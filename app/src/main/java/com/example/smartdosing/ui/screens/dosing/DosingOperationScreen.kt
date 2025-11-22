@@ -1,0 +1,675 @@
+package com.example.smartdosing.ui.screens.dosing
+
+import android.net.Uri
+import android.speech.tts.TextToSpeech
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.example.smartdosing.ui.theme.SmartDosingTheme
+import java.io.BufferedReader
+import java.io.InputStreamReader
+import java.util.Locale
+import kotlinx.coroutines.delay
+
+data class Material(val id: String, val name: String, val targetWeight: Float)
+
+/**
+ * 语音播报管理器 - 专门处理工业投料的语音播报
+ */
+class VoiceAnnouncementManager(private val context: android.content.Context) {
+    private var tts: TextToSpeech? = null
+    private var isInitialized = false
+
+    fun initialize(onReady: () -> Unit = {}) {
+        tts = TextToSpeech(context) { status ->
+            if (status == TextToSpeech.SUCCESS) {
+                tts?.apply {
+                    language = Locale.CHINESE
+                    setSpeechRate(0.8f)  // 稍微慢一点，便于理解
+                    setPitch(1.0f)       // 标准音调
+                }
+                isInitialized = true
+                onReady()
+            }
+        }
+    }
+
+    /**
+     * 播报材料信息 - 材料名称、编号、重量
+     */
+    fun announceMaterial(material: Material) {
+        if (!isInitialized) return
+
+        val announcement = buildString {
+            append("请添加材料：")
+            append("${material.name}，")
+            append("编号：${material.id}，")
+            append("重量：${formatWeight(material.targetWeight)}公斤")
+        }
+
+        speak(announcement)
+    }
+
+    /**
+     * 播报当前步骤
+     */
+    fun announceStep(currentStep: Int, totalSteps: Int) {
+        if (!isInitialized) return
+        speak("第${currentStep + 1}步，共${totalSteps}步")
+    }
+
+    /**
+     * 播报配方完成
+     */
+    fun announceCompletion() {
+        if (!isInitialized) return
+        speak("配方投料完成，请确认所有材料已添加")
+    }
+
+    /**
+     * 播报错误信息
+     */
+    fun announceError(message: String) {
+        if (!isInitialized) return
+        speak("注意：$message")
+    }
+
+    /**
+     * 重复播报当前材料信息
+     */
+    fun repeatCurrentAnnouncement(material: Material) {
+        announceMaterial(material)
+    }
+
+    private fun speak(text: String) {
+        tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "announcement")
+    }
+
+    private fun formatWeight(weight: Float): String {
+        return if (weight == weight.toInt().toFloat()) {
+            weight.toInt().toString()
+        } else {
+            String.format("%.1f", weight)
+        }
+    }
+
+    fun shutdown() {
+        tts?.stop()
+        tts?.shutdown()
+        tts = null
+        isInitialized = false
+    }
+}
+
+/**
+ * 投料操作页面
+ * 集成CSV文件导入和完整的投料流程
+ */
+@Composable
+fun DosingOperationScreen(
+    recipeId: String? = null,
+    onNavigateBack: () -> Unit = {},
+    modifier: Modifier = Modifier
+) {
+    var recipe by remember { mutableStateOf<List<Material>?>(null) }
+    val context = LocalContext.current
+
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        uri?.let {
+            try {
+                val takeFlags = android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+                context.contentResolver.takePersistableUriPermission(it, takeFlags)
+                val parsedRecipe = mutableListOf<Material>()
+                context.contentResolver.openInputStream(it)?.use { inputStream ->
+                    BufferedReader(InputStreamReader(inputStream)).use { reader ->
+                        var line: String?
+                        while (reader.readLine().also { line = it } != null) {
+                            val tokens = line!!.split(',')
+                            if (tokens.size == 3) {
+                                val material = Material(
+                                    id = tokens[0].trim(),
+                                    name = tokens[1].trim(),
+                                    targetWeight = tokens[2].trim().toFloat()
+                                )
+                                parsedRecipe.add(material)
+                            }
+                        }
+                    }
+                }
+                if (parsedRecipe.isNotEmpty()) {
+                    recipe = parsedRecipe
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    if (recipe == null) {
+        // 配方选择界面
+        Column(
+            modifier = modifier.fillMaxSize().padding(32.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = "选择投料配方",
+                fontSize = 32.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF263238)
+            )
+
+            Spacer(modifier = Modifier.height(48.dp))
+
+            // 从文件导入配方
+            Button(
+                onClick = { launcher.launch(arrayOf("*/*")) },
+                modifier = Modifier.width(300.dp).height(80.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF1976D2)
+                ),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text(
+                    text = "导入CSV配方文件",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            Text(
+                text = "请选择一个CSV格式的配方文件\n格式: 材料编号,材料名称,重量",
+                fontSize = 16.sp,
+                color = Color(0xFF757575),
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(modifier = Modifier.height(48.dp))
+
+            // 返回按钮
+            OutlinedButton(
+                onClick = onNavigateBack,
+                modifier = Modifier.width(200.dp).height(60.dp),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = Color(0xFF757575)
+                ),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text(
+                    text = "返回",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+        }
+    } else {
+        DosingScreen(
+            recipe = recipe!!,
+            onSelectNewRecipe = { recipe = null },
+            onNavigateBack = onNavigateBack,
+            modifier = modifier
+        )
+    }
+}
+
+@Composable
+fun InfoCard(title: String, content: String, modifier: Modifier = Modifier) {
+    Card(
+        modifier = modifier,
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White)
+    ) {
+        Column(
+            modifier = Modifier.fillMaxSize().padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(text = title, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(text = content, style = MaterialTheme.typography.displayMedium, maxLines = 1, fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+@Composable
+fun DosingScreen(
+    recipe: List<Material>,
+    onSelectNewRecipe: () -> Unit,
+    onNavigateBack: () -> Unit = {},
+    modifier: Modifier = Modifier
+) {
+    var currentStep by remember { mutableStateOf(0) }
+    var actualWeight by remember { mutableStateOf("") }
+    val context = LocalContext.current
+
+    // 使用新的语音播报管理器
+    val voiceManager = remember { VoiceAnnouncementManager(context) }
+
+    // 初始化语音播报
+    DisposableEffect(context) {
+        voiceManager.initialize()
+        onDispose {
+            voiceManager.shutdown()
+        }
+    }
+
+    val currentMaterial = if (currentStep < recipe.size) recipe[currentStep] else null
+
+    // 当材料切换时进行语音播报
+    LaunchedEffect(currentMaterial) {
+        if (currentMaterial != null) {
+            // 先播报步骤，稍等片刻再播报材料信息
+            voiceManager.announceStep(currentStep, recipe.size)
+            delay(800) // 等待步骤播报完成
+            voiceManager.announceMaterial(currentMaterial)
+        } else {
+            voiceManager.announceCompletion()
+        }
+    }
+
+    if (currentMaterial != null) {
+        Column(
+            modifier = modifier.fillMaxSize().padding(32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            // Top Banner
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedButton(
+                    onClick = onNavigateBack,
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = Color(0xFF757575)
+                    )
+                ) {
+                    Text("← 返回", fontSize = 16.sp)
+                }
+
+                Text(
+                    text = "配方投料操作",
+                    style = MaterialTheme.typography.headlineMedium,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.weight(1f)
+                )
+
+                Spacer(modifier = Modifier.width(80.dp)) // 平衡布局
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Middle Info Row
+            Row(
+                modifier = Modifier.fillMaxWidth().weight(0.5f),
+                horizontalArrangement = Arrangement.spacedBy(24.dp)
+            ) {
+                InfoCard(title = "材料名称", content = currentMaterial.name, modifier = Modifier.weight(1f))
+                InfoCard(title = "材料编码", content = currentMaterial.id, modifier = Modifier.weight(1f))
+                InfoCard(title = "投料重量", content = "${currentMaterial.targetWeight} KG", modifier = Modifier.weight(1f))
+            }
+
+            Spacer(Modifier.height(24.dp))
+
+            // 底部控制区域 - 重构为左右两栏布局 (2:1 比例)
+            BottomControlArea(
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                currentWeight = actualWeight,
+                onWeightChange = { newWeight -> actualWeight = newWeight },
+                onClearWeight = { actualWeight = "" },
+                onConfirmNext = {
+                    if (actualWeight.isNotBlank()) {
+                        currentStep++
+                        actualWeight = ""
+                    }
+                },
+                onRepeatAnnouncement = {
+                    // 手动重复播报当前材料信息
+                    currentMaterial?.let { material ->
+                        voiceManager.repeatCurrentAnnouncement(material)
+                    }
+                }
+            )
+        }
+    } else {
+        // "配方完成" screen
+        Column(
+            modifier = modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(text = "配方完成!", fontSize = 48.sp)
+            Spacer(modifier = Modifier.height(32.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Button(
+                    onClick = { currentStep = 0 },
+                    modifier = Modifier.width(200.dp).height(60.dp)
+                ) {
+                    Text("重新开始", fontSize = 24.sp)
+                }
+                Button(
+                    onClick = onSelectNewRecipe,
+                    modifier = Modifier.width(200.dp).height(60.dp)
+                ) {
+                    Text("选择新配方", fontSize = 24.sp)
+                }
+                Button(
+                    onClick = onNavigateBack,
+                    modifier = Modifier.width(200.dp).height(60.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF757575)
+                    )
+                ) {
+                    Text("返回首页", fontSize = 24.sp)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 底部控制区域 - 左右两栏布局（2:1 比例）
+ * 左侧：数字键盘区域 (66% 宽度)
+ * 右侧：功能控制区域 (33% 宽度)
+ */
+@Composable
+fun BottomControlArea(
+    modifier: Modifier = Modifier,
+    currentWeight: String,
+    onWeightChange: (String) -> Unit,
+    onClearWeight: () -> Unit,
+    onConfirmNext: () -> Unit,
+    onRepeatAnnouncement: () -> Unit = {}
+) {
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(24.dp)
+    ) {
+        // 左侧 - 数字键盘区域 (65% 宽度)
+        Column(
+            modifier = Modifier.weight(2f).fillMaxHeight(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            // 输入显示框 - 放在键盘上方
+            WeightDisplayBox(
+                modifier = Modifier.fillMaxWidth().weight(0.25f),
+                weight = currentWeight
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // 数字键盘 - 标准3x4布局
+            IndustrialNumericKeypad(
+                modifier = Modifier.weight(0.75f),
+                onKeyPress = { key ->
+                    when (key) {
+                        "⌫" -> {
+                            // 回退删除最后一位
+                            if (currentWeight.isNotEmpty()) {
+                                onWeightChange(currentWeight.dropLast(1))
+                            }
+                        }
+                        "." -> {
+                            // 小数点逻辑 - 只允许一个小数点且不能是第一位
+                            if (!currentWeight.contains(".") && currentWeight.isNotEmpty()) {
+                                onWeightChange(currentWeight + key)
+                            }
+                        }
+                        else -> {
+                            // 数字输入
+                            onWeightChange(currentWeight + key)
+                        }
+                    }
+                }
+            )
+        }
+
+        // 右侧 - 功能控制区域 (33% 宽度)
+        FunctionControlPanel(
+            modifier = Modifier.weight(1f).fillMaxHeight(),
+            onClearWeight = onClearWeight,
+            onConfirmNext = onConfirmNext,
+            onRepeatAnnouncement = onRepeatAnnouncement,
+            isNextEnabled = currentWeight.isNotBlank()
+        )
+    }
+}
+
+/**
+ * 重量显示框 - 输入显示区域
+ */
+@Composable
+fun WeightDisplayBox(
+    modifier: Modifier = Modifier,
+    weight: String
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(12.dp),
+        color = Color.White,
+        border = BorderStroke(1.dp, Color(0xFFB0BEC5)),
+        shadowElevation = 2.dp
+    ) {
+        Box(
+            modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp),
+            contentAlignment = Alignment.CenterEnd
+        ) {
+            Text(
+                text = if (weight.isBlank()) "0.0" else weight,
+                style = MaterialTheme.typography.displayLarge.copy(fontSize = 48.sp),
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF263238),
+                textAlign = TextAlign.End
+            )
+        }
+    }
+}
+
+/**
+ * 工业级数字键盘 - 3列 x 4行标准布局，适配10寸平板
+ * 布局：7 8 9
+ *      4 5 6
+ *      1 2 3
+ *      . 0 ⌫
+ * 优化：适中尺寸，适合10寸平板操作
+ */
+@Composable
+fun IndustrialNumericKeypad(
+    modifier: Modifier = Modifier,
+    onKeyPress: (String) -> Unit
+) {
+    // 按键布局 - 标准计算器布局
+    val keyLayout = listOf(
+        listOf("7", "8", "9"),
+        listOf("4", "5", "6"),
+        listOf("1", "2", "3"),
+        listOf(".", "0", "⌫")
+    )
+
+    Column(
+        modifier = modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(12.dp) // 适中的垂直间距
+    ) {
+        keyLayout.forEach { row ->
+            Row(
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp) // 适中的水平间距
+            ) {
+                row.forEach { key ->
+                    IndustrialKeyButton(
+                        modifier = Modifier.weight(1f).fillMaxHeight(),
+                        text = key,
+                        onClick = { onKeyPress(key) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 工业级按键按钮 - 适配10寸平板，便于操作
+ */
+@Composable
+fun IndustrialKeyButton(
+    modifier: Modifier = Modifier,
+    text: String,
+    onClick: () -> Unit
+) {
+    Button(
+        onClick = onClick,
+        modifier = modifier,
+        shape = RoundedCornerShape(12.dp), // 恢复圆润设计
+        colors = ButtonDefaults.buttonColors(
+            containerColor = Color.White,
+            contentColor = Color(0xFF263238)
+        ),
+        elevation = ButtonDefaults.buttonElevation(
+            defaultElevation = 4.dp,  // 适中的阴影
+            pressedElevation = 8.dp
+        ),
+        border = BorderStroke(1.dp, Color(0xFFE0E0E0)) // 适中的边框
+    ) {
+        Text(
+            text = text,
+            fontSize = 28.sp, // 适合10寸平板的字体大小
+            fontWeight = FontWeight.Bold,
+            color = Color(0xFF263238),
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
+/**
+ * 功能控制面板 - 右侧操作按钮区域
+ * 工业级设计：大按钮，方形设计，间距充足
+ */
+@Composable
+fun FunctionControlPanel(
+    modifier: Modifier = Modifier,
+    onClearWeight: () -> Unit,
+    onConfirmNext: () -> Unit,
+    onRepeatAnnouncement: () -> Unit,
+    isNextEnabled: Boolean
+) {
+    Column(
+        modifier = modifier.padding(8.dp), // 面板内边距
+        verticalArrangement = Arrangement.spacedBy(20.dp, Alignment.CenterVertically), // 增加按钮间距
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        // "语音重播"按钮 - 工业绿色，超大设计
+        Button(
+            onClick = onRepeatAnnouncement,
+            modifier = Modifier.fillMaxWidth().height(90.dp), // 增加高度
+            shape = RoundedCornerShape(8.dp), // 方形设计
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Color(0xFF4CAF50),
+                contentColor = Color.White
+            ),
+            elevation = ButtonDefaults.buttonElevation(
+                defaultElevation = 8.dp,  // 增加阴影
+                pressedElevation = 16.dp
+            ),
+            border = BorderStroke(2.dp, Color(0xFF388E3C)), // 添加边框
+            contentPadding = PaddingValues(20.dp) // 增加内边距
+        ) {
+            Text(
+                text = "🔊 重播",
+                fontSize = 24.sp, // 增大字体
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
+            )
+        }
+
+        // "清空"按钮 - 警示色，超大设计
+        Button(
+            onClick = onClearWeight,
+            modifier = Modifier.fillMaxWidth().height(90.dp), // 增加高度
+            shape = RoundedCornerShape(8.dp), // 方形设计
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Color(0xFFEF9A9A),
+                contentColor = Color(0xFFB71C1C)
+            ),
+            elevation = ButtonDefaults.buttonElevation(
+                defaultElevation = 8.dp,  // 增加阴影
+                pressedElevation = 16.dp
+            ),
+            border = BorderStroke(2.dp, Color(0xFFE57373)), // 添加边框
+            contentPadding = PaddingValues(20.dp) // 增加内边距
+        ) {
+            Text(
+                text = "清空",
+                fontSize = 24.sp, // 增大字体
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
+            )
+        }
+
+        // "下一步"按钮 - 工业蓝，超大设计
+        Button(
+            onClick = onConfirmNext,
+            modifier = Modifier.fillMaxWidth().height(90.dp), // 增加高度
+            shape = RoundedCornerShape(8.dp), // 方形设计
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Color(0xFF1976D2),
+                contentColor = Color.White,
+                disabledContainerColor = Color(0xFFB0BEC5),
+                disabledContentColor = Color.White
+            ),
+            elevation = ButtonDefaults.buttonElevation(
+                defaultElevation = 8.dp,  // 增加阴影
+                pressedElevation = 16.dp
+            ),
+            border = BorderStroke(
+                width = 2.dp,
+                color = if (isNextEnabled) Color(0xFF1565C0) else Color(0xFF90A4AE)
+            ), // 动态边框颜色
+            enabled = isNextEnabled,
+            contentPadding = PaddingValues(20.dp) // 增加内边距
+        ) {
+            Text(
+                text = "下一步",
+                fontSize = 24.sp, // 增大字体
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
+            )
+        }
+    }
+}
+
+@Preview(showBackground = true, device = "spec:width=1280dp,height=800dp,dpi=240")
+@Composable
+fun DosingOperationScreenPreview() {
+    SmartDosingTheme {
+        DosingOperationScreen()
+    }
+}
+
+@Preview(showBackground = true, device = "spec:width=1280dp,height=800dp,dpi=240")
+@Composable
+fun DosingOperationScreenDetailPreview() {
+    val previewRecipe = listOf(
+        Material("abc-001", "苹果香精", 10.5f),
+        Material("abc-002", "柠檬酸", 22.0f),
+        Material("def-003", "甜蜜素", 5.2f)
+    )
+    SmartDosingTheme {
+        DosingScreen(recipe = previewRecipe, onSelectNewRecipe = {})
+    }
+}
