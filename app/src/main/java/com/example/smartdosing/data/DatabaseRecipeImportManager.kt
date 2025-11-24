@@ -197,10 +197,10 @@ class DatabaseRecipeImportManager(
             requests += RecipeImportRequest(
                 code = firstRow["recipe_code"].orEmpty(),
                 name = name,
-                category = firstRow["recipe_category"].orEmpty().ifBlank { "未分类" },
+                category = normalizeCategory(firstRow["recipe_category"]),
                 subCategory = "",
-                customer = "",
-                batchNo = firstRow["batch_no"].orEmpty(),
+                customer = firstRow["recipe_customer"].orEmpty(),
+                batchNo = firstRow["recipe_design_time"].orEmpty(),
                 version = "1.0",
                 description = allNotes,
                 materials = materials,
@@ -356,10 +356,10 @@ class DatabaseRecipeImportManager(
             requests += RecipeImportRequest(
                 code = firstRow["recipe_code"].orEmpty(),
                 name = name,
-                category = firstRow["recipe_category"].orEmpty().ifBlank { "未分类" },
+                category = normalizeCategory(firstRow["recipe_category"]),
                 subCategory = "",
-                customer = "",
-                batchNo = firstRow["batch_no"].orEmpty(),
+                customer = firstRow["recipe_customer"].orEmpty(),
+                batchNo = firstRow["recipe_design_time"].orEmpty(),
                 version = "1.0",
                 description = allNotes,
                 materials = materials,
@@ -591,6 +591,17 @@ class DatabaseRecipeImportManager(
             .filterNotNull()
             .filter { it.isNotBlank() }
             .joinToString("\n")
+    }
+
+    // 将配方分类限定为“烟油/辅料”两种，便于后续过滤
+    private fun normalizeCategory(raw: String?): String {
+        val text = raw?.trim().orEmpty()
+        if (text.isEmpty()) return "烟油"
+        return when {
+            text.equals("烟油", ignoreCase = true) || text.contains("烟") -> "烟油"
+            text.equals("辅料", ignoreCase = true) || text.contains("辅") -> "辅料"
+            else -> "辅料"
+        }
     }
 
     private fun parseTagsFromValue(tagsString: String): List<String> {

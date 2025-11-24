@@ -98,10 +98,8 @@ fun HTML.generateRecipesPage() {
                     select("category-filter") {
                         id = "category-filter"
                         option { value = "全部"; +"全部分类" }
-                        option { value = "香精"; +"香精" }
-                        option { value = "酸类"; +"酸类" }
-                        option { value = "甜味剂"; +"甜味剂" }
-                        option { value = "其他"; +"其他" }
+                        option { value = "烟油"; +"烟油" }
+                        option { value = "辅料"; +"辅料" }
                     }
                     a(href = "/import", classes = "btn btn-primary") { +"+ 新建配方" }
                 }
@@ -155,34 +153,50 @@ fun HTML.generateImportPage() {
                         id = "recipe-form"
 
                         div("form-group") {
-                            label { htmlFor = "recipe-name"; +"???? *" }
+                            label { htmlFor = "recipe-name"; +"配方名称 *" }
                             input(type = InputType.text, classes = "form-control") {
                                 id = "recipe-name"
                                 required = true
-                                placeholder = "???????"
+                                placeholder = "请输入配方名称"
                             }
                         }
 
                         div("form-row") {
                             div("form-group") {
-                                label { htmlFor = "recipe-category"; +"???? *" }
+                                label { htmlFor = "recipe-category"; +"配方分类 *" }
                                 select("form-control") {
                                     id = "recipe-category"
                                     required = true
-                                    option { value = ""; +"?????" }
-                                    option { value = "??"; +"??" }
-                                    option { value = "??"; +"??" }
-                                    option { value = "???"; +"???" }
-                                    option { value = "??"; +"??" }
+                                    option { value = ""; +"请选择分类" }
+                                    option { value = "烟油"; +"烟油" }
+                                    option { value = "辅料"; +"辅料" }
+                                }
+                            }
+                            div("form-group") {
+                                label { htmlFor = "recipe-customer"; +"客户名称 *" }
+                                input(type = InputType.text, classes = "form-control") {
+                                    id = "recipe-customer"
+                                    required = true
+                                    placeholder = "请输入客户或项目名称"
+                                }
+                            }
+                        }
+
+                        div("form-row") {
+                            div("form-group") {
+                                label { htmlFor = "recipe-design-time"; +"配方设计时间 *" }
+                                input(type = InputType.date, classes = "form-control") {
+                                    id = "recipe-design-time"
+                                    required = true
                                 }
                             }
                         }
 
                         div("form-group") {
-                            label { htmlFor = "recipe-description"; +"????" }
+                            label { htmlFor = "recipe-description"; +"配方说明" }
                             textArea(classes = "form-control") {
                                 id = "recipe-description"
-                                placeholder = "???????????"
+                                placeholder = "可记录配方用途、注意事项等"
                                 rows = "3"
                             }
                         }

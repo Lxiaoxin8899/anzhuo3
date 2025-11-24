@@ -82,8 +82,9 @@ class RecipeImportManager(
             requests += RecipeImportRequest(
                 code = valueMap["recipe_code"].orEmpty(),
                 name = name,
-                category = valueMap["recipe_category"].orEmpty().ifBlank { "未分类" },
-                batchNo = valueMap["batch_no"].orEmpty(),
+                category = normalizeCategory(valueMap["recipe_category"]),
+                customer = valueMap["recipe_customer"].orEmpty(),
+                batchNo = valueMap["recipe_design_time"].orEmpty(),
                 description = description,
                 materials = materials
             )
@@ -147,8 +148,9 @@ class RecipeImportManager(
             requests += RecipeImportRequest(
                 code = valueMap["recipe_code"].orEmpty(),
                 name = name,
-                category = valueMap["recipe_category"].orEmpty().ifBlank { "未分类" },
-                batchNo = valueMap["batch_no"].orEmpty(),
+                category = normalizeCategory(valueMap["recipe_category"]),
+                customer = valueMap["recipe_customer"].orEmpty(),
+                batchNo = valueMap["recipe_design_time"].orEmpty(),
                 description = description,
                 materials = materials
             )
@@ -347,6 +349,17 @@ class RecipeImportManager(
             .filterNotNull()
             .filter { it.isNotBlank() }
             .joinToString("\n")
+    }
+
+    // 将导入文件中的分类值规范为“烟油”或“辅料”，保持过滤选项一致
+    private fun normalizeCategory(raw: String?): String {
+        val text = raw?.trim().orEmpty()
+        if (text.isEmpty()) return "烟油"
+        return when {
+            text.equals("烟油", ignoreCase = true) || text.contains("烟") -> "烟油"
+            text.equals("辅料", ignoreCase = true) || text.contains("辅") -> "辅料"
+            else -> "辅料"
+        }
     }
 
     private fun currentTemplate(): TemplateDefinition {

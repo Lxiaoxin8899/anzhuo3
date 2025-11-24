@@ -217,12 +217,8 @@ class RecipeRepository {
      */
     private fun generateUniqueCode(category: String, totalWeight: Double = 0.0, recipeName: String = ""): String {
         val prefix = when (category) {
-            "香精" -> "XJ"
-            "酸类" -> "SL"
-            "甜味剂" -> "TWJ"
-            "色素" -> "SS"
-            "防腐剂" -> "FFS"
-            "增稠剂" -> "ZCJ"
+            "烟油" -> "YY"
+            "辅料" -> "FL"
             else -> "QT"
         }
 

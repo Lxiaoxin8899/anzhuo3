@@ -577,6 +577,8 @@ function collectFormData() {
     return {
         name: form.querySelector('#recipe-name').value.trim(),
         category: form.querySelector('#recipe-category').value,
+        customer: form.querySelector('#recipe-customer').value.trim(),
+        batchNo: form.querySelector('#recipe-design-time').value.trim(),
         description: form.querySelector('#recipe-description').value.trim(),
         materials: materials
     };
@@ -591,6 +593,23 @@ function validateFormData(data) {
 
     if (!data.category) {
         showNotification('请选择配方分类', 'warning');
+        return false;
+    }
+
+    // 分类仅允许烟油/辅料，确保与导入模板同步
+    const allowedCategories = ['烟油', '辅料'];
+    if (!allowedCategories.includes(data.category)) {
+        showNotification('配方分类仅支持“烟油”或“辅料”', 'warning');
+        return false;
+    }
+
+    if (!data.customer) {
+        showNotification('请输入客户名称', 'warning');
+        return false;
+    }
+
+    if (!data.batchNo) {
+        showNotification('请选择配方设计时间', 'warning');
         return false;
     }
 
@@ -619,6 +638,8 @@ function previewRecipe() {
                 <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin-bottom: 1rem;">
                     <div><strong>配方名称:</strong> ${'$'}{formData.name}</div>
                     <div><strong>分类:</strong> ${'$'}{formData.category}</div>
+                    <div><strong>客户:</strong> ${'$'}{formData.customer}</div>
+                    <div><strong>设计时间:</strong> ${'$'}{formData.batchNo}</div>
                     <div><strong>总重量:</strong> ${'$'}{totalWeight.toFixed(1)}g</div>
                     <div><strong>材料数量:</strong> ${'$'}{formData.materials.length}</div>
                 </div>
@@ -919,6 +940,8 @@ async function loadRecipeForEdit(recipeId) {
             // 填充表单
             document.getElementById('recipe-name').value = recipe.name;
             document.getElementById('recipe-category').value = recipe.category;
+            document.getElementById('recipe-customer').value = recipe.customer || '';
+            document.getElementById('recipe-design-time').value = recipe.batchNo || '';
             document.getElementById('recipe-description').value = recipe.description;
 
             // 清空现有材料

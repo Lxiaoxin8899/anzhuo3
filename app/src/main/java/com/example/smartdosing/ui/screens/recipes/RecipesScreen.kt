@@ -99,7 +99,6 @@ fun RecipesScreen(
     var selectedCategory by remember { mutableStateOf("") }
     var selectedSubCategory by remember { mutableStateOf("") }
     var selectedStatus by remember { mutableStateOf<RecipeStatus?>(null) }
-    var selectedPriority by remember { mutableStateOf<RecipePriority?>(null) }
     var selectedQuickCollection by remember { mutableStateOf(QuickCollectionType.ALL) }
     var selectedFolderId by remember { mutableStateOf<String?>(null) }
     var viewMode by remember { mutableStateOf(RecipeViewMode.CARD) }
@@ -171,7 +170,7 @@ fun RecipesScreen(
         }
     }
 
-    val categories = remember(recipes) { recipes.map { it.category }.distinct() }
+    val categories = remember { listOf("烟油", "辅料") }
     val subCategories = remember(recipes, selectedCategory) {
         if (selectedCategory.isEmpty()) emptyList()
         else recipes.filter { it.category == selectedCategory && it.subCategory.isNotEmpty() }
@@ -191,7 +190,6 @@ fun RecipesScreen(
         selectedCategory,
         selectedSubCategory,
         selectedStatus,
-        selectedPriority,
         selectedQuickCollection,
         selectedFolderId,
         folderSnapshot
@@ -237,10 +235,6 @@ fun RecipesScreen(
             filtered = filtered.filter { it.status == status }
         }
 
-        selectedPriority?.let { priority ->
-            filtered = filtered.filter { it.priority == priority }
-        }
-
         filteredRecipes = filtered
     }
     Row(
@@ -271,8 +265,6 @@ fun RecipesScreen(
                 onCustomerSelected = { selectedCustomer = it },
                 selectedStatus = selectedStatus,
                 onStatusSelected = { selectedStatus = it },
-                selectedPriority = selectedPriority,
-                onPrioritySelected = { selectedPriority = it },
                 folders = folderSnapshot,
                 selectedFolderId = selectedFolderId,
                 onFolderSelected = {
@@ -405,8 +397,6 @@ fun RecipeFilterPanel(
     onCustomerSelected: (String) -> Unit,
     selectedStatus: RecipeStatus?,
     onStatusSelected: (RecipeStatus?) -> Unit,
-    selectedPriority: RecipePriority?,
-    onPrioritySelected: (RecipePriority?) -> Unit,
     folders: List<RecipeFolder>,
     selectedFolderId: String?,
     onFolderSelected: (String?) -> Unit,
@@ -479,7 +469,7 @@ fun RecipeFilterPanel(
             wrap = true
         )
 
-        SectionTitle(icon = Icons.Default.Speed, text = "状态 / 优先级")
+        SectionTitle(icon = Icons.Default.Speed, text = "状态")
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -494,24 +484,6 @@ fun RecipeFilterPanel(
                     selected = selectedStatus == status,
                     onClick = { onStatusSelected(status) },
                     label = { Text(status.label) }
-                )
-            }
-        }
-
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            FilterChip(
-                selected = selectedPriority == null,
-                onClick = { onPrioritySelected(null) },
-                label = { Text("全部优先级") }
-            )
-            RecipePriority.values().forEach { priority ->
-                FilterChip(
-                    selected = selectedPriority == priority,
-                    onClick = { onPrioritySelected(priority) },
-                    label = { Text(priority.label) }
                 )
             }
         }

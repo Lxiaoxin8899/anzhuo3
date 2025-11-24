@@ -167,20 +167,30 @@ abstract class SmartDosingDatabase : RoomDatabase() {
                     templateId = standardTemplate.id,
                     fieldKey = "recipe_category",
                     label = "配方分类",
-                    description = "用于统计的分类，例如香精/溶剂/调味剂",
+                    description = "一级分类，仅支持“烟油”或“辅料”",
                     required = false,
-                    example = "香精",
+                    example = "烟油",
                     fieldOrder = 3
                 ),
                 TemplateFieldEntity(
-                    id = "field_batch_no",
+                    id = "field_recipe_customer",
                     templateId = standardTemplate.id,
-                    fieldKey = "batch_no",
-                    label = "配方批次",
-                    description = "可选，配方批次或版本信息",
+                    fieldKey = "recipe_customer",
+                    label = "客户名称",
+                    description = "用于过滤的客户/项目名称",
                     required = false,
-                    example = "2025-Q1",
+                    example = "华南OEM工厂",
                     fieldOrder = 4
+                ),
+                TemplateFieldEntity(
+                    id = "field_recipe_design_time",
+                    templateId = standardTemplate.id,
+                    fieldKey = "recipe_design_time",
+                    label = "配方设计时间",
+                    description = "记录完成设计的日期，建议格式：2024-05-01",
+                    required = false,
+                    example = "2024-05-01",
+                    fieldOrder = 5
                 ),
                 TemplateFieldEntity(
                     id = "field_designer",
@@ -190,7 +200,7 @@ abstract class SmartDosingDatabase : RoomDatabase() {
                     description = "负责配方设计/审核的人员",
                     required = false,
                     example = "张工",
-                    fieldOrder = 5
+                    fieldOrder = 6
                 ),
                 TemplateFieldEntity(
                     id = "field_material_name",
@@ -200,7 +210,7 @@ abstract class SmartDosingDatabase : RoomDatabase() {
                     description = "材料的名称，每个材料占一行",
                     required = true,
                     example = "草莓香精",
-                    fieldOrder = 6
+                    fieldOrder = 7
                 ),
                 TemplateFieldEntity(
                     id = "field_material_code",
@@ -210,7 +220,7 @@ abstract class SmartDosingDatabase : RoomDatabase() {
                     description = "材料唯一编号或SKU，用于库存和追溯",
                     required = false,
                     example = "MAT001",
-                    fieldOrder = 7
+                    fieldOrder = 8
                 ),
                 TemplateFieldEntity(
                     id = "field_material_weight",
@@ -220,7 +230,7 @@ abstract class SmartDosingDatabase : RoomDatabase() {
                     description = "材料重量，只填写数字",
                     required = true,
                     example = "50",
-                    fieldOrder = 8
+                    fieldOrder = 9
                 ),
                 TemplateFieldEntity(
                     id = "field_material_unit",
@@ -230,7 +240,7 @@ abstract class SmartDosingDatabase : RoomDatabase() {
                     description = "重量单位，例如 g/kg/ml",
                     required = false,
                     example = "g",
-                    fieldOrder = 9
+                    fieldOrder = 10
                 ),
                 TemplateFieldEntity(
                     id = "field_material_sequence",
@@ -240,7 +250,7 @@ abstract class SmartDosingDatabase : RoomDatabase() {
                     description = "投料顺序编号，可选",
                     required = false,
                     example = "1",
-                    fieldOrder = 10
+                    fieldOrder = 11
                 ),
                 TemplateFieldEntity(
                     id = "field_material_notes",
@@ -250,7 +260,7 @@ abstract class SmartDosingDatabase : RoomDatabase() {
                     description = "材料备注或工艺说明",
                     required = false,
                     example = "",
-                    fieldOrder = 11
+                    fieldOrder = 12
                 )
             )
             templateDao.insertTemplateWithFields(standardTemplate, standardFields)

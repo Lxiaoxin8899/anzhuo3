@@ -311,19 +311,28 @@ class TemplateRepository private constructor() {
                 id = UUID.randomUUID().toString(),
                 key = "recipe_category",
                 label = "配方分类",
-                description = "用于统计的分类，例如香精/溶剂/调味剂",
+                description = "一级分类，仅支持“烟油”或“辅料”",
                 required = false,
-                example = "香精",
+                example = "烟油",
                 order = 3
             ),
             TemplateField(
                 id = UUID.randomUUID().toString(),
-                key = "batch_no",
-                label = "配方批次",
-                description = "配方批次或版本信息",
+                key = "recipe_customer",
+                label = "客户名称",
+                description = "用于过滤和追踪的客户/项目名称",
                 required = false,
-                example = "2025-Q1",
+                example = "华南OEM工厂",
                 order = 4
+            ),
+            TemplateField(
+                id = UUID.randomUUID().toString(),
+                key = "recipe_design_time",
+                label = "配方设计时间",
+                description = "记录完成设计的日期，建议格式：2024-05-01",
+                required = false,
+                example = "2024-05-01",
+                order = 5
             ),
             TemplateField(
                 id = UUID.randomUUID().toString(),
@@ -332,7 +341,7 @@ class TemplateRepository private constructor() {
                 description = "负责配方设计/审核的人员",
                 required = false,
                 example = "张工",
-                order = 5
+                order = 6
             ),
             TemplateField(
                 id = UUID.randomUUID().toString(),
@@ -341,7 +350,7 @@ class TemplateRepository private constructor() {
                 description = "材料的名称，每个材料占一行",
                 required = true,
                 example = "草莓香精",
-                order = 6
+                order = 7
             ),
             TemplateField(
                 id = UUID.randomUUID().toString(),
@@ -350,7 +359,7 @@ class TemplateRepository private constructor() {
                 description = "材料的唯一编号或SKU，用于库存管理和追溯",
                 required = false,
                 example = "MAT001",
-                order = 7
+                order = 8
             ),
             TemplateField(
                 id = UUID.randomUUID().toString(),
@@ -359,7 +368,7 @@ class TemplateRepository private constructor() {
                 description = "材料的重量，只填数字",
                 required = true,
                 example = "50",
-                order = 8
+                order = 9
             ),
             TemplateField(
                 id = UUID.randomUUID().toString(),
@@ -368,7 +377,7 @@ class TemplateRepository private constructor() {
                 description = "重量单位，例如g、kg、ml、l",
                 required = false,
                 example = "g",
-                order = 9
+                order = 10
             ),
             TemplateField(
                 id = UUID.randomUUID().toString(),
@@ -377,7 +386,7 @@ class TemplateRepository private constructor() {
                 description = "材料的顺序编号，可选",
                 required = false,
                 example = "1",
-                order = 10
+                order = 11
             ),
             TemplateField(
                 id = UUID.randomUUID().toString(),
@@ -386,7 +395,7 @@ class TemplateRepository private constructor() {
                 description = "材料的备注信息或工艺说明",
                 required = false,
                 example = "",
-                order = 11
+                order = 12
             )
         )
 

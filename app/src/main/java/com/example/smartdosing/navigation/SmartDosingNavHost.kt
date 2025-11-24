@@ -127,7 +127,17 @@ fun SmartDosingNavHost(
             val recipeId = backStackEntry.arguments?.getString("recipeId") ?: ""
             DosingOperationScreen(
                 recipeId = recipeId,
-                onNavigateBack = { navController.popBackStack() }
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToRecipeList = {
+                    // 优先弹出到配方管理，确保投料完成后直接回到列表
+                    val popped = navController.popBackStack(SmartDosingRoutes.RECIPES, inclusive = false)
+                    if (!popped) {
+                        navController.navigate(SmartDosingRoutes.RECIPES) {
+                            popUpTo(SmartDosingRoutes.HOME) { inclusive = false }
+                            launchSingleTop = true
+                        }
+                    }
+                }
             )
         }
 

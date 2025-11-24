@@ -296,6 +296,7 @@ class VoiceAnnouncementManager(private val context: android.content.Context) {
 fun DosingOperationScreen(
     recipeId: String? = null,
     onNavigateBack: () -> Unit = {},
+    onNavigateToRecipeList: () -> Unit = onNavigateBack,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -382,14 +383,17 @@ fun DosingOperationScreen(
             )
         }
         else -> {
+            val selectNewRecipeLabel = if (isCsvMode) "选择新配方" else "返回配方管理"
             val onSelectNewRecipeAction: () -> Unit = if (isCsvMode) {
                 { recipe = null }
             } else {
-                { onNavigateBack() }
+                // 非 CSV 模式下直接退回配方管理，避免用户还要手动退出检查清单
+                { onNavigateToRecipeList() }
             }
             DosingScreen(
                 recipe = recipe!!,
                 onSelectNewRecipe = onSelectNewRecipeAction,
+                selectNewRecipeLabel = selectNewRecipeLabel,
                 onNavigateBack = onNavigateBack,
                 modifier = modifier
             )
@@ -525,6 +529,7 @@ fun InfoCard(title: String, content: String, modifier: Modifier = Modifier) {
 fun DosingScreen(
     recipe: List<Material>,
     onSelectNewRecipe: () -> Unit,
+    selectNewRecipeLabel: String = "选择新配方",
     onNavigateBack: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -645,7 +650,7 @@ fun DosingScreen(
                     onClick = onSelectNewRecipe,
                     modifier = Modifier.width(200.dp).height(60.dp)
                 ) {
-                    Text("选择新配方", fontSize = 24.sp)
+                    Text(selectNewRecipeLabel, fontSize = 24.sp)
                 }
                 Button(
                     onClick = onNavigateBack,
