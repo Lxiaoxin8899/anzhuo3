@@ -7,8 +7,27 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
 
+    <!-- 语音播放权限 -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <uses-permission android:name="android.permission.BIND_ACCESSIBILITY_SERVICE" />
+
+    <!-- 小米设备特殊权限 -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <!-- 小米TTS专用权限 -->
+    <uses-permission android:name="com.xiaomi.permission.TTS" />
+    <uses-permission android:name="com.miui.permission.TTS" />
+    <uses-permission android:name="android.permission.BIND_TTS_SERVICE" />
+
+    <!-- 音频焦点权限 -->
+    <uses-permission android:name="android.permission.AUDIO_FOCUS" />
+    <uses-permission android:name="android.permission.ACCESS_AUDIO_STATE" />
+
     <application
         android:allowBackup="true"
+        android:hasFragileUserData="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"

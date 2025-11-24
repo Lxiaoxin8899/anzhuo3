@@ -38,8 +38,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import com.example.smartdosing.data.Recipe
 import com.example.smartdosing.data.RecipeRepository
+import com.example.smartdosing.data.DatabaseRecipeRepository
 import com.example.smartdosing.ui.theme.SmartDosingTheme
 import java.util.Locale
 
@@ -55,14 +61,19 @@ fun DosingScreen(
     onNavigateBack: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    val repository = remember { RecipeRepository.getInstance() }
-    val checklistInfo = remember(recipeId) {
-        recipeId?.takeIf { it.isNotBlank() && it != "quick_start" }?.let { id ->
+    val context = LocalContext.current
+    val repository = remember { DatabaseRecipeRepository.getInstance(context) }
+    var checklistInfo by remember { mutableStateOf<RecipeChecklistInfo?>(null) }
+
+    LaunchedEffect(recipeId) {
+        checklistInfo = recipeId?.takeIf { it.isNotBlank() && it != "quick_start" }?.let { id ->
             repository.getRecipeById(id)?.toChecklistInfo()
         }
     }
 
-    if (checklistInfo == null) {
+    val currentChecklist = checklistInfo
+
+    if (currentChecklist == null) {
         EmptyChecklistState(
             onNavigateToRecipeList = onNavigateToRecipeList,
             onNavigateBack = onNavigateBack,
@@ -70,7 +81,7 @@ fun DosingScreen(
         )
     } else {
         DosingChecklistContent(
-            recipe = checklistInfo,
+            recipe = currentChecklist,
             onNavigateToDosingOperation = onNavigateToDosingOperation,
             modifier = modifier
         )

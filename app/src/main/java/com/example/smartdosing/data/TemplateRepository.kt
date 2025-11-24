@@ -113,8 +113,10 @@ class TemplateRepository private constructor() {
     fun generateCsvTemplate(templateId: String): Pair<String, ByteArray>? {
         val template = getTemplateById(templateId) ?: return null
         val builder = StringBuilder()
+        // 生成表头
         builder.appendLine(template.fields.joinToString(",") { escapeCsv(it.label) })
-        buildSampleRows(template).forEach { row ->
+        // 生成3行示例数据（同一配方的3个材料）
+        buildVerticalSampleRows(template).forEach { row ->
             builder.appendLine(row.joinToString(",") { escapeCsv(it) })
         }
         val fileName = "${template.name}_模板.csv"
@@ -128,22 +130,18 @@ class TemplateRepository private constructor() {
     }
 
     private fun buildExcelFile(template: TemplateDefinition): ByteArray {
-        val summaryFields = template.fields.filterNot { it.key.startsWith("material_line") }
-        val materialFields = template.fields.filter { it.key.startsWith("material_line") }
-        val summaryHeaders = summaryFields.map { it.label }
-        val summaryRows = listOf(summaryFields.map { it.example.orEmpty() })
-        val detailHeaders = listOf("配方编码", "序号", "材料名称", "重量", "单位", "备注")
-        val detailRows = buildMaterialDetailSampleRows(template, materialFields)
-        val summarySheetXml = buildSheetXml(summaryHeaders, summaryRows)
-        val detailSheetXml = buildSheetXml(detailHeaders, detailRows)
+        // 使用单工作表，包含所有字段
+        val headers = template.fields.map { it.label }
+        val sampleRows = buildVerticalSampleRows(template)
+        val sheetXml = buildSheetXml(headers, sampleRows)
         val nowIso = isoNow()
+
         val workbookXml = """
             <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
             <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
                       xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
                 <sheets>
-                    <sheet name="配方信息" sheetId="1" r:id="rId1"/>
-                    <sheet name="材料明细" sheetId="2" r:id="rId2"/>
+                    <sheet name="配方导入" sheetId="1" r:id="rId1"/>
                 </sheets>
             </workbook>
         """.trimIndent()
@@ -155,7 +153,6 @@ class TemplateRepository private constructor() {
                 <Default Extension="xml" ContentType="application/xml"/>
                 <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
                 <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
-                <Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
                 <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
                 <Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>
                 <Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>
@@ -175,8 +172,7 @@ class TemplateRepository private constructor() {
             <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
             <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
                 <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
-                <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/>
-                <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+                <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
             </Relationships>
         """.trimIndent()
 
@@ -222,8 +218,7 @@ class TemplateRepository private constructor() {
             addZipEntry(zip, "_rels/.rels", rootRels)
             addZipEntry(zip, "xl/workbook.xml", workbookXml)
             addZipEntry(zip, "xl/_rels/workbook.xml.rels", workbookRels)
-            addZipEntry(zip, "xl/worksheets/sheet1.xml", summarySheetXml)
-            addZipEntry(zip, "xl/worksheets/sheet2.xml", detailSheetXml)
+            addZipEntry(zip, "xl/worksheets/sheet1.xml", sheetXml)
             addZipEntry(zip, "xl/styles.xml", stylesXml)
             addZipEntry(zip, "docProps/core.xml", coreProps)
             addZipEntry(zip, "docProps/app.xml", appProps)
@@ -292,12 +287,13 @@ class TemplateRepository private constructor() {
 
     private fun buildDefaultTemplates(): List<TemplateDefinition> {
         val now = now()
+        // 垂直展开格式：每个材料占一行
         val standardFields = listOf(
             TemplateField(
                 id = UUID.randomUUID().toString(),
                 key = "recipe_name",
                 label = "配方名称",
-                description = "整条记录的配方名称，示例：草莓烟油",
+                description = "配方的唯一标识名称，同一配方的多行材料应填写相同的配方名称",
                 required = true,
                 example = "草莓烟油",
                 order = 1
@@ -306,28 +302,10 @@ class TemplateRepository private constructor() {
                 id = UUID.randomUUID().toString(),
                 key = "recipe_code",
                 label = "配方编码",
-                description = "可选字段，配方唯一编号或物料号",
+                description = "配方唯一编号，同一配方的多行材料应填写相同的配方编码",
                 required = false,
                 example = "S000001",
                 order = 2
-            ),
-            TemplateField(
-                id = UUID.randomUUID().toString(),
-                key = "designer",
-                label = "设计师",
-                description = "负责配方设计/审核的人员",
-                required = false,
-                example = "张工",
-                order = 3
-            ),
-            TemplateField(
-                id = UUID.randomUUID().toString(),
-                key = "batch_no",
-                label = "配方批次",
-                description = "可选，配方批次或版本信息",
-                required = false,
-                example = "2025-Q1",
-                order = 4
             ),
             TemplateField(
                 id = UUID.randomUUID().toString(),
@@ -336,51 +314,69 @@ class TemplateRepository private constructor() {
                 description = "用于统计的分类，例如香精/溶剂/调味剂",
                 required = false,
                 example = "香精",
+                order = 3
+            ),
+            TemplateField(
+                id = UUID.randomUUID().toString(),
+                key = "batch_no",
+                label = "配方批次",
+                description = "配方批次或版本信息",
+                required = false,
+                example = "2025-Q1",
+                order = 4
+            ),
+            TemplateField(
+                id = UUID.randomUUID().toString(),
+                key = "designer",
+                label = "设计师",
+                description = "负责配方设计/审核的人员",
+                required = false,
+                example = "张工",
                 order = 5
             ),
             TemplateField(
                 id = UUID.randomUUID().toString(),
-                key = "recipe_description",
-                label = "配方描述",
-                description = "对整个配方的说明，整条记录只填写一次",
-                required = false,
-                example = "经典草莓烟油配方",
+                key = "material_name",
+                label = "材料名称",
+                description = "材料的名称，每个材料占一行",
+                required = true,
+                example = "草莓香精",
                 order = 6
             ),
             TemplateField(
                 id = UUID.randomUUID().toString(),
-                key = "material_line_1",
-                label = "材料1名称:重量:单位:序号",
-                description = "请按“名称:重量:单位:序号”格式填写，例如 草莓香精:50:g:1",
+                key = "material_weight",
+                label = "重量",
+                description = "材料的重量，只填数字",
                 required = true,
-                example = "草莓香精:50:g:1",
+                example = "50",
                 order = 7
             ),
             TemplateField(
                 id = UUID.randomUUID().toString(),
-                key = "material_line_2",
-                label = "材料2名称:重量:单位:序号",
-                description = "示例：草莓香精(溶剂):150:ml:2",
+                key = "material_unit",
+                label = "单位",
+                description = "重量单位，例如g、kg、ml、l",
                 required = false,
-                example = "草莓香精(溶剂):150:ml:2",
+                example = "g",
                 order = 8
             ),
             TemplateField(
                 id = UUID.randomUUID().toString(),
-                key = "material_line_3",
-                label = "材料3名称:重量:单位:序号",
-                description = "可继续追加更多材料列，按照同样格式填写",
+                key = "material_sequence",
+                label = "材料序号",
+                description = "材料的顺序编号，可选",
                 required = false,
-                example = "柠檬酸:10:g:3",
+                example = "1",
                 order = 9
             ),
             TemplateField(
                 id = UUID.randomUUID().toString(),
                 key = "material_notes",
-                label = "材料/工艺备注",
-                description = "整体备注或注意事项，例如“需低温保存”",
+                label = "备注",
+                description = "材料的备注信息或工艺说明",
                 required = false,
-                example = "需低温保存",
+                example = "",
                 order = 10
             )
         )
@@ -398,28 +394,41 @@ class TemplateRepository private constructor() {
         return listOf(standardTemplate)
     }
 
-    private fun buildSampleRows(template: TemplateDefinition): List<List<String>> {
-        // 仅生成一条示例记录，避免示例行重复
-        val baseRow = template.fields.map { it.example.orEmpty() }
-        return listOf(baseRow)
-    }
+    /**
+     * 生成垂直展开格式的示例数据（同一配方的多个材料）
+     */
+    private fun buildVerticalSampleRows(template: TemplateDefinition): List<List<String>> {
+        val sampleMaterials = listOf(
+            mapOf(
+                "material_name" to "草莓香精",
+                "material_weight" to "50",
+                "material_unit" to "g",
+                "material_sequence" to "1",
+                "material_notes" to ""
+            ),
+            mapOf(
+                "material_name" to "草莓香精(溶剂)",
+                "material_weight" to "150",
+                "material_unit" to "ml",
+                "material_sequence" to "2",
+                "material_notes" to ""
+            ),
+            mapOf(
+                "material_name" to "柠檬酸",
+                "material_weight" to "10",
+                "material_unit" to "g",
+                "material_sequence" to "3",
+                "material_notes" to ""
+            )
+        )
 
-    private fun buildMaterialDetailSampleRows(
-        template: TemplateDefinition,
-        materialFields: List<TemplateField>
-    ): List<List<String>> {
-        val recipeCode = template.fields.find { it.key == "recipe_code" }?.example?.takeIf { it.isNotBlank() }
-            ?: "SAMPLE_CODE"
-        if (materialFields.isEmpty()) {
-            return listOf(listOf(recipeCode, "1", "示例材料", "50", "g", ""))
-        }
-        return materialFields.mapIndexed { index, field ->
-            val parts = field.example.split(":")
-            val name = parts.getOrNull(0).orEmpty()
-            val weight = parts.getOrNull(1).orEmpty()
-            val unit = parts.getOrNull(2).orEmpty()
-            val seq = parts.getOrNull(3).orEmpty().ifBlank { (index + 1).toString() }
-            listOf(recipeCode, seq, name, weight, unit, "")
+        return sampleMaterials.map { material ->
+            template.fields.map { field ->
+                when (field.key) {
+                    in material.keys -> material[field.key].orEmpty()
+                    else -> field.example
+                }
+            }
         }
     }
 

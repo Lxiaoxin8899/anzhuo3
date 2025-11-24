@@ -5,7 +5,16 @@
       "Bash(dir:*)",
       "Bash(tree:*)",
       "Bash(./gradlew build:*)",
-      "Bash(./gradlew compileDebugKotlin:*)"
+      "Bash(./gradlew compileDebugKotlin:*)",
+      "Bash(tasklist:*)",
+      "Bash(findstr:*)",
+      "Bash(gradlew:*)",
+      "Bash(.gradlew --stop)",
+      "Bash(cmd /c \"gradlew.bat clean\")",
+      "Bash(cmd /c:*)",
+      "Bash(./gradlew clean:*)",
+      "Bash(taskkill:*)",
+      "Bash(.gradlew compileDebugKotlin:*)"
     ],
     "deny": [],
     "ask": []

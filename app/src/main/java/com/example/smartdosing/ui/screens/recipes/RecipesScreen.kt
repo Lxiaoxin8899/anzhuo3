@@ -64,9 +64,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalContext
 import com.example.smartdosing.data.Recipe
 import com.example.smartdosing.data.RecipePriority
 import com.example.smartdosing.data.RecipeRepository
+import com.example.smartdosing.data.DatabaseRecipeRepository
 import com.example.smartdosing.data.RecipeStats
 import com.example.smartdosing.data.RecipeStatus
 import com.example.smartdosing.ui.theme.SmartDosingTheme
@@ -86,7 +88,8 @@ fun RecipesScreen(
     onNavigateToDosingOperation: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    val repository = remember { RecipeRepository.getInstance() }
+    val context = LocalContext.current
+    val repository = remember { DatabaseRecipeRepository.getInstance(context) }
 
     var recipes by remember { mutableStateOf<List<Recipe>>(emptyList()) }
     var filteredRecipes by remember { mutableStateOf<List<Recipe>>(emptyList()) }
@@ -127,7 +130,28 @@ fun RecipesScreen(
         }
     }
 
-    val stats = remember(recipes) { repository.getRecipeStats() }
+    var stats by remember {
+        mutableStateOf(
+            RecipeStats(
+                totalRecipes = 0,
+                categoryCounts = emptyMap(),
+                customerCounts = emptyMap(),
+                statusCounts = emptyMap(),
+                priorityCounts = emptyMap(),
+                recentlyUsed = emptyList(),
+                mostUsed = emptyList(),
+                recentlyCreated = emptyList(),
+                categoryTree = emptyList()
+            )
+        )
+    }
+    var timeRanges by remember { mutableStateOf<List<String>>(emptyList()) }
+
+    LaunchedEffect(recipes) {
+        stats = repository.getRecipeStats()
+        timeRanges = repository.getTimeRanges()
+    }
+
     val categories = remember(recipes) { recipes.map { it.category }.distinct() }
     val subCategories = remember(recipes, selectedCategory) {
         if (selectedCategory.isEmpty()) emptyList()
@@ -138,7 +162,6 @@ fun RecipesScreen(
     val customers = remember(recipes) {
         recipes.mapNotNull { it.customer.takeIf(String::isNotEmpty) }.distinct()
     }
-    val timeRanges = remember(recipes) { repository.getTimeRanges() }
     val folderSnapshot = customFolders.toList()
     // 综合过滤逻辑：支持搜索/分类/状态/自定义组/快速集合
     LaunchedEffect(

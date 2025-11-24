@@ -19,6 +19,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.smartdosing.data.RecipeRepository
+import com.example.smartdosing.data.DatabaseRecipeRepository
 import com.example.smartdosing.data.Material as RecipeMaterial
 import com.example.smartdosing.ui.theme.SmartDosingTheme
 import java.io.BufferedReader
@@ -41,16 +42,50 @@ class VoiceAnnouncementManager(private val context: android.content.Context) {
     private var isInitialized = false
 
     fun initialize(onReady: () -> Unit = {}) {
-        tts = TextToSpeech(context) { status ->
-            if (status == TextToSpeech.SUCCESS) {
-                tts?.apply {
-                    language = Locale.CHINESE
-                    setSpeechRate(0.8f)  // 稍微慢一点，便于理解
-                    setPitch(1.0f)       // 标准音调
+        android.util.Log.d("VoiceManager", "开始初始化TTS服务")
+
+        try {
+            tts = TextToSpeech(context) { status ->
+                when (status) {
+                    TextToSpeech.SUCCESS -> {
+                        android.util.Log.d("VoiceManager", "TTS初始化成功")
+                        tts?.apply {
+                            // 优先尝试中文（中国）
+                            val chineseResult = setLanguage(Locale.CHINA)
+                            if (chineseResult == TextToSpeech.LANG_MISSING_DATA || chineseResult == TextToSpeech.LANG_NOT_SUPPORTED) {
+                                android.util.Log.w("VoiceManager", "中文不支持，尝试使用默认语言")
+                                setLanguage(Locale.getDefault())
+                            } else {
+                                android.util.Log.d("VoiceManager", "已设置中文语言")
+                            }
+
+                            setSpeechRate(0.9f)  // 稍微慢一点，便于理解
+                            setPitch(1.1f)       // 稍微提高音调，更清晰
+
+                            // 设置音频属性，确保在工业环境中音量足够
+                            val audioAttributes = android.media.AudioAttributes.Builder()
+                                .setUsage(android.media.AudioAttributes.USAGE_NOTIFICATION)
+                                .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SPEECH)
+                                .build()
+                            setAudioAttributes(audioAttributes)
+                        }
+                        isInitialized = true
+                        android.util.Log.d("VoiceManager", "TTS配置完成")
+                        onReady()
+                    }
+                    TextToSpeech.ERROR -> {
+                        android.util.Log.e("VoiceManager", "TTS初始化失败")
+                        isInitialized = false
+                    }
+                    else -> {
+                        android.util.Log.w("VoiceManager", "TTS初始化未知状态: $status")
+                        isInitialized = false
+                    }
                 }
-                isInitialized = true
-                onReady()
             }
+        } catch (e: Exception) {
+            android.util.Log.e("VoiceManager", "TTS初始化异常", e)
+            isInitialized = false
         }
     }
 
@@ -102,7 +137,35 @@ class VoiceAnnouncementManager(private val context: android.content.Context) {
     }
 
     private fun speak(text: String) {
-        tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "announcement")
+        android.util.Log.d("VoiceManager", "尝试播放语音: $text")
+
+        if (!isInitialized) {
+            android.util.Log.w("VoiceManager", "TTS未初始化，跳过播放")
+            return
+        }
+
+        val ttsInstance = tts
+        if (ttsInstance == null) {
+            android.util.Log.e("VoiceManager", "TTS实例为空")
+            return
+        }
+
+        try {
+            val result = ttsInstance.speak(text, TextToSpeech.QUEUE_FLUSH, null, "announcement")
+            when (result) {
+                TextToSpeech.SUCCESS -> {
+                    android.util.Log.d("VoiceManager", "语音播放成功")
+                }
+                TextToSpeech.ERROR -> {
+                    android.util.Log.e("VoiceManager", "语音播放失败")
+                }
+                else -> {
+                    android.util.Log.w("VoiceManager", "语音播放未知结果: $result")
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("VoiceManager", "语音播放异常", e)
+        }
     }
 
     private fun formatWeight(weight: Float, unit: String): String {
@@ -133,8 +196,8 @@ fun DosingOperationScreen(
     onNavigateBack: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    val repository = remember { RecipeRepository.getInstance() }
     val context = LocalContext.current
+    val repository = remember { DatabaseRecipeRepository.getInstance(context) }
     val normalizedRecipeId = recipeId?.trim().orEmpty()
     val isCsvMode = normalizedRecipeId.isEmpty() || normalizedRecipeId == "import_csv" || normalizedRecipeId == "quick_start"
     var recipe by remember(normalizedRecipeId) { mutableStateOf<List<Material>?>(null) }

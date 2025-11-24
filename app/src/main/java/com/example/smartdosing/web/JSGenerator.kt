@@ -794,11 +794,26 @@ async function uploadFileImport() {
     uploadBtn.disabled = true;
 
     try {
+        console.log('[Import] 开始上传文件:', file.name, file.size, 'bytes');
+
+        // 添加30秒超时
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => {
+            controller.abort();
+            console.error('[Import] 请求超时');
+        }, 30000);
+
         const response = await fetch('/api/import/recipes', {
             method: 'POST',
-            body: formData
+            body: formData,
+            signal: controller.signal
         });
+
+        clearTimeout(timeoutId);
+        console.log('[Import] 收到响应, status:', response.status);
+
         const data = await response.json();
+        console.log('[Import] 解析响应数据:', data);
 
         if (data.data) {
             renderImportSummary(data.data);
@@ -813,8 +828,14 @@ async function uploadFileImport() {
             showNotification(data.message || '导入完成但存在错误，请检查结果', data.data && data.data.success > 0 ? 'warning' : 'error');
         }
     } catch (error) {
-        console.error('文件导入失败:', error);
-        showNotification('文件上传失败，请重试', 'error');
+        console.error('[Import] 文件导入失败:', error);
+        if (error.name === 'AbortError') {
+            showNotification('上传超时，请检查网络连接或文件大小', 'error');
+        } else if (error instanceof TypeError) {
+            showNotification('网络错误，请检查服务器是否正常运行', 'error');
+        } else {
+            showNotification('文件上传失败：' + (error.message || '未知错误'), 'error');
+        }
     } finally {
         uploadBtn.textContent = '上传并导入';
         uploadBtn.disabled = false;
