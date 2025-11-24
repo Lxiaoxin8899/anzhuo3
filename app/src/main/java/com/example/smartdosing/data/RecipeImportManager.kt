@@ -199,23 +199,46 @@ class RecipeImportManager(
         errors: MutableList<String>
     ): List<MaterialImport> {
         val materials = mutableListOf<MaterialImport>()
-        materialFields.forEachIndexed { index, field ->
-            val value = valueMap[field.key].orEmpty()
-            if (value.isBlank()) {
-                return@forEachIndexed
-            }
-            val parts = value.split(":").map { it.trim() }
-            val name = parts.getOrNull(0).orEmpty()
-            val weight = parts.getOrNull(1)?.toDoubleOrNull()
-            val unit = parts.getOrNull(2).orEmpty().ifBlank { "g" }
-            val sequence = parts.getOrNull(3)?.toIntOrNull() ?: (index + 1)
 
-            if (name.isBlank() || weight == null) {
-                errors += "第$rowNumber 行第${index + 1}个材料格式不正确，应为“名称:重量:单位:序号”"
-                return@forEachIndexed
+        // 检查是否为垂直展开格式（直接从valueMap获取字段）
+        val materialName = valueMap["material_name"].orEmpty()
+        val materialCode = valueMap["material_code"].orEmpty()
+        val materialWeight = valueMap["material_weight"]?.toDoubleOrNull()
+        val materialUnit = valueMap["material_unit"].orEmpty().ifBlank { "g" }
+        val materialSeq = valueMap["material_sequence"]?.toIntOrNull() ?: 1
+        val materialNotes = valueMap["material_notes"].orEmpty()
+
+        if (materialName.isNotBlank() && materialWeight != null) {
+            // 垂直展开格式：直接从字段获取材料信息
+            materials += MaterialImport(
+                name = materialName,
+                code = materialCode,
+                weight = materialWeight,
+                unit = materialUnit,
+                sequence = materialSeq,
+                notes = materialNotes
+            )
+        } else {
+            // 内联格式：从material_line字段解析
+            materialFields.forEachIndexed { index, field ->
+                val value = valueMap[field.key].orEmpty()
+                if (value.isBlank()) {
+                    return@forEachIndexed
+                }
+                val parts = value.split(":").map { it.trim() }
+                val name = parts.getOrNull(0).orEmpty()
+                val weight = parts.getOrNull(1)?.toDoubleOrNull()
+                val unit = parts.getOrNull(2).orEmpty().ifBlank { "g" }
+                val sequence = parts.getOrNull(3)?.toIntOrNull() ?: (index + 1)
+
+                if (name.isBlank() || weight == null) {
+                    errors += "第$rowNumber 行第${index + 1}个材料格式不正确，应为\"名称:重量:单位:序号\""
+                    return@forEachIndexed
+                }
+                materials += MaterialImport(name = name, code = "", weight = weight, unit = unit, sequence = sequence, notes = "")
             }
-            materials += MaterialImport(name = name, weight = weight, unit = unit, sequence = sequence, notes = "")
         }
+
         return materials
     }
 

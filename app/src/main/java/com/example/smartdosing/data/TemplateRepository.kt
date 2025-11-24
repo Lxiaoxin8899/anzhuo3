@@ -345,12 +345,21 @@ class TemplateRepository private constructor() {
             ),
             TemplateField(
                 id = UUID.randomUUID().toString(),
+                key = "material_code",
+                label = "材料编码",
+                description = "材料的唯一编号或SKU，用于库存管理和追溯",
+                required = false,
+                example = "MAT001",
+                order = 7
+            ),
+            TemplateField(
+                id = UUID.randomUUID().toString(),
                 key = "material_weight",
                 label = "重量",
                 description = "材料的重量，只填数字",
                 required = true,
                 example = "50",
-                order = 7
+                order = 8
             ),
             TemplateField(
                 id = UUID.randomUUID().toString(),
@@ -359,7 +368,7 @@ class TemplateRepository private constructor() {
                 description = "重量单位，例如g、kg、ml、l",
                 required = false,
                 example = "g",
-                order = 8
+                order = 9
             ),
             TemplateField(
                 id = UUID.randomUUID().toString(),
@@ -368,7 +377,7 @@ class TemplateRepository private constructor() {
                 description = "材料的顺序编号，可选",
                 required = false,
                 example = "1",
-                order = 9
+                order = 10
             ),
             TemplateField(
                 id = UUID.randomUUID().toString(),
@@ -377,7 +386,7 @@ class TemplateRepository private constructor() {
                 description = "材料的备注信息或工艺说明",
                 required = false,
                 example = "",
-                order = 10
+                order = 11
             )
         )
 
@@ -401,6 +410,7 @@ class TemplateRepository private constructor() {
         val sampleMaterials = listOf(
             mapOf(
                 "material_name" to "草莓香精",
+                "material_code" to "MAT001",
                 "material_weight" to "50",
                 "material_unit" to "g",
                 "material_sequence" to "1",
@@ -408,6 +418,7 @@ class TemplateRepository private constructor() {
             ),
             mapOf(
                 "material_name" to "草莓香精(溶剂)",
+                "material_code" to "MAT002",
                 "material_weight" to "150",
                 "material_unit" to "ml",
                 "material_sequence" to "2",
@@ -415,6 +426,7 @@ class TemplateRepository private constructor() {
             ),
             mapOf(
                 "material_name" to "柠檬酸",
+                "material_code" to "MAT003",
                 "material_weight" to "10",
                 "material_unit" to "g",
                 "material_sequence" to "3",

@@ -321,6 +321,10 @@ class WebServerManager(private val context: Context) {
         tbody td { padding: 1rem; color: #2d3748; }
         .loading { text-align: center; padding: 2rem; color: #718096; }
         .error { background: #fed7d7; color: #c53030; padding: 1rem; border-radius: 8px; margin: 1rem 0; }
+        .actions { display: flex; gap: 0.5rem; }
+        .action-btn { padding: 0.25rem 0.75rem; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9rem; }
+        .action-btn.delete { background: #fee2e2; color: #b91c1c; }
+        .action-btn.delete:hover { background: #fecaca; }
     </style>
 </head>
 <body>
@@ -358,10 +362,11 @@ class WebServerManager(private val context: Context) {
                         <th>状态</th>
                         <th>使用次数</th>
                         <th>创建时间</th>
+                        <th>操作</th>
                     </tr>
                 </thead>
                 <tbody id="recipes-tbody">
-                    <tr><td colspan="7" class="loading">加载中...</td></tr>
+                    <tr><td colspan="8" class="loading">加载中...</td></tr>
                 </tbody>
             </table>
         </div>
@@ -390,26 +395,70 @@ class WebServerManager(private val context: Context) {
             const tbody = document.getElementById('recipes-tbody');
 
             if (recipes.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="7" class="loading">暂无配方数据</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="8" class="loading">暂无配方数据</td></tr>';
                 return;
             }
 
-            tbody.innerHTML = recipes.map(recipe => `
-                <tr>
-                    <td>${'$'}{recipe.code || '-'}</td>
-                    <td>${'$'}{recipe.name || '-'}</td>
-                    <td>${'$'}{recipe.category || '-'}</td>
-                    <td>${'$'}{recipe.customer || '-'}</td>
-                    <td>${'$'}{recipe.status || '-'}</td>
-                    <td>${'$'}{recipe.useCount || 0}</td>
-                    <td>${'$'}{recipe.createdAt ? new Date(recipe.createdAt).toLocaleDateString('zh-CN') : '-'}</td>
-                </tr>
-            `).join('');
+            tbody.innerHTML = recipes.map(recipe => {
+                const useCount = recipe.usageCount ?? recipe.useCount ?? 0;
+                const createTime = recipe.createTime ?? recipe.createdAt;
+                const formattedTime = createTime ? new Date(createTime).toLocaleDateString('zh-CN') : '-';
+                const safeName = encodeURIComponent(recipe.name || recipe.code || '-');
+                return `
+                    <tr>
+                        <td>${'$'}{recipe.code || '-'}</td>
+                        <td>${'$'}{recipe.name || '-'}</td>
+                        <td>${'$'}{recipe.category || '-'}</td>
+                        <td>${'$'}{recipe.customer || '-'}</td>
+                        <td>${'$'}{recipe.status || '-'}</td>
+                        <td>${'$'}{useCount}</td>
+                        <td>${'$'}{formattedTime}</td>
+                        <td>
+                            <div class="actions">
+                                <button class="action-btn delete delete-btn" data-id="${'$'}{recipe.id}" data-name="${'$'}{safeName}">删除</button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+            attachActionHandlers();
         }
 
         function showError(message) {
             const tbody = document.getElementById('recipes-tbody');
-            tbody.innerHTML = `<tr><td colspan="7"><div class="error">${'$'}{message}</div></td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="8"><div class="error">${'$'}{message}</div></td></tr>`;
+        }
+
+        function attachActionHandlers() {
+            const buttons = document.querySelectorAll('.delete-btn');
+            buttons.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const id = btn.dataset.id;
+                    const name = decodeURIComponent(btn.dataset.name || '');
+                    confirmDeleteRecipe(id, name);
+                });
+            });
+        }
+
+        async function confirmDeleteRecipe(id, name) {
+            if (!id) {
+                alert('未找到配方ID，无法删除');
+                return;
+            }
+            const confirmed = window.confirm(`确定删除配方【${'$'}{name || '未命名'}】吗？此操作不可恢复。`);
+            if (!confirmed) return;
+            try {
+                const response = await fetch(`/api/recipes/${'$'}{id}`, { method: 'DELETE' });
+                const result = await response.json();
+                if (result.success) {
+                    alert(result.message || '删除成功');
+                    loadRecipes();
+                } else {
+                    alert('删除失败：' + (result.message || '未知错误'));
+                }
+            } catch (error) {
+                alert('网络错误：' + error.message);
+            }
         }
 
         document.getElementById('search-input').addEventListener('input', (e) => {
@@ -917,7 +966,10 @@ class WebServerManager(private val context: Context) {
                     Log.e(TAG, "获取配方列表失败", e)
                     call.respond(
                         HttpStatusCode.InternalServerError,
-                        ApiResponse<List<Recipe>>(success = false, message = "获取配方列表失败")
+                        ApiResponse<List<Recipe>>(
+                            success = false,
+                            message = e.localizedMessage ?: "获取配方列表失败"
+                        )
                     )
                 }
             }
@@ -1219,10 +1271,11 @@ class WebServerManager(private val context: Context) {
                         Log.w(TAG, "[Import] 错误列表: ${summary.errors.joinToString("; ")}")
                     }
 
+                    val detailHint = if (summary.errors.isNotEmpty()) "，请查看错误详情" else ""
                     val message = when {
-                        summary.success > 0 && summary.failed == 0 -> "成功导入${summary.success}条配方"
-                        summary.success > 0 && summary.failed > 0 -> "成功导入${summary.success}条，${summary.failed}条失败"
-                        else -> "未导入任何配方，请检查模板内容"
+                        summary.success > 0 && summary.failed == 0 -> "成功导入${summary.success}条配方$detailHint"
+                        summary.success > 0 && summary.failed > 0 -> "成功导入${summary.success}条，${summary.failed}条失败$detailHint"
+                        else -> "未导入任何配方，请检查模板内容$detailHint"
                     }
 
                     call.respond(

@@ -220,7 +220,7 @@ class DatabaseRecipeRepository(private val context: Context) {
             }
         }
 
-        // 构建更新后的配方
+        // 构建更新后的配方，带上导入模板中的材料编码
         val materials = request.materials.mapIndexed { index, materialImport ->
             Material(
                 id = "material_${System.currentTimeMillis()}_$index",
@@ -228,7 +228,8 @@ class DatabaseRecipeRepository(private val context: Context) {
                 weight = materialImport.weight,
                 unit = materialImport.unit,
                 sequence = materialImport.sequence,
-                notes = materialImport.notes
+                notes = materialImport.notes,
+                code = materialImport.code
             )
         }
 

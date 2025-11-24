@@ -37,7 +37,8 @@ data class Material(
     val weight: Double, // 克
     val unit: String = "g",
     val sequence: Int = 1, // 投料顺序
-    val notes: String = ""
+    val notes: String = "",
+    val code: String = "" // 材料编码 - 用于库存管理和追溯
 )
 
 /**
@@ -93,6 +94,7 @@ data class RecipeImportRequest(
 
 data class MaterialImport(
     val name: String,
+    val code: String = "", // 材料编码
     val weight: Double,
     val unit: String = "g",
     val sequence: Int = 1,

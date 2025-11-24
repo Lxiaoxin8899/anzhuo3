@@ -306,7 +306,6 @@ class XiaomiTTSManager(private val context: Context) {
 
                 // 设置小米TTS特定参数
                 configureXiaomiTTSParameters(packageName)
-                testXiaomiTTS()
             }
             true
         } catch (e: Exception) {
@@ -332,18 +331,6 @@ class XiaomiTTSManager(private val context: Context) {
                 setPitch(1.0f)     // 正常音调
                 Log.d(TAG, "配置MIUI TTS参数")
             }
-        }
-    }
-    
-    /**
-     * 测试小米TTS
-     */
-    private fun testXiaomiTTS() {
-        try {
-            textToSpeech?.speak("小米语音测试成功", TextToSpeech.QUEUE_FLUSH, null, "xiaomi_test")
-            Log.d(TAG, "小米TTS测试播放完成")
-        } catch (e: Exception) {
-            Log.e(TAG, "小米TTS测试失败", e)
         }
     }
     

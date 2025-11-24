@@ -70,7 +70,8 @@ data class RecipeEntity(
     tableName = "materials",
     indices = [
         Index(value = ["recipe_id"]),
-        Index(value = ["recipe_id", "sequence"])
+        Index(value = ["recipe_id", "sequence"]),
+        Index(value = ["code"])
     ],
     foreignKeys = [
         ForeignKey(
@@ -92,7 +93,8 @@ data class MaterialEntity(
     val weight: Double,                             // 重量
     val unit: String = "g",                         // 单位
     val sequence: Int = 1,                          // 投料顺序
-    val notes: String = ""                          // 备注
+    val notes: String = "",                         // 备注
+    val code: String = ""                           // 材料编码 - 用于库存管理和追溯
 )
 
 /**

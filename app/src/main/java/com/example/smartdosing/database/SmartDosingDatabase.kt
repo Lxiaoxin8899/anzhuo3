@@ -147,7 +147,7 @@ abstract class SmartDosingDatabase : RoomDatabase() {
                     templateId = standardTemplate.id,
                     fieldKey = "recipe_name",
                     label = "配方名称",
-                    description = "整条记录的配方名称，示例：草莓烟油",
+                    description = "同一配方的多行材料需保持一致的名称",
                     required = true,
                     example = "草莓烟油",
                     fieldOrder = 1
@@ -163,13 +163,13 @@ abstract class SmartDosingDatabase : RoomDatabase() {
                     fieldOrder = 2
                 ),
                 TemplateFieldEntity(
-                    id = "field_designer",
+                    id = "field_recipe_category",
                     templateId = standardTemplate.id,
-                    fieldKey = "designer",
-                    label = "设计师",
-                    description = "负责配方设计/审核的人员",
+                    fieldKey = "recipe_category",
+                    label = "配方分类",
+                    description = "用于统计的分类，例如香精/溶剂/调味剂",
                     required = false,
-                    example = "张工",
+                    example = "香精",
                     fieldOrder = 3
                 ),
                 TemplateFieldEntity(
@@ -183,47 +183,76 @@ abstract class SmartDosingDatabase : RoomDatabase() {
                     fieldOrder = 4
                 ),
                 TemplateFieldEntity(
-                    id = "field_recipe_category",
+                    id = "field_designer",
                     templateId = standardTemplate.id,
-                    fieldKey = "recipe_category",
-                    label = "配方分类",
-                    description = "用于统计的分类，例如香精/溶剂/调味剂",
+                    fieldKey = "designer",
+                    label = "设计师",
+                    description = "负责配方设计/审核的人员",
                     required = false,
-                    example = "香精",
+                    example = "张工",
                     fieldOrder = 5
                 ),
                 TemplateFieldEntity(
-                    id = "field_material_line_1",
+                    id = "field_material_name",
                     templateId = standardTemplate.id,
-                    fieldKey = "material_line_1",
-                    label = "材料1名称:重量:单位:序号",
-                    description = "请按\"名称:重量:单位:序号\"格式填写，例如 草莓香精:50:g:1",
+                    fieldKey = "material_name",
+                    label = "材料名称",
+                    description = "材料的名称，每个材料占一行",
                     required = true,
-                    example = "草莓香精:50:g:1",
+                    example = "草莓香精",
                     fieldOrder = 6
                 ),
                 TemplateFieldEntity(
-                    id = "field_material_line_2",
+                    id = "field_material_code",
                     templateId = standardTemplate.id,
-                    fieldKey = "material_line_2",
-                    label = "材料2名称:重量:单位:序号",
-                    description = "示例：草莓香精(溶剂):150:ml:2",
+                    fieldKey = "material_code",
+                    label = "材料编码",
+                    description = "材料唯一编号或SKU，用于库存和追溯",
                     required = false,
-                    example = "草莓香精(溶剂):150:ml:2",
+                    example = "MAT001",
                     fieldOrder = 7
                 ),
                 TemplateFieldEntity(
-                    id = "field_material_line_3",
+                    id = "field_material_weight",
                     templateId = standardTemplate.id,
-                    fieldKey = "material_line_3",
-                    label = "材料3名称:重量:单位:序号",
-                    description = "可继续追加更多材料列，按照同样格式填写",
-                    required = false,
-                    example = "柠檬酸:10:g:3",
+                    fieldKey = "material_weight",
+                    label = "重量",
+                    description = "材料重量，只填写数字",
+                    required = true,
+                    example = "50",
                     fieldOrder = 8
+                ),
+                TemplateFieldEntity(
+                    id = "field_material_unit",
+                    templateId = standardTemplate.id,
+                    fieldKey = "material_unit",
+                    label = "单位",
+                    description = "重量单位，例如 g/kg/ml",
+                    required = false,
+                    example = "g",
+                    fieldOrder = 9
+                ),
+                TemplateFieldEntity(
+                    id = "field_material_sequence",
+                    templateId = standardTemplate.id,
+                    fieldKey = "material_sequence",
+                    label = "材料序号",
+                    description = "投料顺序编号，可选",
+                    required = false,
+                    example = "1",
+                    fieldOrder = 10
+                ),
+                TemplateFieldEntity(
+                    id = "field_material_notes",
+                    templateId = standardTemplate.id,
+                    fieldKey = "material_notes",
+                    label = "备注",
+                    description = "材料备注或工艺说明",
+                    required = false,
+                    example = "",
+                    fieldOrder = 11
                 )
             )
-
             templateDao.insertTemplateWithFields(standardTemplate, standardFields)
             android.util.Log.i("SmartDosingDB", "插入默认模板完成")
         }

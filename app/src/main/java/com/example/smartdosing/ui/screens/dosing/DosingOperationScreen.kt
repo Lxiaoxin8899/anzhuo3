@@ -116,7 +116,7 @@ class VoiceAnnouncementManager(private val context: android.content.Context) {
                             android.util.Log.d("VoiceManager", "✅ 小爱TTS配置完成 - 引擎: $enginePackage")
 
                             // 测试播放
-                            speak("小爱语音已就绪，智能投料系统准备完成", TextToSpeech.QUEUE_FLUSH, null, null)
+                        android.util.Log.i("DosingTTS", "小爱语音引擎已就绪")
                             onReady()
                             return true
                         } else {
@@ -159,7 +159,7 @@ class VoiceAnnouncementManager(private val context: android.content.Context) {
                     android.util.Log.d("VoiceManager", "✅ Google TTS（HyperOS优化）配置完成")
 
                     // 测试播放
-                    speak("Google语音已就绪，智能投料系统准备完成", TextToSpeech.QUEUE_FLUSH, null, null)
+                    android.util.Log.i("DosingTTS", "Google语音引擎已就绪")
                     onReady()
                 }
                 return true
@@ -188,7 +188,7 @@ class VoiceAnnouncementManager(private val context: android.content.Context) {
                 ttsInstance.setSpeechRate(1.0f)
                 ttsInstance.setPitch(1.0f)
                 isInitialized = true
-                ttsInstance.speak("智能投料系统语音播报已就绪", TextToSpeech.QUEUE_FLUSH, null, null)
+                ttsInstance.speak("投料系统已经就绪", TextToSpeech.QUEUE_FLUSH, null, null)
                 onReady()
             } else {
                 android.util.Log.e("VoiceManager", "❌ 标准TTS语言设置失败")
@@ -665,10 +665,10 @@ fun DosingScreen(
  * 将配方材料转换为投料操作材料
  */
 private fun RecipeMaterial.toOperationMaterial(): Material {
-    val normalizedId = if (id.isBlank()) {
-        "MAT-$sequence"
-    } else {
-        id
+    val normalizedId = when {
+        code.isNotBlank() -> code
+        id.isNotBlank() -> id
+        else -> "MAT-$sequence"
     }
     val normalizedUnit = unit.ifBlank { "KG" }.uppercase(Locale.getDefault())
     return Material(

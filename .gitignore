@@ -13,3 +13,6 @@
 .externalNativeBuild
 .cxx
 local.properties
+_tmp_script.py
+replace_template.py
+update_template.py

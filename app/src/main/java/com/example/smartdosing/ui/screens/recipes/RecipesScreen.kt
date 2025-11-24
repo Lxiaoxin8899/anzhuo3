@@ -104,6 +104,7 @@ fun RecipesScreen(
     var selectedFolderId by remember { mutableStateOf<String?>(null) }
     var viewMode by remember { mutableStateOf(RecipeViewMode.CARD) }
     var isFilterExpanded by remember { mutableStateOf(true) }
+    var loadError by remember { mutableStateOf<String?>(null) }
 
     val customFolders = remember { mutableStateListOf<RecipeFolder>() }
     fun addRecipeToFolder(recipeId: String, folderId: String) {
@@ -118,15 +119,22 @@ fun RecipesScreen(
 
     // 预加载数据，后续可替换成 Flow 收集
     LaunchedEffect(Unit) {
-        recipes = repository.getAllRecipes()
-        filteredRecipes = recipes
-        if (customFolders.isEmpty()) {
-            customFolders.addAll(
-                listOf(
-                    RecipeFolder(id = UUID.randomUUID().toString(), name = "快速交付", recipeIds = emptySet()),
-                    RecipeFolder(id = UUID.randomUUID().toString(), name = "出口客户", recipeIds = emptySet())
+        runCatching {
+            val allRecipes = repository.getAllRecipes()
+            recipes = allRecipes
+            filteredRecipes = allRecipes
+            if (customFolders.isEmpty()) {
+                customFolders.addAll(
+                    listOf(
+                        RecipeFolder(id = UUID.randomUUID().toString(), name = "快速交付", recipeIds = emptySet()),
+                        RecipeFolder(id = UUID.randomUUID().toString(), name = "出口客户", recipeIds = emptySet())
+                    )
                 )
-            )
+            }
+        }.onSuccess {
+            loadError = null
+        }.onFailure { throwable ->
+            loadError = throwable.localizedMessage ?: "加载配方失败，请稍后重试"
         }
     }
 
@@ -146,10 +154,21 @@ fun RecipesScreen(
         )
     }
     var timeRanges by remember { mutableStateOf<List<String>>(emptyList()) }
+    var statsError by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(recipes) {
-        stats = repository.getRecipeStats()
-        timeRanges = repository.getTimeRanges()
+        if (recipes.isEmpty()) {
+            statsError = null
+            return@LaunchedEffect
+        }
+        runCatching {
+            stats = repository.getRecipeStats()
+            timeRanges = repository.getTimeRanges()
+        }.onSuccess {
+            statsError = null
+        }.onFailure { throwable ->
+            statsError = throwable.localizedMessage ?: "统计信息加载失败"
+        }
     }
 
     val categories = remember(recipes) { recipes.map { it.category }.distinct() }
@@ -294,6 +313,14 @@ fun RecipesScreen(
                 .fillMaxHeight(),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            loadError?.let { message ->
+                Text(
+                    text = "配方加载失败：$message",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(horizontal = 8.dp)
+                )
+            }
             RecipeWorkspaceHeader(
                 searchText = searchText,
                 onSearchTextChange = { searchText = it },
@@ -314,6 +341,14 @@ fun RecipesScreen(
                 stats = stats,
                 filteredCount = filteredRecipes.size
             )
+            statsError?.let { message ->
+                Text(
+                    text = "统计信息加载失败：$message",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(horizontal = 8.dp)
+                )
+            }
 
             Box(
                 modifier = Modifier

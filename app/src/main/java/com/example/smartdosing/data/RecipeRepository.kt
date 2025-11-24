@@ -155,7 +155,7 @@ class RecipeRepository {
         val newId = "recipe_${System.currentTimeMillis()}"
         val currentTime = dateFormat.format(Date())
 
-        // 计算材料信息
+        // 计算材料信息并写入导入模板提供的编码，确保多端数据一致
         val materials = request.materials.mapIndexed { index, materialImport ->
             Material(
                 id = "material_${System.currentTimeMillis()}_$index",
@@ -163,7 +163,8 @@ class RecipeRepository {
                 weight = materialImport.weight,
                 unit = materialImport.unit,
                 sequence = materialImport.sequence,
-                notes = materialImport.notes
+                notes = materialImport.notes,
+                code = materialImport.code
             )
         }
 
@@ -261,6 +262,7 @@ class RecipeRepository {
             }
         }
 
+        // 更新时同样带上材料编码，避免导入后的数据丢失关键字段
         val materials = request.materials.mapIndexed { index, materialImport ->
             Material(
                 id = "material_${System.currentTimeMillis()}_$index",
@@ -268,7 +270,8 @@ class RecipeRepository {
                 weight = materialImport.weight,
                 unit = materialImport.unit,
                 sequence = materialImport.sequence,
-                notes = materialImport.notes
+                notes = materialImport.notes,
+                code = materialImport.code
             )
         }
 

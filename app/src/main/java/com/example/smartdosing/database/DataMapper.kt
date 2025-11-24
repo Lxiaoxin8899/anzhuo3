@@ -97,6 +97,7 @@ object DataMapper {
             batchNo = batchNo,
             version = version,
             description = description,
+            // 生成材料列表时写入导入模板的编码，确保数据链路一致
             materials = materials.mapIndexed { index, materialImport ->
                 Material(
                     id = "material_${System.currentTimeMillis()}_$index",
@@ -104,7 +105,8 @@ object DataMapper {
                     weight = materialImport.weight,
                     unit = materialImport.unit,
                     sequence = materialImport.sequence,
-                    notes = materialImport.notes
+                    notes = materialImport.notes,
+                    code = materialImport.code
                 )
             },
             totalWeight = materials.sumOf { it.weight },
@@ -134,7 +136,8 @@ object DataMapper {
             weight = weight,
             unit = unit,
             sequence = sequence,
-            notes = notes
+            notes = notes,
+            code = code
         )
     }
 
@@ -149,7 +152,8 @@ object DataMapper {
             weight = weight,
             unit = unit,
             sequence = sequence,
-            notes = notes
+            notes = notes,
+            code = code
         )
     }
 
@@ -167,7 +171,8 @@ object DataMapper {
             weight = weight,
             unit = unit,
             sequence = sequence,
-            notes = notes
+            notes = notes,
+            code = code
         )
     }
 

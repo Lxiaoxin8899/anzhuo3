@@ -132,7 +132,7 @@ class MainActivity : ComponentActivity() {
             // 尝试设置中文语言
             val langResult = testTts?.setLanguage(Locale.CHINA)
             if (langResult != null && langResult >= TextToSpeech.LANG_AVAILABLE) {
-                testTts?.speak("智能投料系统启动完成", TextToSpeech.QUEUE_FLUSH, null, "fallback_test")
+                testTts?.speak("投料系统已经就绪", TextToSpeech.QUEUE_FLUSH, null, "fallback_test")
                 showToast("TTS功能已启用（备用方案）")
             } else {
                 Log.w("TTS", "备用TTS不支持中文")
@@ -242,7 +242,7 @@ class MainActivity : ComponentActivity() {
 
                         if (langResult >= TextToSpeech.LANG_AVAILABLE) {
                             setSpeechRate(1.0f)
-                            speak("小爱语音已就绪，智能投料系统启动完成", TextToSpeech.QUEUE_FLUSH, null, null)
+                            Log.i("TTSTest", "小爱语音引擎已就绪")
 
                             showToast("小米TTS功能正常 - 引擎: $enginePackage")
                             Log.d("TTSTest", "✅ 小爱TTS测试完成 - 引擎: $enginePackage")
@@ -281,7 +281,7 @@ class MainActivity : ComponentActivity() {
                 testTts?.apply {
                     setLanguage(Locale.CHINA)           // 中文
                     setSpeechRate(1.0f)                 // 语速正常
-                    speak("Google语音已就绪，智能投料系统启动完成", TextToSpeech.QUEUE_FLUSH, null, null)
+                    Log.i("TTSTest", "Google语音引擎已就绪")
 
                     showToast("Google TTS（HyperOS优化）功能正常")
                     Log.d("TTSTest", "✅ Google TTS HyperOS优化测试完成")
@@ -309,7 +309,7 @@ class MainActivity : ComponentActivity() {
             if (langResult >= TextToSpeech.LANG_AVAILABLE) {
                 Log.d("TTSTest", "✅ 标准TTS配置成功")
                 ttsInstance.setSpeechRate(1.0f)
-                ttsInstance.speak("智能投料系统启动完成，使用标准TTS", TextToSpeech.QUEUE_FLUSH, null, null)
+                ttsInstance.speak("投料系统已经就绪", TextToSpeech.QUEUE_FLUSH, null, null)
                 showToast("标准TTS功能正常")
             } else {
                 Log.e("TTSTest", "❌ 标准TTS语言设置失败")

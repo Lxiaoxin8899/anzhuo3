@@ -1,6 +1,7 @@
 package com.example.smartdosing.data
 
 import android.content.Context
+import androidx.room.withTransaction
 import java.io.ByteArrayInputStream
 import java.util.Locale
 import java.util.zip.ZipInputStream
@@ -89,6 +90,23 @@ class DatabaseRecipeImportManager(
             return ImportSummary(0, 0, 0, listOf("CSV内容为空，请使用模板填写数据"))
         }
 
+        val headerColumns = parseCsvLine(lines.first())
+        val requiredHeaders = template.fields
+            .sortedBy { it.order }
+            .filter { it.required }
+            .map { it.label }
+        val missingHeaders = requiredHeaders.filter { required ->
+            headerColumns.none { it == required }
+        }
+        if (missingHeaders.isNotEmpty()) {
+            return ImportSummary(
+                total = 0,
+                success = 0,
+                failed = 0,
+                errors = listOf("CSV表头缺少：${missingHeaders.joinToString("、")}，请使用最新模板")
+            )
+        }
+
         val dataLines = lines.drop(1)
         if (dataLines.isEmpty()) {
             return ImportSummary(0, 0, 0, listOf("CSV中未找到数据行，请保留表头并填写内容"))
@@ -147,6 +165,7 @@ class DatabaseRecipeImportManager(
             val materials = mutableListOf<MaterialImport>()
             rows.forEachIndexed { index, (rowNumber, valueMap) ->
                 val materialName = valueMap["material_name"].orEmpty()
+                val materialCode = valueMap["material_code"].orEmpty() // 新增：提取材料编码
                 val materialWeight = valueMap["material_weight"]?.toDoubleOrNull()
                 val materialUnit = valueMap["material_unit"].orEmpty().ifBlank { "g" }
                 val materialSeq = valueMap["material_sequence"]?.toIntOrNull() ?: (index + 1)
@@ -159,6 +178,7 @@ class DatabaseRecipeImportManager(
 
                 materials += MaterialImport(
                     name = materialName,
+                    code = materialCode, // 新增：设置材料编码
                     weight = materialWeight,
                     unit = materialUnit,
                     sequence = materialSeq,
@@ -209,12 +229,13 @@ class DatabaseRecipeImportManager(
             val entries = unzipEntries(bytes)
             // 使用单工作表
             val sheetXml = entries["xl/worksheets/sheet1.xml"]
+            val sharedStrings = parseSharedStringsXml(entries["xl/sharedStrings.xml"])
 
             if (sheetXml == null) {
                 return ImportSummary(0, 0, 0, listOf("Excel模板缺少工作表，请使用最新模板"))
             }
 
-            val summary = importExcelWithTransaction(template, sheetXml)
+            val summary = importExcelWithTransaction(template, sheetXml, sharedStrings)
 
             // 记录导入日志
             val importDuration = System.currentTimeMillis() - startTime
@@ -235,9 +256,26 @@ class DatabaseRecipeImportManager(
      */
     private suspend fun importExcelWithTransaction(
         template: TemplateDefinition,
-        sheetXml: String
+        sheetXml: String,
+        sharedStrings: List<String>
     ): ImportSummary {
-        val rows = parseSheetXml(sheetXml)
+        val rows = parseSheetXml(sheetXml, sharedStrings)
+        val headerRow = rows.firstOrNull().orEmpty()
+        val requiredHeaders = template.fields
+            .sortedBy { it.order }
+            .filter { it.required }
+            .map { it.label }
+        val headerMissing = requiredHeaders.filter { header ->
+            headerRow.none { it == header }
+        }
+        if (headerMissing.isNotEmpty()) {
+            return ImportSummary(
+                total = 0,
+                success = 0,
+                failed = 0,
+                errors = listOf("Excel表头缺少：${headerMissing.joinToString("、")}，请使用最新模板")
+            )
+        }
         val dataRows = rows.drop(1).filter { row -> row.any { it.isNotBlank() } }
 
         if (dataRows.isEmpty()) {
@@ -286,6 +324,7 @@ class DatabaseRecipeImportManager(
             val materials = mutableListOf<MaterialImport>()
             rows.forEachIndexed { index, (rowNumber, valueMap) ->
                 val materialName = valueMap["material_name"].orEmpty()
+                val materialCode = valueMap["material_code"].orEmpty() // 新增：提取材料编码
                 val materialWeight = valueMap["material_weight"]?.toDoubleOrNull()
                 val materialUnit = valueMap["material_unit"].orEmpty().ifBlank { "g" }
                 val materialSeq = valueMap["material_sequence"]?.toIntOrNull() ?: (index + 1)
@@ -298,6 +337,7 @@ class DatabaseRecipeImportManager(
 
                 materials += MaterialImport(
                     name = materialName,
+                    code = materialCode, // 新增：设置材料编码
                     weight = materialWeight,
                     unit = materialUnit,
                     sequence = materialSeq,
@@ -343,31 +383,46 @@ class DatabaseRecipeImportManager(
     ): ImportSummary {
         android.util.Log.i("DatabaseImportManager", "[Persist] 开始持久化，配方数: ${requests.size}, 解析错误数: ${parseErrors.size}")
         val errors = parseErrors.toMutableList()
-        var successCount = 0
-
-        // 直接逐个添加配方，不使用 runInTransaction（避免死锁）
-        requests.forEachIndexed { index, request ->
-            try {
-                databaseRepository.addRecipe(request)
-                successCount++
-                android.util.Log.i("DatabaseImportManager", "[Persist] 第${index + 1}个配方成功: ${request.name}")
-            } catch (e: Exception) {
-                android.util.Log.e("DatabaseImportManager", "[Persist] 第${index + 1}个配方失败: ${e.message}", e)
-                errors += "第${index + 1}条配方导入失败：${e.message ?: "未知错误"}"
+        if (requests.isEmpty()) {
+            if (errors.isEmpty()) {
+                errors += "未解析到任何有效配方，请检查模板内容"
             }
+            return ImportSummary(
+                total = parseErrors.size,
+                success = 0,
+                failed = errors.size,
+                errors = errors
+            )
         }
 
-        val total = requests.size + parseErrors.size
-        val failed = errors.size
-
-        android.util.Log.i("DatabaseImportManager", "[Persist] 持久化完成，成功: $successCount, 失败: $failed")
-
-        return ImportSummary(
-            total = total,
-            success = successCount,
-            failed = failed,
-            errors = errors
-        )
+        var processedCount = 0
+        return try {
+            database.withTransaction {
+                requests.forEachIndexed { index, request ->
+                    databaseRepository.addRecipe(request)
+                    processedCount++
+                    android.util.Log.i("DatabaseImportManager", "[Persist] 第${index + 1}个配方成功: ${request.name}")
+                }
+            }
+            val total = requests.size + parseErrors.size
+            android.util.Log.i("DatabaseImportManager", "[Persist] 持久化完成，成功: $processedCount, 失败: ${errors.size}")
+            ImportSummary(
+                total = total,
+                success = processedCount,
+                failed = errors.size,
+                errors = errors
+            )
+        } catch (e: Exception) {
+            android.util.Log.e("DatabaseImportManager", "[Persist] 执行事务失败: ${e.message}", e)
+            val failedIndex = processedCount + 1
+            errors += "第${failedIndex}条配方导入失败：${e.message ?: "未知错误"}"
+            ImportSummary(
+                total = requests.size + parseErrors.size,
+                success = 0,
+                failed = errors.size,
+                errors = errors
+            )
+        }
     }
 
     /**
@@ -416,15 +471,49 @@ class DatabaseRecipeImportManager(
         return map
     }
 
-    private fun parseSheetXml(xml: String): List<List<String>> {
+    private fun parseSheetXml(xml: String, sharedStrings: List<String>): List<List<String>> {
         val rows = mutableListOf<List<String>>()
         val rowRegex = Regex("<row[^>]*>(.*?)</row>", RegexOption.DOT_MATCHES_ALL)
-        val cellRegex = Regex("<t[^>]*>(.*?)</t>", RegexOption.DOT_MATCHES_ALL)
+        val cellRegex = Regex("<c([^>]*)>(.*?)</c>", RegexOption.DOT_MATCHES_ALL)
         rowRegex.findAll(xml).forEach { rowMatch ->
-            val cells = cellRegex.findAll(rowMatch.groupValues[1])
-                .map { unescapeXml(it.groupValues[1]) }
-                .toList()
-            rows += cells
+            val cellValues = mutableMapOf<Int, String>()
+            cellRegex.findAll(rowMatch.groupValues[1]).forEach { cellMatch ->
+                val attrs = cellMatch.groupValues[1]
+                val content = cellMatch.groupValues[2]
+                val reference = Regex("r=\\\"([A-Z]+)\\d+\\\"").find(attrs)?.groupValues?.get(1)
+                val columnIndex = reference?.let { columnIndexFromRef(it) }
+                    ?: cellValues.size
+                val cellType = Regex("t=\\\"(\\w+)\\\"").find(attrs)?.groupValues?.get(1)
+                val value = when {
+                    cellType == "s" -> {
+                        val index = Regex("<v>(.*?)</v>").find(content)?.groupValues?.get(1)?.toIntOrNull()
+                        index?.let { sharedStrings.getOrNull(it) } ?: ""
+                    }
+                    content.contains("<is>") -> {
+                        Regex("<t[^>]*>(.*?)</t>", RegexOption.DOT_MATCHES_ALL)
+                            .find(content)
+                            ?.groupValues
+                            ?.get(1)
+                            ?.let(::unescapeXml) ?: ""
+                    }
+                    else -> {
+                        Regex("<v>(.*?)</v>").find(content)?.groupValues?.get(1)?.let(::unescapeXml) ?: ""
+                    }
+                }
+                cellValues[columnIndex] = value
+            }
+            if (cellValues.isEmpty()) {
+                rows.add(emptyList())
+            } else {
+                val maxIndex = cellValues.keys.maxOrNull() ?: -1
+                val rowData = MutableList(maxIndex + 1) { "" }
+                cellValues.forEach { (idx, value) ->
+                    if (idx in rowData.indices) {
+                        rowData[idx] = value
+                    }
+                }
+                rows.add(rowData)
+            }
         }
         return rows
     }
@@ -436,6 +525,28 @@ class DatabaseRecipeImportManager(
             .replace("&quot;", "\"")
             .replace("&apos;", "'")
             .replace("&amp;", "&")
+    }
+
+    private fun parseSharedStringsXml(xml: String?): List<String> {
+        if (xml.isNullOrBlank()) return emptyList()
+        val shared = mutableListOf<String>()
+        val siRegex = Regex("<si[^>]*>(.*?)</si>", RegexOption.DOT_MATCHES_ALL)
+        val tRegex = Regex("<t[^>]*>(.*?)</t>", RegexOption.DOT_MATCHES_ALL)
+        siRegex.findAll(xml).forEach { match ->
+            val combined = tRegex.findAll(match.groupValues[1])
+                .map { unescapeXml(it.groupValues[1]) }
+                .joinToString("")
+            shared += combined
+        }
+        return shared
+    }
+
+    private fun columnIndexFromRef(columnRef: String): Int {
+        var result = 0
+        columnRef.forEach { ch ->
+            result = result * 26 + (ch.code - 'A'.code + 1)
+        }
+        return result - 1
     }
 
     private fun parseCsvLine(line: String): List<String> {
