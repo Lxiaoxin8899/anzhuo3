@@ -66,6 +66,7 @@ object SmartDosingRoutes {
     const val RECIPE_CREATE = "recipe_create"
     const val RECIPE_EDIT = "recipe_edit/{recipeId}"
     const val DOSING = "dosing"
+    const val DOSING_CHECKLIST = "dosing_checklist/{recipeId}"
     const val DOSING_OPERATION = "dosing_operation/{recipeId}"
     const val RECORDS = "records"
     const val RECORD_DETAIL = "record_detail/{recordId}"
@@ -73,6 +74,7 @@ object SmartDosingRoutes {
 
     fun recipeDetail(recipeId: String) = "recipe_detail/$recipeId"
     fun recipeEdit(recipeId: String) = "recipe_edit/$recipeId"
+    fun dosingChecklist(recipeId: String) = "dosing_checklist/$recipeId"
     fun dosingOperation(recipeId: String) = "dosing_operation/$recipeId"
     fun recordDetail(recordId: String) = "record_detail/$recordId"
 }

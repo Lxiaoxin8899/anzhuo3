@@ -14,7 +14,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.smartdosing.ui.theme.SmartDosingTheme
+import com.example.smartdosing.ui.theme.*
 
 /**
  * 投料记录页面
@@ -38,7 +38,7 @@ fun RecordsScreen(
             text = "投料记录",
             fontSize = 28.sp,
             fontWeight = FontWeight.Bold,
-            color = Color(0xFF263238)
+            color = MaterialTheme.colorScheme.onBackground
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -46,8 +46,8 @@ fun RecordsScreen(
         // 标签页
         TabRow(
             selectedTabIndex = selectedTab,
-            containerColor = Color.White,
-            contentColor = Color(0xFF1976D2)
+            containerColor = MaterialTheme.colorScheme.surface,
+            contentColor = MaterialTheme.colorScheme.primary
         ) {
             tabs.forEachIndexed { index, title ->
                 Tab(
@@ -127,7 +127,7 @@ fun RecordCard(
     Card(
         onClick = { onRecordClick(record.id) },
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
         shape = RoundedCornerShape(16.dp)
     ) {
@@ -147,13 +147,13 @@ fun RecordCard(
                         text = record.recipeName,
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF263238)
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = record.timestamp,
                         fontSize = 14.sp,
-                        color = Color(0xFF757575)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
 
@@ -183,7 +183,7 @@ fun RecordCard(
                 Button(
                     onClick = { onRepeatDosing(record.id) },
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF4CAF50)
+                        containerColor = IndustrialGreen
                     ),
                     shape = RoundedCornerShape(8.dp),
                     modifier = Modifier.height(40.dp)
@@ -211,10 +211,10 @@ fun RecordCard(
 @Composable
 fun StatusChip(status: String) {
     val (backgroundColor, textColor) = when (status) {
-        "完成" -> Color(0xFFE8F5E8) to Color(0xFF4CAF50)
-        "进行中" -> Color(0xFFE3F2FD) to Color(0xFF2196F3)
-        "异常" -> Color(0xFFFFEBEE) to Color(0xFFF44336)
-        else -> Color(0xFFF5F5F5) to Color(0xFF757575)
+        "完成" -> IndustrialGreen.copy(alpha = 0.1f) to IndustrialGreen
+        "进行中" -> IndustrialBlue.copy(alpha = 0.1f) to IndustrialBlue
+        "异常" -> IndustrialRed.copy(alpha = 0.1f) to IndustrialRed
+        else -> MaterialTheme.colorScheme.surfaceVariant to MaterialTheme.colorScheme.onSurfaceVariant
     }
 
     Card(
@@ -246,7 +246,7 @@ fun RecordInfoItem(
         Icon(
             imageVector = icon,
             contentDescription = label,
-            tint = Color(0xFF757575),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(16.dp)
         )
         Spacer(modifier = Modifier.width(4.dp))
@@ -254,13 +254,13 @@ fun RecordInfoItem(
             Text(
                 text = label,
                 fontSize = 12.sp,
-                color = Color(0xFF757575)
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Text(
                 text = value,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Medium,
-                color = Color(0xFF263238)
+                color = MaterialTheme.colorScheme.onSurface
             )
         }
     }
@@ -326,7 +326,7 @@ fun StatisticsCard(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
         shape = RoundedCornerShape(16.dp)
     ) {
@@ -337,7 +337,7 @@ fun StatisticsCard(
                 text = title,
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color(0xFF263238)
+                color = MaterialTheme.colorScheme.onSurface
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -350,13 +350,13 @@ fun StatisticsCard(
                     Text(
                         text = label,
                         fontSize = 14.sp,
-                        color = Color(0xFF757575)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
                         text = value,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Medium,
-                        color = Color(0xFF263238)
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 }
             }

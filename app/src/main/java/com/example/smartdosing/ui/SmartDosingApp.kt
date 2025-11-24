@@ -20,7 +20,7 @@ fun SmartDosingApp(modifier: Modifier = Modifier) {
 
     Scaffold(
         modifier = modifier,
-        containerColor = Color(0xFFF0F2F5), // 保持原有的工业背景色
+        containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {
             SmartDosingBottomNavigationBar(navController = navController)
         }

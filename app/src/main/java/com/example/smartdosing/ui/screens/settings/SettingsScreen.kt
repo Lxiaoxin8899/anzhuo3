@@ -36,7 +36,7 @@ fun SettingsScreen(
                 text = "系统设置",
                 fontSize = 28.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color(0xFF263238)
+                color = MaterialTheme.colorScheme.onBackground
             )
         }
 
@@ -244,7 +244,7 @@ fun SettingsSection(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
         shape = RoundedCornerShape(16.dp)
     ) {
@@ -255,7 +255,7 @@ fun SettingsSection(
                 text = title,
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color(0xFF263238)
+                color = MaterialTheme.colorScheme.onSurface
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -264,7 +264,7 @@ fun SettingsSection(
                 SettingsItemView(item = item)
                 if (index < items.size - 1) {
                     Spacer(modifier = Modifier.height(16.dp))
-                    Divider(color = Color(0xFFE0E0E0), thickness = 1.dp)
+                    Divider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 1.dp)
                     Spacer(modifier = Modifier.height(16.dp))
                 }
             }
@@ -349,7 +349,7 @@ fun SwitchSettingItem(
             Icon(
                 imageVector = icon,
                 contentDescription = title,
-                tint = Color(0xFF1976D2),
+                tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(24.dp)
             )
             Spacer(modifier = Modifier.width(12.dp))
@@ -358,12 +358,12 @@ fun SwitchSettingItem(
                     text = title,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Medium,
-                    color = Color(0xFF263238)
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
                     text = subtitle,
                     fontSize = 14.sp,
-                    color = Color(0xFF757575)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
@@ -371,8 +371,10 @@ fun SwitchSettingItem(
             checked = isChecked,
             onCheckedChange = onCheckedChange,
             colors = SwitchDefaults.colors(
-                checkedThumbColor = Color(0xFF1976D2),
-                checkedTrackColor = Color(0xFF1976D2).copy(alpha = 0.5f)
+                checkedThumbColor = MaterialTheme.colorScheme.primary,
+                checkedTrackColor = MaterialTheme.colorScheme.primaryContainer,
+                uncheckedThumbColor = MaterialTheme.colorScheme.outline,
+                uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant
             )
         )
     }
@@ -404,7 +406,7 @@ fun SliderSettingItem(
                 Icon(
                     imageVector = icon,
                     contentDescription = title,
-                    tint = Color(0xFF1976D2),
+                    tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(24.dp)
                 )
                 Spacer(modifier = Modifier.width(12.dp))
@@ -413,12 +415,12 @@ fun SliderSettingItem(
                         text = title,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Medium,
-                        color = Color(0xFF263238)
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
                         text = subtitle,
                         fontSize = 14.sp,
-                        color = Color(0xFF757575)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
@@ -426,7 +428,7 @@ fun SliderSettingItem(
                 text = valueFormatter(value),
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Medium,
-                color = Color(0xFF1976D2)
+                color = MaterialTheme.colorScheme.primary
             )
         }
         Spacer(modifier = Modifier.height(8.dp))
@@ -435,9 +437,9 @@ fun SliderSettingItem(
             onValueChange = onValueChange,
             valueRange = valueRange,
             colors = SliderDefaults.colors(
-                thumbColor = Color(0xFF1976D2),
-                activeTrackColor = Color(0xFF1976D2),
-                inactiveTrackColor = Color(0xFFE0E0E0)
+                thumbColor = MaterialTheme.colorScheme.primary,
+                activeTrackColor = MaterialTheme.colorScheme.primary,
+                inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant
             )
         )
     }
@@ -466,7 +468,7 @@ fun SelectionSettingItem(
             Icon(
                 imageVector = icon,
                 contentDescription = title,
-                tint = Color(0xFF1976D2),
+                tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(24.dp)
             )
             Spacer(modifier = Modifier.width(12.dp))
@@ -475,12 +477,12 @@ fun SelectionSettingItem(
                     text = title,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Medium,
-                    color = Color(0xFF263238)
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
                     text = subtitle,
                     fontSize = 14.sp,
-                    color = Color(0xFF757575)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
@@ -491,13 +493,13 @@ fun SelectionSettingItem(
                 text = selectedValue,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Medium,
-                color = Color(0xFF1976D2)
+                color = MaterialTheme.colorScheme.primary
             )
             Spacer(modifier = Modifier.width(4.dp))
             Icon(
                 imageVector = Icons.Default.ArrowForward,
                 contentDescription = "选择",
-                tint = Color(0xFF757575),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(16.dp)
             )
         }
@@ -525,7 +527,7 @@ fun ActionSettingItem(
         Icon(
             imageVector = icon,
             contentDescription = title,
-            tint = if (isDestructive) Color(0xFFF44336) else Color(0xFF1976D2),
+            tint = if (isDestructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
             modifier = Modifier.size(24.dp)
         )
         Spacer(modifier = Modifier.width(12.dp))
@@ -536,18 +538,18 @@ fun ActionSettingItem(
                 text = title,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Medium,
-                color = if (isDestructive) Color(0xFFF44336) else Color(0xFF263238)
+                color = if (isDestructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
             )
             Text(
                 text = subtitle,
                 fontSize = 14.sp,
-                color = Color(0xFF757575)
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
         Icon(
             imageVector = Icons.Default.ArrowForward,
             contentDescription = "执行",
-            tint = Color(0xFF757575),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(16.dp)
         )
     }
@@ -569,7 +571,7 @@ fun InfoSettingItem(
         Icon(
             imageVector = icon,
             contentDescription = title,
-            tint = Color(0xFF1976D2),
+            tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.size(24.dp)
         )
         Spacer(modifier = Modifier.width(12.dp))
@@ -578,12 +580,12 @@ fun InfoSettingItem(
                 text = title,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Medium,
-                color = Color(0xFF263238)
+                color = MaterialTheme.colorScheme.onSurface
             )
             Text(
                 text = subtitle,
                 fontSize = 14.sp,
-                color = Color(0xFF757575)
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }

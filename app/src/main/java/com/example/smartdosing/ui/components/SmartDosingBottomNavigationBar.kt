@@ -1,16 +1,22 @@
 package com.example.smartdosing.ui.components
 
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarDefaults
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import androidx.navigation.compose.currentBackStackEntryAsState
-import com.example.smartdosing.navigation.SmartDosingDestination
 import com.example.smartdosing.navigation.bottomNavigationDestinations
 
 /**
@@ -26,10 +32,11 @@ fun SmartDosingBottomNavigationBar(
     val currentRoute = navBackStackEntry?.destination?.route
 
     NavigationBar(
-        modifier = modifier,
-        containerColor = Color.White,
-        contentColor = Color(0xFF263238),
-        tonalElevation = 8.dp
+        modifier = modifier.height(54.dp),
+        containerColor = MaterialTheme.colorScheme.surface,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        tonalElevation = 4.dp,
+        windowInsets = NavigationBarDefaults.windowInsets
     ) {
         bottomNavigationDestinations.forEach { destination ->
             val selected = currentRoute == destination.route
@@ -39,16 +46,16 @@ fun SmartDosingBottomNavigationBar(
                     Icon(
                         imageVector = destination.icon,
                         contentDescription = destination.description,
-                        modifier = Modifier.size(28.dp), // 适合平板的图标大小
-                        tint = if (selected) Color(0xFF1976D2) else Color(0xFF757575)
+                        modifier = Modifier.size(20.dp) // 进一步压缩图标尺寸避免溢出
                     )
                 },
                 label = {
                     Text(
                         text = destination.title,
-                        fontSize = 14.sp, // 适合平板的文字大小
+                        fontSize = 11.sp, // 更小字号，防止在低高度下换行
                         fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                        color = if (selected) Color(0xFF1976D2) else Color(0xFF757575)
+                        maxLines = 1,
+                        softWrap = false
                     )
                 },
                 selected = selected,
@@ -67,11 +74,11 @@ fun SmartDosingBottomNavigationBar(
                     }
                 },
                 colors = NavigationBarItemDefaults.colors(
-                    selectedIconColor = Color(0xFF1976D2),
-                    unselectedIconColor = Color(0xFF757575),
-                    selectedTextColor = Color(0xFF1976D2),
-                    unselectedTextColor = Color(0xFF757575),
-                    indicatorColor = Color(0xFFE3F2FD) // 淡蓝色指示器
+                    selectedIconColor = MaterialTheme.colorScheme.primary,
+                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    selectedTextColor = MaterialTheme.colorScheme.primary,
+                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
                 )
             )
         }

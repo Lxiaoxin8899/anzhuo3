@@ -20,6 +20,17 @@ fun SmartDosingNavHost(
     navController: NavHostController,
     modifier: Modifier = Modifier
 ) {
+    fun handleDosingNavigation(recipeId: String) {
+        val normalizedId = recipeId.trim().ifBlank { "quick_start" }
+        val directOperation = normalizedId == "quick_start" || normalizedId == "import_csv"
+        val targetRoute = if (directOperation) {
+            SmartDosingRoutes.dosingOperation(normalizedId)
+        } else {
+            SmartDosingRoutes.dosingChecklist(normalizedId)
+        }
+        navController.navigate(targetRoute)
+    }
+
     NavHost(
         navController = navController,
         startDestination = SmartDosingRoutes.HOME,
@@ -32,13 +43,16 @@ fun SmartDosingNavHost(
                     navController.navigate(SmartDosingRoutes.RECIPES)
                 },
                 onNavigateToDosingOperation = { recipeId ->
-                    navController.navigate(SmartDosingRoutes.dosingOperation(recipeId))
+                    handleDosingNavigation(recipeId)
                 },
                 onNavigateToRecords = {
                     navController.navigate(SmartDosingRoutes.RECORDS)
                 },
                 onNavigateToSettings = {
                     navController.navigate(SmartDosingRoutes.SETTINGS)
+                },
+                onImportRecipe = {
+                    navController.navigate(SmartDosingRoutes.dosingOperation("import_csv"))
                 }
             )
         }
@@ -49,11 +63,8 @@ fun SmartDosingNavHost(
                 onNavigateToRecipeDetail = { recipeId ->
                     navController.navigate(SmartDosingRoutes.recipeDetail(recipeId))
                 },
-                onNavigateToCreateRecipe = {
-                    navController.navigate(SmartDosingRoutes.RECIPE_CREATE)
-                },
                 onNavigateToDosingOperation = { recipeId ->
-                    navController.navigate(SmartDosingRoutes.dosingOperation(recipeId))
+                    handleDosingNavigation(recipeId)
                 }
             )
         }
@@ -61,9 +72,29 @@ fun SmartDosingNavHost(
         // 投料作业
         composable(SmartDosingRoutes.DOSING) {
             DosingScreen(
+                recipeId = null,
                 onNavigateToDosingOperation = { recipeId ->
-                    navController.navigate(SmartDosingRoutes.dosingOperation(recipeId))
-                }
+                    handleDosingNavigation(recipeId)
+                },
+                onNavigateToRecipeList = {
+                    navController.navigate(SmartDosingRoutes.RECIPES)
+                },
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        // 投料作业检查清单
+        composable(SmartDosingRoutes.DOSING_CHECKLIST) { backStackEntry ->
+            val recipeId = backStackEntry.arguments?.getString("recipeId")
+            DosingScreen(
+                recipeId = recipeId,
+                onNavigateToDosingOperation = { targetRecipeId ->
+                    navController.navigate(SmartDosingRoutes.dosingOperation(targetRecipeId))
+                },
+                onNavigateToRecipeList = {
+                    navController.navigate(SmartDosingRoutes.RECIPES)
+                },
+                onNavigateBack = { navController.popBackStack() }
             )
         }
 
@@ -74,7 +105,7 @@ fun SmartDosingNavHost(
                     navController.navigate(SmartDosingRoutes.recordDetail(recordId))
                 },
                 onNavigateToDosingOperation = { recipeId ->
-                    navController.navigate(SmartDosingRoutes.dosingOperation(recipeId))
+                    handleDosingNavigation(recipeId)
                 }
             )
         }

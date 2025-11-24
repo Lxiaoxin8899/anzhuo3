@@ -18,13 +18,20 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.smartdosing.data.RecipeRepository
+import com.example.smartdosing.data.Material as RecipeMaterial
 import com.example.smartdosing.ui.theme.SmartDosingTheme
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.util.Locale
 import kotlinx.coroutines.delay
 
-data class Material(val id: String, val name: String, val targetWeight: Float)
+data class Material(
+    val id: String,
+    val name: String,
+    val targetWeight: Float,
+    val unit: String = "KG"
+)
 
 /**
  * 语音播报管理器 - 专门处理工业投料的语音播报
@@ -57,7 +64,7 @@ class VoiceAnnouncementManager(private val context: android.content.Context) {
             append("请添加材料：")
             append("${material.name}，")
             append("编号：${material.id}，")
-            append("重量：${formatWeight(material.targetWeight)}公斤")
+            append("重量：${formatWeight(material.targetWeight, material.unit)}")
         }
 
         speak(announcement)
@@ -98,12 +105,14 @@ class VoiceAnnouncementManager(private val context: android.content.Context) {
         tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "announcement")
     }
 
-    private fun formatWeight(weight: Float): String {
-        return if (weight == weight.toInt().toFloat()) {
+    private fun formatWeight(weight: Float, unit: String): String {
+        val normalizedUnit = unit.uppercase(Locale.getDefault())
+        val value = if (weight == weight.toInt().toFloat()) {
             weight.toInt().toString()
         } else {
-            String.format("%.1f", weight)
+            String.format(Locale.getDefault(), "%.1f", weight)
         }
+        return "$value $normalizedUnit"
     }
 
     fun shutdown() {
@@ -124,8 +133,13 @@ fun DosingOperationScreen(
     onNavigateBack: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    var recipe by remember { mutableStateOf<List<Material>?>(null) }
+    val repository = remember { RecipeRepository.getInstance() }
     val context = LocalContext.current
+    val normalizedRecipeId = recipeId?.trim().orEmpty()
+    val isCsvMode = normalizedRecipeId.isEmpty() || normalizedRecipeId == "import_csv" || normalizedRecipeId == "quick_start"
+    var recipe by remember(normalizedRecipeId) { mutableStateOf<List<Material>?>(null) }
+    var loadError by remember(normalizedRecipeId) { mutableStateOf<String?>(null) }
+    var isLoading by remember(normalizedRecipeId) { mutableStateOf(!isCsvMode) }
 
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         uri?.let {
@@ -142,7 +156,8 @@ fun DosingOperationScreen(
                                 val material = Material(
                                     id = tokens[0].trim(),
                                     name = tokens[1].trim(),
-                                    targetWeight = tokens[2].trim().toFloat()
+                                    targetWeight = tokens[2].trim().toFloat(),
+                                    unit = "KG"
                                 )
                                 parsedRecipe.add(material)
                             }
@@ -158,72 +173,166 @@ fun DosingOperationScreen(
         }
     }
 
-    if (recipe == null) {
-        // 配方选择界面
-        Column(
-            modifier = modifier.fillMaxSize().padding(32.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
+    LaunchedEffect(normalizedRecipeId) {
+        loadError = null
+        if (!isCsvMode) {
+            isLoading = true
+            recipe = null
+            val targetRecipe = repository.getRecipeById(normalizedRecipeId)
+            if (targetRecipe == null) {
+                loadError = "未找到该配方，请返回重新选择。"
+            } else {
+                val materials = targetRecipe.materials
+                    .sortedBy { it.sequence }
+                    .map { it.toOperationMaterial() }
+                if (materials.isEmpty()) {
+                    loadError = "该配方没有材料，请返回重新选择。"
+                } else {
+                    recipe = materials
+                }
+            }
+            isLoading = false
+        } else {
+            loadError = null
+            isLoading = false
+        }
+    }
+
+    when {
+        loadError != null -> {
+            DosingErrorState(
+                message = loadError!!,
+                onNavigateBack = onNavigateBack,
+                modifier = modifier
+            )
+        }
+        !isCsvMode && (isLoading || recipe == null) -> {
+            DosingLoadingState(modifier = modifier)
+        }
+        recipe == null -> {
+            CsvImportState(
+                modifier = modifier,
+                onImportFromFile = { launcher.launch(arrayOf("*/*")) },
+                onNavigateBack = onNavigateBack
+            )
+        }
+        else -> {
+            val onSelectNewRecipeAction: () -> Unit = if (isCsvMode) {
+                { recipe = null }
+            } else {
+                { onNavigateBack() }
+            }
+            DosingScreen(
+                recipe = recipe!!,
+                onSelectNewRecipe = onSelectNewRecipeAction,
+                onNavigateBack = onNavigateBack,
+                modifier = modifier
+            )
+        }
+    }
+}
+
+/**
+ * CSV 导入模式界面
+ */
+@Composable
+private fun CsvImportState(
+    modifier: Modifier = Modifier,
+    onImportFromFile: () -> Unit,
+    onNavigateBack: () -> Unit
+) {
+    Column(
+        modifier = modifier.fillMaxSize().padding(32.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = "选择投料配方",
+            fontSize = 32.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color(0xFF263238)
+        )
+
+        Spacer(modifier = Modifier.height(48.dp))
+
+        Button(
+            onClick = onImportFromFile,
+            modifier = Modifier.width(300.dp).height(80.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Color(0xFF1976D2)
+            ),
+            shape = RoundedCornerShape(12.dp)
         ) {
             Text(
-                text = "选择投料配方",
-                fontSize = 32.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF263238)
+                text = "导入CSV配方文件",
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Medium
             )
-
-            Spacer(modifier = Modifier.height(48.dp))
-
-            // 从文件导入配方
-            Button(
-                onClick = { launcher.launch(arrayOf("*/*")) },
-                modifier = Modifier.width(300.dp).height(80.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFF1976D2)
-                ),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Text(
-                    text = "导入CSV配方文件",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Medium
-                )
-            }
-
-            Spacer(modifier = Modifier.height(32.dp))
-
-            Text(
-                text = "请选择一个CSV格式的配方文件\n格式: 材料编号,材料名称,重量",
-                fontSize = 16.sp,
-                color = Color(0xFF757575),
-                textAlign = TextAlign.Center
-            )
-
-            Spacer(modifier = Modifier.height(48.dp))
-
-            // 返回按钮
-            OutlinedButton(
-                onClick = onNavigateBack,
-                modifier = Modifier.width(200.dp).height(60.dp),
-                colors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = Color(0xFF757575)
-                ),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Text(
-                    text = "返回",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Medium
-                )
-            }
         }
-    } else {
-        DosingScreen(
-            recipe = recipe!!,
-            onSelectNewRecipe = { recipe = null },
-            onNavigateBack = onNavigateBack,
-            modifier = modifier
+
+        Spacer(modifier = Modifier.height(32.dp))
+
+        Text(
+            text = "请选择一个CSV格式的配方文件\n格式: 材料编号,材料名称,重量",
+            fontSize = 16.sp,
+            color = Color(0xFF757575),
+            textAlign = TextAlign.Center
         )
+
+        Spacer(modifier = Modifier.height(48.dp))
+
+        OutlinedButton(
+            onClick = onNavigateBack,
+            modifier = Modifier.width(200.dp).height(60.dp),
+            colors = ButtonDefaults.outlinedButtonColors(
+                contentColor = Color(0xFF757575)
+            ),
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            Text(
+                text = "返回",
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Medium
+            )
+        }
+    }
+}
+
+/**
+ * 配方载入错误提示
+ */
+@Composable
+private fun DosingErrorState(
+    message: String,
+    onNavigateBack: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier.fillMaxSize().padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(text = message, fontSize = 20.sp, color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center)
+        Spacer(modifier = Modifier.height(24.dp))
+        Button(onClick = onNavigateBack, modifier = Modifier.width(200.dp).height(56.dp)) {
+            Text(text = "返回", fontSize = 18.sp)
+        }
+    }
+}
+
+/**
+ * 配方载入过渡态
+ */
+@Composable
+private fun DosingLoadingState(modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier.fillMaxSize(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        CircularProgressIndicator()
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(text = "正在载入配方信息...", fontSize = 16.sp)
     }
 }
 
@@ -322,7 +431,11 @@ fun DosingScreen(
             ) {
                 InfoCard(title = "材料名称", content = currentMaterial.name, modifier = Modifier.weight(1f))
                 InfoCard(title = "材料编码", content = currentMaterial.id, modifier = Modifier.weight(1f))
-                InfoCard(title = "投料重量", content = "${currentMaterial.targetWeight} KG", modifier = Modifier.weight(1f))
+                InfoCard(
+                    title = "投料重量",
+                    content = formatWeightDisplay(currentMaterial.targetWeight, currentMaterial.unit),
+                    modifier = Modifier.weight(1f)
+                )
             }
 
             Spacer(Modifier.height(24.dp))
@@ -380,6 +493,36 @@ fun DosingScreen(
                 }
             }
         }
+    }
+}
+
+/**
+ * 将配方材料转换为投料操作材料
+ */
+private fun RecipeMaterial.toOperationMaterial(): Material {
+    val normalizedId = if (id.isBlank()) {
+        "MAT-$sequence"
+    } else {
+        id
+    }
+    val normalizedUnit = unit.ifBlank { "KG" }.uppercase(Locale.getDefault())
+    return Material(
+        id = normalizedId,
+        name = name,
+        targetWeight = weight.toFloat(),
+        unit = normalizedUnit
+    )
+}
+
+/**
+ * 显示用重量格式化
+ */
+private fun formatWeightDisplay(weight: Float, unit: String): String {
+    val normalizedUnit = unit.uppercase(Locale.getDefault())
+    return if (weight == weight.toInt().toFloat()) {
+        "${weight.toInt()} $normalizedUnit"
+    } else {
+        String.format(Locale.getDefault(), "%.2f %s", weight, normalizedUnit)
     }
 }
 
@@ -665,9 +808,9 @@ fun DosingOperationScreenPreview() {
 @Composable
 fun DosingOperationScreenDetailPreview() {
     val previewRecipe = listOf(
-        Material("abc-001", "苹果香精", 10.5f),
-        Material("abc-002", "柠檬酸", 22.0f),
-        Material("def-003", "甜蜜素", 5.2f)
+        Material("abc-001", "苹果香精", 10.5f, "KG"),
+        Material("abc-002", "柠檬酸", 22.0f, "KG"),
+        Material("def-003", "甜蜜素", 5.2f, "KG")
     )
     SmartDosingTheme {
         DosingScreen(recipe = previewRecipe, onSelectNewRecipe = {})
