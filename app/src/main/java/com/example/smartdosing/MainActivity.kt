@@ -15,6 +15,8 @@ import androidx.lifecycle.lifecycleScope
 import androidx.navigation.compose.rememberNavController
 import com.example.smartdosing.data.DatabaseRecipeRepository
 import com.example.smartdosing.navigation.SmartDosingNavHost
+import com.example.smartdosing.tts.TTSManagerFactory
+import com.example.smartdosing.tts.XiaomiTTSSettingsHelper
 import com.example.smartdosing.ui.components.SmartDosingBottomNavigationBar
 import com.example.smartdosing.ui.theme.SmartDosingTheme
 import com.example.smartdosing.web.WebService
@@ -25,6 +27,7 @@ import java.util.Locale
 class MainActivity : ComponentActivity() {
     private lateinit var webService: WebService
     private var testTts: TextToSpeech? = null
+    private lateinit var ttsSettingsHelper: XiaomiTTSSettingsHelper
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -32,8 +35,8 @@ class MainActivity : ComponentActivity() {
         // Initialize Web Service
         webService = WebService.getInstance(this)
 
-        // 测试TTS功能
-        testTTSFunctionality()
+        // 初始化小米TTS管理器
+        initializeXiaomiTTS()
 
         // 验证数据库初始化
         testDatabaseInitialization()
@@ -50,178 +53,261 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * 测试TTS功能
+     * 初始化TTS管理器
      */
-    private fun testTTSFunctionality() {
-        Log.d("TTSTest", "开始测试TTS功能")
-
-        // 首先检查TTS引擎可用性
-        checkTTSEngineAvailability()
-
+    private fun initializeXiaomiTTS() {
+        Log.d("TTS", "=== 开始初始化TTS管理器工厂 ===")
+        
+        try {
+            // 初始化TTS设置助手
+            ttsSettingsHelper = XiaomiTTSSettingsHelper(this)
+            
+            // 检查TTS可用性
+            val ttsStatus = ttsSettingsHelper.checkTTSAvailability()
+            Log.d("TTS", "TTS状态检查结果: $ttsStatus")
+            
+            // 如果TTS不可用，显示设置对话框
+            if (!ttsStatus.canUseTTS) {
+                Log.w("TTS", "TTS不可用，显示设置对话框")
+                showTTSSettingsDialog()
+            }
+            
+            // 使用TTS管理器工厂初始化
+            if (TTSManagerFactory.initialize(this)) {
+                val ttsType = TTSManagerFactory.getCurrentTTSType()
+                Log.d("TTS", "✅ TTS管理器工厂初始化成功，类型: $ttsType")
+                showToast("TTS语音功能已就绪 ($ttsType)")
+                
+                // 测试TTS功能
+                TTSManagerFactory.testTTS(this)
+            } else {
+                Log.w("TTS", "⚠️ TTS管理器工厂初始化失败")
+                showToast("TTS功能初始化失败，请检查设置")
+            }
+            
+        } catch (e: Exception) {
+            Log.e("TTS", "❌ TTS管理器工厂初始化异常", e)
+            showToast("TTS初始化异常: ${e.message}")
+        }
+    }
+    
+    /**
+     * 显示TTS设置对话框
+     */
+    private fun showTTSSettingsDialog() {
+        try {
+            ttsSettingsHelper.showTTSSettingsOptions(this)
+        } catch (e: Exception) {
+            Log.e("TTS", "显示TTS设置对话框失败", e)
+            showToast("请手动检查TTS设置")
+        }
+    }
+    
+    /**
+     * 备用TTS初始化
+     */
+    private fun initializeFallbackTTS() {
+        Log.d("TTS", "使用备用TTS初始化方案")
+        
         testTts = TextToSpeech(this) { status ->
-            when (status) {
-                TextToSpeech.SUCCESS -> {
-                    Log.d("TTSTest", "✅ TTS初始化成功")
-                    configureTTSSettings()
-                }
-                TextToSpeech.ERROR -> {
-                    Log.e("TTSTest", "❌ TTS初始化失败 - ERROR状态")
-                    showToast("TTS初始化失败，请检查设备TTS设置")
-                    tryAlternativeTTSApproach()
-                }
-                else -> {
-                    Log.w("TTSTest", "⚠️ TTS状态未知: $status")
-                    showToast("TTS状态异常: $status")
-                }
+            if (status != TextToSpeech.SUCCESS) {
+                Log.e("TTS", "❌ 备用TTS初始化失败: $status")
+                showToast("TTS功能不可用，请检查设备设置")
+                return@TextToSpeech
+            }
+            
+            Log.d("TTS", "✅ 备用TTS初始化成功")
+            
+            // 尝试设置中文语言
+            val langResult = testTts?.setLanguage(Locale.CHINA)
+            if (langResult != null && langResult >= TextToSpeech.LANG_AVAILABLE) {
+                testTts?.speak("智能投料系统启动完成", TextToSpeech.QUEUE_FLUSH, null, "fallback_test")
+                showToast("TTS功能已启用（备用方案）")
+            } else {
+                Log.w("TTS", "备用TTS不支持中文")
+                showToast("TTS不支持中文语言")
             }
         }
     }
+    
+    /**
+     * 获取TTS设置助手实例（供其他组件使用）
+     */
+    fun getTTSSettingsHelper(): XiaomiTTSSettingsHelper? {
+        return if (::ttsSettingsHelper.isInitialized) ttsSettingsHelper else null
+    }
+    
+    /**
+     * 播放TTS语音（供其他组件使用）
+     */
+    fun speakTTS(text: String) {
+        TTSManagerFactory.speak(text)
+    }
+    
+    /**
+     * 停止TTS语音（供其他组件使用）
+     */
+    fun stopTTS() {
+        TTSManagerFactory.stopSpeaking()
+    }
 
     /**
-     * 检查TTS引擎可用性
+     * 检查设备上可用的TTS引擎 - 诊断用
      */
-    private fun checkTTSEngineAvailability() {
+    private fun checkAvailableTTSEngines() {
         try {
-            val packageManager = packageManager
-            val ttsIntent = android.content.Intent(TextToSpeech.Engine.ACTION_CHECK_TTS_DATA)
-            val ttsEngines = packageManager.queryIntentActivities(ttsIntent, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)
+            Log.d("TTSTest", "=== 开始检查设备上可用的TTS引擎 ===")
 
-            Log.d("TTSTest", "可用TTS引擎数量: ${ttsEngines.size}")
-            for (engine in ttsEngines) {
-                Log.d("TTSTest", "TTS引擎: ${engine.activityInfo.packageName}")
+            val intent = android.content.Intent(TextToSpeech.Engine.ACTION_CHECK_TTS_DATA)
+            val activities = packageManager.queryIntentActivities(intent, 0)
+
+            Log.d("TTSTest", "找到 ${activities.size} 个TTS引擎:")
+            activities.forEach { activity ->
+                val packageName = activity.activityInfo.packageName
+                val appName = activity.loadLabel(packageManager).toString()
+                Log.d("TTSTest", "  - $appName ($packageName)")
             }
 
-            if (ttsEngines.isEmpty()) {
-                Log.e("TTSTest", "❌ 没有可用的TTS引擎")
-                showToast("设备没有安装TTS引擎，请到设置中安装")
+            // 特别检查小米相关的包
+            val xiaomiPackages = listOf(
+                "com.xiaomi.mibrain.speech",
+                "com.miui.tts",
+                "com.xiaomi.speech",
+                "com.miui.speech.tts"
+            )
+
+            Log.d("TTSTest", "\n=== 检查小米TTS包是否已安装 ===")
+            xiaomiPackages.forEach { packageName ->
+                try {
+                    packageManager.getPackageInfo(packageName, 0)
+                    Log.d("TTSTest", "✅ 已安装: $packageName")
+                } catch (e: android.content.pm.PackageManager.NameNotFoundException) {
+                    Log.w("TTSTest", "❌ 未安装: $packageName")
+                }
             }
+
+            Log.d("TTSTest", "=== 引擎检查完成 ===\n")
         } catch (e: Exception) {
             Log.e("TTSTest", "检查TTS引擎时出错", e)
         }
     }
 
     /**
-     * 配置TTS设置
+     * 尝试小米自带小爱TTS测试 - 增强版
+     * 支持多个小米TTS引擎包名
      */
-    private fun configureTTSSettings() {
-        testTts?.apply {
-            // 尝试多种语言设置
-            val languages = listOf(
-                Locale.CHINA,
-                Locale.CHINESE,
-                Locale("zh", "CN"),
-                Locale.getDefault(),
-                Locale.ENGLISH
-            )
-
-            var languageSet = false
-            for (locale in languages) {
-                val result = setLanguage(locale)
-                when (result) {
-                    TextToSpeech.LANG_AVAILABLE,
-                    TextToSpeech.LANG_COUNTRY_AVAILABLE,
-                    TextToSpeech.LANG_COUNTRY_VAR_AVAILABLE -> {
-                        Log.d("TTSTest", "✅ 语言设置成功: $locale")
-                        languageSet = true
-                        break
-                    }
-                    TextToSpeech.LANG_MISSING_DATA -> {
-                        Log.w("TTSTest", "⚠️ 语言数据缺失: $locale")
-                    }
-                    TextToSpeech.LANG_NOT_SUPPORTED -> {
-                        Log.w("TTSTest", "⚠️ 语言不支持: $locale")
-                    }
-                }
-            }
-
-            if (!languageSet) {
-                Log.e("TTSTest", "❌ 所有语言设置都失败")
-                showToast("TTS语言设置失败，可能需要下载语音数据包")
-                return
-            }
-
-            // 设置语音参数 - 针对小米设备优化
-            setSpeechRate(1.0f)  // 标准语速
-            setPitch(1.0f)       // 标准音调
-
-            // 尝试设置音频属性
-            try {
-                val audioAttributes = android.media.AudioAttributes.Builder()
-                    .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
-                    .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SPEECH)
-                    .setLegacyStreamType(android.media.AudioManager.STREAM_MUSIC)
-                    .build()
-                setAudioAttributes(audioAttributes)
-                Log.d("TTSTest", "✅ 音频属性设置成功")
-            } catch (e: Exception) {
-                Log.w("TTSTest", "⚠️ 音频属性设置失败", e)
-            }
-
-            // 测试播放
-            testVoicePlayback()
-        }
-    }
-
-    /**
-     * 测试语音播放
-     */
-    private fun testVoicePlayback() {
-        try {
-            val testText = "语音测试，智能投料系统启动完成"
-            val result = testTts?.speak(testText, TextToSpeech.QUEUE_FLUSH, null, "test")
-
-            when (result) {
-                TextToSpeech.SUCCESS -> {
-                    Log.d("TTSTest", "✅ 语音播放命令发送成功")
-                    showToast("TTS功能正常，可以进行语音播报")
-                }
-                TextToSpeech.ERROR -> {
-                    Log.e("TTSTest", "❌ 语音播放命令失败")
-                    showToast("TTS播放失败，请检查音量设置")
-                }
-                else -> {
-                    Log.w("TTSTest", "⚠️ 语音播放结果未知: $result")
-                    showToast("TTS播放状态异常")
-                }
-            }
-        } catch (e: Exception) {
-            Log.e("TTSTest", "语音测试异常", e)
-            showToast("语音测试出错: ${e.message}")
-        }
-    }
-
-    /**
-     * 尝试替代TTS方案
-     */
-    private fun tryAlternativeTTSApproach() {
-        Log.d("TTSTest", "尝试替代TTS方案")
-
-        // 方案1: 指定特定的TTS引擎
-        val miuiTTSPackages = listOf(
-            "com.xiaomi.speech",
-            "com.miui.speech",
-            "com.google.android.tts",
-            "com.android.speech.tts",
-            "com.svox.pico"
+    private fun tryXiaoAiTTSTest(): Boolean {
+        // 小米设备可能的TTS引擎包名（按优先级排列）
+        val xiaomiEngines = listOf(
+            "com.xiaomi.mibrain.speech",          // XiaoAi TTS (主要)
+            "com.miui.tts",                       // MIUI TTS (备用1)
+            "com.xiaomi.speech",                  // Xiaomi Speech (备用2)
+            "com.miui.speech.tts"                 // MIUI Speech TTS (备用3)
         )
 
-        for (enginePackage in miuiTTSPackages) {
+        Log.d("TTSTest", "=== 开始尝试小米自带TTS引擎 ===")
+
+        xiaomiEngines.forEach { enginePackage ->
             try {
-                packageManager.getPackageInfo(enginePackage, 0)
-                Log.d("TTSTest", "尝试使用TTS引擎: $enginePackage")
-                testTts = TextToSpeech(this, { status ->
-                    if (status == TextToSpeech.SUCCESS) {
-                        Log.d("TTSTest", "✅ 使用$enginePackage 初始化成功")
-                        configureTTSSettings()
+                Log.d("TTSTest", "尝试引擎: $enginePackage")
+
+                val result = testTts?.setEngineByPackageName(enginePackage)
+                Log.d("TTSTest", "引擎绑定结果: $result")
+
+                if (result == TextToSpeech.SUCCESS) {
+                    Log.d("TTSTest", "✅ 成功绑定小米TTS引擎: $enginePackage")
+
+                    testTts?.apply {
+                        // 延迟一下，确保引擎完全切换
+                        try {
+                            Thread.sleep(300) // 300ms延迟
+                        } catch (e: InterruptedException) {
+                            Thread.currentThread().interrupt()
+                        }
+
+                        // 设置中文语言
+                        val langResult = setLanguage(Locale.CHINA)
+                        Log.d("TTSTest", "语言设置结果: $langResult")
+
+                        if (langResult >= TextToSpeech.LANG_AVAILABLE) {
+                            setSpeechRate(1.0f)
+                            speak("小爱语音已就绪，智能投料系统启动完成", TextToSpeech.QUEUE_FLUSH, null, null)
+
+                            showToast("小米TTS功能正常 - 引擎: $enginePackage")
+                            Log.d("TTSTest", "✅ 小爱TTS测试完成 - 引擎: $enginePackage")
+                            return true
+                        } else {
+                            Log.w("TTSTest", "⚠️ 引擎 $enginePackage 不支持中文，继续尝试下一个")
+                            return@forEach
+                        }
                     }
-                }, enginePackage)
-                return
+                } else {
+                    Log.w("TTSTest", "⚠️ 引擎绑定失败: $enginePackage (结果: $result)")
+                    return@forEach
+                }
             } catch (e: Exception) {
-                Log.d("TTSTest", "TTS引擎 $enginePackage 不可用")
+                Log.e("TTSTest", "❌ 引擎 $enginePackage 配置异常", e)
+                return@forEach
             }
         }
 
-        showToast("所有TTS引擎都无法使用，请手动配置TTS设置")
+        Log.e("TTSTest", "❌ 所有小米TTS引擎都无法使用")
+        return false
+    }
+
+    /**
+     * 尝试Google TTS（HyperOS优化）测试
+     */
+    private fun tryGoogleTTSHyperOSTest(): Boolean {
+        try {
+            Log.d("TTSTest", "尝试Google TTS（HyperOS优化）")
+
+            // 这行是小米 HyperOS 的"开挂神句"，必须加！
+            val result = testTts?.setEngineByPackageName("com.google.android.tts")
+            if (result == TextToSpeech.SUCCESS) {
+                Log.d("TTSTest", "✅ 成功强制使用 Google 原生 TTS")
+
+                testTts?.apply {
+                    setLanguage(Locale.CHINA)           // 中文
+                    setSpeechRate(1.0f)                 // 语速正常
+                    speak("Google语音已就绪，智能投料系统启动完成", TextToSpeech.QUEUE_FLUSH, null, null)
+
+                    showToast("Google TTS（HyperOS优化）功能正常")
+                    Log.d("TTSTest", "✅ Google TTS HyperOS优化测试完成")
+                }
+                return true
+            } else {
+                Log.e("TTSTest", "❌ Google TTS HyperOS优化失败: $result")
+                return false
+            }
+        } catch (e: Exception) {
+            Log.e("TTSTest", "❌ Google TTS HyperOS优化异常", e)
+            return false
+        }
+    }
+
+    /**
+     * 标准TTS初始化方式（备用）
+     */
+    private fun fallbackToStandardTTS() {
+        val ttsInstance = testTts ?: return
+
+        try {
+            Log.d("TTSTest", "尝试标准TTS配置方式")
+            val langResult = ttsInstance.setLanguage(Locale.CHINA)
+            if (langResult >= TextToSpeech.LANG_AVAILABLE) {
+                Log.d("TTSTest", "✅ 标准TTS配置成功")
+                ttsInstance.setSpeechRate(1.0f)
+                ttsInstance.speak("智能投料系统启动完成，使用标准TTS", TextToSpeech.QUEUE_FLUSH, null, null)
+                showToast("标准TTS功能正常")
+            } else {
+                Log.e("TTSTest", "❌ 标准TTS语言设置失败")
+                showToast("TTS语言设置失败")
+            }
+        } catch (e: Exception) {
+            Log.e("TTSTest", "❌ 标准TTS配置异常", e)
+            showToast("TTS配置异常: ${e.message}")
+        }
     }
 
     /**

@@ -36,55 +36,166 @@ data class Material(
 
 /**
  * 语音播报管理器 - 专门处理工业投料的语音播报
+ * 优化支持小米定制版百度TTS引擎
  */
 class VoiceAnnouncementManager(private val context: android.content.Context) {
     private var tts: TextToSpeech? = null
     private var isInitialized = false
 
     fun initialize(onReady: () -> Unit = {}) {
-        android.util.Log.d("VoiceManager", "开始初始化TTS服务")
+        android.util.Log.d("VoiceManager", "开始初始化TTS服务（优先小米小爱TTS）")
 
         try {
+            // 优先使用小米自带小爱TTS的初始化方式
             tts = TextToSpeech(context) { status ->
-                when (status) {
-                    TextToSpeech.SUCCESS -> {
-                        android.util.Log.d("VoiceManager", "TTS初始化成功")
-                        tts?.apply {
-                            // 优先尝试中文（中国）
-                            val chineseResult = setLanguage(Locale.CHINA)
-                            if (chineseResult == TextToSpeech.LANG_MISSING_DATA || chineseResult == TextToSpeech.LANG_NOT_SUPPORTED) {
-                                android.util.Log.w("VoiceManager", "中文不支持，尝试使用默认语言")
-                                setLanguage(Locale.getDefault())
-                            } else {
-                                android.util.Log.d("VoiceManager", "已设置中文语言")
-                            }
-
-                            setSpeechRate(0.9f)  // 稍微慢一点，便于理解
-                            setPitch(1.1f)       // 稍微提高音调，更清晰
-
-                            // 设置音频属性，确保在工业环境中音量足够
-                            val audioAttributes = android.media.AudioAttributes.Builder()
-                                .setUsage(android.media.AudioAttributes.USAGE_NOTIFICATION)
-                                .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SPEECH)
-                                .build()
-                            setAudioAttributes(audioAttributes)
-                        }
-                        isInitialized = true
-                        android.util.Log.d("VoiceManager", "TTS配置完成")
-                        onReady()
-                    }
-                    TextToSpeech.ERROR -> {
-                        android.util.Log.e("VoiceManager", "TTS初始化失败")
-                        isInitialized = false
-                    }
-                    else -> {
-                        android.util.Log.w("VoiceManager", "TTS初始化未知状态: $status")
-                        isInitialized = false
-                    }
+                if (status != TextToSpeech.SUCCESS) {
+                    android.util.Log.e("VoiceManager", "❌ TTS初始化失败: $status")
+                    isInitialized = false
+                    return@TextToSpeech
                 }
+
+                android.util.Log.d("VoiceManager", "✅ TTS基础初始化成功，开始配置引擎")
+
+                // 尝试小米自带小爱TTS
+                if (tryXiaoAiTTS(onReady)) return@TextToSpeech
+
+                // 备用：尝试Google TTS（HyperOS优化）
+                if (tryGoogleTTSHyperOS(onReady)) return@TextToSpeech
+
+                // 最后备用：标准TTS
+                fallbackToStandardTTS(onReady)
             }
         } catch (e: Exception) {
-            android.util.Log.e("VoiceManager", "TTS初始化异常", e)
+            android.util.Log.e("VoiceManager", "❌ TTS初始化异常", e)
+            isInitialized = false
+        }
+    }
+
+    /**
+     * 尝试小米自带小爱TTS
+     * 增强版 - 支持多个小米TTS引擎包名
+     */
+    private fun tryXiaoAiTTS(onReady: () -> Unit): Boolean {
+        // 小米设备可能的TTS引擎包名（按优先级排列）
+        val xiaomiEngines = listOf(
+            "com.xiaomi.mibrain.speech",          // XiaoAi TTS (主要)
+            "com.miui.tts",                       // MIUI TTS (备用1)
+            "com.xiaomi.speech",                  // Xiaomi Speech (备用2)
+            "com.miui.speech.tts"                 // MIUI Speech TTS (备用3)
+        )
+
+        android.util.Log.d("VoiceManager", "=== 开始尝试小米自带TTS引擎 ===")
+
+        xiaomiEngines.forEach { enginePackage ->
+            try {
+                android.util.Log.d("VoiceManager", "尝试引擎: $enginePackage")
+
+                val result = tts?.setEngineByPackageName(enginePackage)
+                android.util.Log.d("VoiceManager", "引擎绑定结果: $result")
+
+                if (result == TextToSpeech.SUCCESS) {
+                    android.util.Log.d("VoiceManager", "✅ 成功绑定小米TTS引擎: $enginePackage")
+
+                    tts?.apply {
+                        // 延迟一下，确保引擎完全切换
+                        try {
+                            Thread.sleep(300) // 300ms延迟
+                        } catch (e: InterruptedException) {
+                            Thread.currentThread().interrupt()
+                        }
+
+                        // 设置中文语言
+                        val langResult = setLanguage(java.util.Locale.CHINA)
+                        android.util.Log.d("VoiceManager", "语言设置结果: $langResult")
+
+                        if (langResult >= TextToSpeech.LANG_AVAILABLE) {
+                            setSpeechRate(1.0f)
+                            setPitch(1.0f)
+
+                            isInitialized = true
+                            android.util.Log.d("VoiceManager", "✅ 小爱TTS配置完成 - 引擎: $enginePackage")
+
+                            // 测试播放
+                            speak("小爱语音已就绪，智能投料系统准备完成", TextToSpeech.QUEUE_FLUSH, null, null)
+                            onReady()
+                            return true
+                        } else {
+                            android.util.Log.w("VoiceManager", "⚠️ 引擎 $enginePackage 不支持中文，继续尝试下一个")
+                            return@forEach
+                        }
+                    }
+                } else {
+                    android.util.Log.w("VoiceManager", "⚠️ 引擎绑定失败: $enginePackage (结果: $result)")
+                    return@forEach
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("VoiceManager", "❌ 引擎 $enginePackage 配置异常", e)
+                return@forEach
+            }
+        }
+
+        android.util.Log.e("VoiceManager", "❌ 所有小米TTS引擎都无法使用")
+        return false
+    }
+
+    /**
+     * 尝试Google TTS（HyperOS优化）
+     */
+    private fun tryGoogleTTSHyperOS(onReady: () -> Unit): Boolean {
+        try {
+            android.util.Log.d("VoiceManager", "尝试Google TTS（HyperOS优化）")
+
+            // 这行是小米 HyperOS 的"开挂神句"，必须加！
+            val result = tts?.setEngineByPackageName("com.google.android.tts")
+            if (result == TextToSpeech.SUCCESS) {
+                android.util.Log.d("VoiceManager", "✅ 成功强制使用 Google 原生 TTS")
+
+                tts?.apply {
+                    setLanguage(java.util.Locale.CHINA)
+                    setSpeechRate(1.0f)
+                    setPitch(1.0f)
+
+                    isInitialized = true
+                    android.util.Log.d("VoiceManager", "✅ Google TTS（HyperOS优化）配置完成")
+
+                    // 测试播放
+                    speak("Google语音已就绪，智能投料系统准备完成", TextToSpeech.QUEUE_FLUSH, null, null)
+                    onReady()
+                }
+                return true
+            } else {
+                android.util.Log.e("VoiceManager", "❌ Google TTS HyperOS优化失败: $result")
+                return false
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("VoiceManager", "❌ Google TTS HyperOS优化异常", e)
+            return false
+        }
+    }
+
+    /**
+     * 标准TTS初始化方式（备用）
+     */
+    private fun fallbackToStandardTTS(onReady: () -> Unit) {
+        android.util.Log.d("VoiceManager", "尝试标准TTS初始化方式")
+
+        val ttsInstance = tts ?: return
+
+        try {
+            val langResult = ttsInstance.setLanguage(java.util.Locale.CHINA)
+            if (langResult >= TextToSpeech.LANG_AVAILABLE) {
+                android.util.Log.d("VoiceManager", "✅ 标准TTS配置成功")
+                ttsInstance.setSpeechRate(1.0f)
+                ttsInstance.setPitch(1.0f)
+                isInitialized = true
+                ttsInstance.speak("智能投料系统语音播报已就绪", TextToSpeech.QUEUE_FLUSH, null, null)
+                onReady()
+            } else {
+                android.util.Log.e("VoiceManager", "❌ 标准TTS语言设置失败")
+                isInitialized = false
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("VoiceManager", "❌ 标准TTS配置异常", e)
             isInitialized = false
         }
     }
@@ -140,31 +251,22 @@ class VoiceAnnouncementManager(private val context: android.content.Context) {
         android.util.Log.d("VoiceManager", "尝试播放语音: $text")
 
         if (!isInitialized) {
-            android.util.Log.w("VoiceManager", "TTS未初始化，跳过播放")
+            android.util.Log.w("VoiceManager", "⚠️ TTS未初始化，跳过播放")
             return
         }
 
         val ttsInstance = tts
         if (ttsInstance == null) {
-            android.util.Log.e("VoiceManager", "TTS实例为空")
+            android.util.Log.e("VoiceManager", "❌ TTS实例为空")
             return
         }
 
         try {
-            val result = ttsInstance.speak(text, TextToSpeech.QUEUE_FLUSH, null, "announcement")
-            when (result) {
-                TextToSpeech.SUCCESS -> {
-                    android.util.Log.d("VoiceManager", "语音播放成功")
-                }
-                TextToSpeech.ERROR -> {
-                    android.util.Log.e("VoiceManager", "语音播放失败")
-                }
-                else -> {
-                    android.util.Log.w("VoiceManager", "语音播放未知结果: $result")
-                }
-            }
+            // 使用社区推荐的简化播放方式
+            ttsInstance.speak(text, TextToSpeech.QUEUE_FLUSH, null, null)
+            android.util.Log.d("VoiceManager", "✅ 语音播放命令已发送")
         } catch (e: Exception) {
-            android.util.Log.e("VoiceManager", "语音播放异常", e)
+            android.util.Log.e("VoiceManager", "❌ 语音播放异常", e)
         }
     }
 
