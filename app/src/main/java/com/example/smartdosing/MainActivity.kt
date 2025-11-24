@@ -7,18 +7,29 @@ import android.speech.tts.TextToSpeech
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
+import androidx.navigation.NavHostController
 import androidx.navigation.compose.rememberNavController
 import com.example.smartdosing.data.DatabaseRecipeRepository
 import com.example.smartdosing.navigation.SmartDosingNavHost
 import com.example.smartdosing.tts.TTSManagerFactory
 import com.example.smartdosing.tts.XiaomiTTSSettingsHelper
 import com.example.smartdosing.ui.components.SmartDosingBottomNavigationBar
+import com.example.smartdosing.ui.components.SmartDosingNavigationRail
 import com.example.smartdosing.ui.theme.SmartDosingTheme
+import com.example.smartdosing.ui.theme.SmartDosingTokens
 import com.example.smartdosing.web.WebService
 import com.example.smartdosing.web.WebServiceResult
 import kotlinx.coroutines.launch
@@ -531,17 +542,60 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun SmartDosingApp() {
     val navController = rememberNavController()
+    val configuration = LocalConfiguration.current
+    val screenWidthDp = configuration.screenWidthDp
+    val useNavigationRail = screenWidthDp >= 720
 
+    if (useNavigationRail) {
+        SmartDosingLargeScreenLayout(navController)
+    } else {
+        SmartDosingBottomBarLayout(navController)
+    }
+}
+
+@Composable
+private fun SmartDosingBottomBarLayout(navController: NavHostController) {
     Scaffold(
         bottomBar = {
-            SmartDosingBottomNavigationBar(
-                navController = navController
-            )
+            SmartDosingBottomNavigationBar(navController = navController)
         }
     ) { innerPadding ->
         SmartDosingNavHost(
             navController = navController,
             modifier = Modifier.padding(innerPadding)
+        )
+    }
+}
+
+@Composable
+private fun SmartDosingLargeScreenLayout(navController: NavHostController) {
+    val railWidth = 96.dp
+    val dividerWidth = 1.dp
+    val outerPadding = SmartDosingTokens.spacing.lg
+
+    Row(modifier = Modifier.fillMaxSize()) {
+        // Navigation Rail
+        SmartDosingNavigationRail(
+            navController = navController,
+            modifier = Modifier
+                .width(railWidth)
+                .fillMaxHeight()
+        )
+
+        // Divider
+        VerticalDivider(
+            modifier = Modifier
+                .width(dividerWidth)
+                .fillMaxHeight()
+        )
+
+        // Main content
+        SmartDosingNavHost(
+            navController = navController,
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxHeight()
+                .padding(outerPadding)
         )
     }
 }

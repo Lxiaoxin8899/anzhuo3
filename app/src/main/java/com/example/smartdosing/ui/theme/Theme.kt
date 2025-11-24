@@ -9,11 +9,13 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 
 private val DarkColorScheme = darkColorScheme(
@@ -45,6 +47,52 @@ private val LightColorScheme = lightColorScheme(
     error = IndustrialRed
 )
 
+private val DefaultSpacing = SmartDosingSpacing(
+    xxs = 2.dp,
+    xs = 4.dp,
+    sm = 8.dp,
+    md = 12.dp,
+    lg = 16.dp,
+    xl = 24.dp,
+    xxl = 32.dp,
+    giant = 48.dp
+)
+
+private val DefaultRadius = SmartDosingRadius(
+    xs = 4.dp,
+    sm = 8.dp,
+    md = 12.dp,
+    lg = 16.dp,
+    xl = 24.dp
+)
+
+private val DefaultElevation = SmartDosingElevation(
+    level0 = 0.dp,
+    level1 = 1.dp,
+    level2 = 3.dp,
+    level3 = 6.dp,
+    level4 = 10.dp,
+    level5 = 14.dp
+)
+
+private val LightExtendedColors = SmartDosingExtendedColors(
+    success = IndustrialGreen,
+    warning = IndustrialOrange,
+    danger = IndustrialRed,
+    info = IndustrialBlue,
+    neutral = TextSecondary,
+    border = Color(0xFFE0E0E0)
+)
+
+private val DarkExtendedColors = SmartDosingExtendedColors(
+    success = IndustrialGreen.copy(alpha = 0.9f),
+    warning = IndustrialOrange.copy(alpha = 0.9f),
+    danger = IndustrialRed.copy(alpha = 0.9f),
+    info = IndustrialBlueLight,
+    neutral = Color(0xFFB0BEC5),
+    border = Color(0xFF2C2C2C)
+)
+
 @Composable
 fun SmartDosingTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
@@ -60,19 +108,30 @@ fun SmartDosingTheme(
         darkTheme -> DarkColorScheme
         else -> LightColorScheme
     }
+    val extendedColors = if (darkTheme) DarkExtendedColors else LightExtendedColors
     
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
-            window.statusBarColor = colorScheme.primary.toArgb()
+            @Suppress("DEPRECATION")
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+                window.statusBarColor = colorScheme.primary.toArgb()
+            }
             WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = darkTheme
         }
     }
 
-    MaterialTheme(
-        colorScheme = colorScheme,
-        typography = Typography,
-        content = content
-    )
+    CompositionLocalProvider(
+        LocalSpacing provides DefaultSpacing,
+        LocalRadius provides DefaultRadius,
+        LocalElevation provides DefaultElevation,
+        LocalExtendedColors provides extendedColors
+    ) {
+        MaterialTheme(
+            colorScheme = colorScheme,
+            typography = Typography,
+            content = content
+        )
+    }
 }
