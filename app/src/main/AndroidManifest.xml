@@ -2,6 +2,21 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- 声明需要探测的TTS相关包，解决Android 11+的包可见性限制 -->
+    <queries>
+        <package android:name="com.xiaomi.mibrain.speech" />
+        <package android:name="com.miui.tts" />
+        <package android:name="com.xiaomi.speech" />
+        <package android:name="com.miui.speech.tts" />
+        <package android:name="com.google.android.tts" />
+        <intent>
+            <action android:name="android.speech.tts.engine.CHECK_TTS_DATA" />
+        </intent>
+        <intent>
+            <action android:name="android.speech.tts.engine.GET_SAMPLE_TEXT" />
+        </intent>
+    </queries>
+
     <!-- 网络权限 -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
