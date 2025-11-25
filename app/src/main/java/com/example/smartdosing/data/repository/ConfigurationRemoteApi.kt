@@ -233,7 +233,7 @@ class HttpConfigurationRecordApi(
     }.getOrNull()
 }
 
-/** Fake API?????/???? */
+/** Fake API 用于开发/测试环境 */
 class FakeConfigurationTaskApi : ConfigurationTaskApi {
     private val tasks = TaskSampleData.dailyTasks().map { it.toDto() }.toMutableList()
 
@@ -303,11 +303,11 @@ class FakeConfigurationRecordApi : ConfigurationRecordApi {
             quantity = payload.quantity,
             actualQuantity = payload.actualQuantity,
             unit = payload.unit,
-            customer = payload.customer.ifBlank { "???" },
-            salesOwner = payload.salesOwner.ifBlank { "???" },
+            customer = payload.customer.ifBlank { "未知客户" },
+            salesOwner = payload.salesOwner.ifBlank { "未分配" },
             resultStatus = payload.resultStatus,
             updatedAt = formatter.format(Date()),
-            tags = payload.tags.takeIf { it.isNotEmpty() } ?: listOf("????"),
+            tags = payload.tags.takeIf { it.isNotEmpty() } ?: listOf("新建"),
             note = payload.note
         )
         records.add(0, dto)

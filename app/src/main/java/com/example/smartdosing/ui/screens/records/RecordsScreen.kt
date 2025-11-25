@@ -36,7 +36,7 @@ import com.example.smartdosing.ui.theme.*
 @Composable
 fun RecordsScreen(
     onNavigateToRecordDetail: (String) -> Unit = {},
-    onNavigateToDosingOperation: (String) -> Unit = {},
+    onNavigateToMaterialConfiguration: (String, String?) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier
 ) {
     var selectedTab by remember { mutableStateOf(0) }
@@ -84,13 +84,16 @@ fun RecordsScreen(
         }
     }
 
-    val safeOnNavigateToDosingOperation: (String) -> Unit = { recipeId ->
-        Log.d("RecordsScreen", "收到导航到投料操作的请求，配方ID: $recipeId")
+    val safeNavigateToConfiguration: (String, String?) -> Unit = { recipeId, recordId ->
+        Log.d(
+            "RecordsScreen",
+            "收到导航到研发配置的请求，配方ID: $recipeId，记录ID: ${recordId ?: "无"}"
+        )
         try {
-            onNavigateToDosingOperation(recipeId)
-            Log.d("RecordsScreen", "导航到投料操作页面成功")
+            onNavigateToMaterialConfiguration(recipeId, recordId)
+            Log.d("RecordsScreen", "导航到研发配置页面成功")
         } catch (e: Exception) {
-            Log.e("RecordsScreen", "导航到投料操作页面失败", e)
+            Log.e("RecordsScreen", "导航到研发配置页面失败", e)
         }
     }
 
@@ -251,7 +254,7 @@ fun RecordsScreen(
                 0 -> RecordsContent(
                     records = records,
                     onNavigateToRecordDetail = safeonNavigateToRecordDetail,
-                    onNavigateToDosingOperation = safeOnNavigateToDosingOperation
+                    onNavigateToConfiguration = safeNavigateToConfiguration
                 )
                 1 -> StatisticsContent(stats = recordStats)
             }
@@ -266,7 +269,7 @@ fun RecordsScreen(
 fun RecordsContent(
     records: List<DosingRecord>,
     onNavigateToRecordDetail: (String) -> Unit,
-    onNavigateToDosingOperation: (String) -> Unit
+    onNavigateToConfiguration: (String, String?) -> Unit
 ) {
     var contentError by remember { mutableStateOf<String?>(null) }
 
@@ -292,7 +295,7 @@ fun RecordsContent(
                 RecordCard(
                     record = record,
                     onRecordClick = onNavigateToRecordDetail,
-                    onRepeatDosing = onNavigateToDosingOperation
+                    onReconfigure = onNavigateToConfiguration
                 )
             } else {
                 ErrorCard(
@@ -461,7 +464,7 @@ fun ErrorCard(
 fun RecordCard(
     record: DosingRecord,
     onRecordClick: (String) -> Unit,
-    onRepeatDosing: (String) -> Unit
+    onReconfigure: (String, String?) -> Unit
 ) {
     var cardError by remember { mutableStateOf<String?>(null) }
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -605,32 +608,42 @@ fun RecordCard(
                     }
 
                     // 重复投料按钮（增大尺寸）
+                    // 重新配置按钮
+
                     Button(
                         onClick = {
-                            Log.e("RecordCard", "===== 重复投料按钮被点击了！ =====")
-                            runCatching {
-                                record.recipeId?.let { recipeId ->
-                                    Log.d("RecordCard", "开始重复投料，配方ID: $recipeId")
-                                    onRepeatDosing(recipeId)
+                            Log.d("RecordCard", "===== 重新配置按钮被点击，记录ID: ${record.id} =====")
+                            val recipeId = record.recipeId
+                            if (recipeId.isNullOrBlank()) {
+                                cardError = "无法重新配置：配方ID为空"
+                            } else {
+                                runCatching {
+                                    onReconfigure(recipeId, record.id)
+                                }.onFailure { e ->
+                                    Log.e("RecordCard", "重新配置失败", e)
+                                    cardError = "重新配置失败: ${e.message}"
                                 }
-                            }.onFailure { e ->
-                                Log.e("RecordCard", "重复投料失败", e)
-                                cardError = "重复投料失败: ${e.message}"
                             }
                         },
                         enabled = record.recipeId != null,
-                        modifier = Modifier.size(width = 70.dp, height = 32.dp),
+                        modifier = Modifier.size(width = 90.dp, height = 32.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = if (record.recipeId != null) Color(0xFF4CAF50) else MaterialTheme.colorScheme.surfaceVariant,
                             contentColor = Color.White,
                             disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant
                         ),
-                        contentPadding = PaddingValues(4.dp)
+                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Refresh,
-                            contentDescription = "重复投料",
+                            contentDescription = "重新配置",
                             modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "重新配置",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium
                         )
                     }
                 }
@@ -1248,7 +1261,7 @@ fun RecordCardPreview() {
         details = listOf(sampleDetail)
     )
     SmartDosingTheme {
-        RecordCard(record = sampleRecord, onRecordClick = {}, onRepeatDosing = {})
+        RecordCard(record = sampleRecord, onRecordClick = {}, onReconfigure = { _, _ -> })
     }
 }
 

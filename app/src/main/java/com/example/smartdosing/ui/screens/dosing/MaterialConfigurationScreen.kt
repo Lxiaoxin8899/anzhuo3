@@ -39,8 +39,8 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * 材料配置界面 - 适用于研发环境
- * 支持自由顺序投料，每种材料独立确认
+ * 材料配置界面 - 研发配置核心页面
+ * 用于配置配方中各材料的实际重量和确认状态
  */
 @Composable
 fun MaterialConfigurationScreen(
@@ -429,56 +429,8 @@ private fun StakeholderSection(
     onPerfumerChange: (String) -> Unit,
     onNotesChange: (String) -> Unit
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                OutlinedTextField(
-                    value = customer,
-                    onValueChange = onCustomerChange,
-                    label = { Text("客户") },
-                    singleLine = true,
-                    modifier = Modifier.weight(1f)
-                )
-                OutlinedTextField(
-                    value = salesOwner,
-                    onValueChange = onSalesOwnerChange,
-                    label = { Text("业务员") },
-                    singleLine = true,
-                    modifier = Modifier.weight(1f)
-                )
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                OutlinedTextField(
-                    value = perfumer,
-                    onValueChange = onPerfumerChange,
-                    label = { Text("调香师") },
-                    singleLine = true,
-                    modifier = Modifier.weight(1f)
-                )
-            }
-            OutlinedTextField(
-                value = notes,
-                onValueChange = onNotesChange,
-                label = { Text("备注") },
-                modifier = Modifier.fillMaxWidth(),
-                minLines = 2
-            )
-        }
-    }
+    // 研发配置界面聚焦于材料执行，客户/业务等信息在执行
+    // 前已经确认，这里仅保留段落占位，避免显示冗余输入框。
 }
 
 /**

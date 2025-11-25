@@ -1,11 +1,15 @@
 package com.example.smartdosing.navigation
 
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.Assignment
+import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
- * 智能投料系统 - 导航目标枚举
+ * SmartDosing 顶层导航配置（UTF-8 中文）
  */
 enum class SmartDosingDestination(
     val route: String,
@@ -14,50 +18,50 @@ enum class SmartDosingDestination(
     val description: String
 ) {
     HOME(
-        route = "home",
+        route = SmartDosingRoutes.HOME,
         title = "首页",
         icon = Icons.Default.Home,
-        description = "系统主页和快捷操作"
+        description = "任务、配置、导入等总览入口"
+    ),
+    TASK_CENTER(
+        route = SmartDosingRoutes.TASK_CENTER,
+        title = "任务中心",
+        icon = Icons.Default.Assignment,
+        description = "接单、开始配置、更新状态"
     ),
     RECIPES(
-        route = "recipes",
+        route = SmartDosingRoutes.RECIPES,
         title = "配方管理",
         icon = Icons.Default.List,
-        description = "配方创建、编辑和管理"
-    ),
-    DOSING(
-        route = "dosing",
-        title = "投料作业",
-        icon = Icons.Default.PlayArrow,
-        description = "执行投料操作"
+        description = "导入、筛选、维护配方字段"
     ),
     RECORDS(
-        route = "records",
+        route = SmartDosingRoutes.RECORDS,
         title = "投料记录",
-        icon = Icons.Default.List,
-        description = "查看投料历史和统计"
+        icon = Icons.Default.BarChart,
+        description = "查看历史记录与统计"
     ),
     SETTINGS(
-        route = "settings",
+        route = SmartDosingRoutes.SETTINGS,
         title = "系统设置",
         icon = Icons.Default.Settings,
-        description = "应用设置和个性化配置"
+        description = "网络、语音、Web 服务等设置"
     )
 }
 
 /**
- * 底部导航栏显示的主要页面
+ * 底部导航展示顺序
  */
 val bottomNavigationDestinations = listOf(
     SmartDosingDestination.HOME,
+    SmartDosingDestination.TASK_CENTER,
     SmartDosingDestination.RECIPES,
-    SmartDosingDestination.DOSING,
     SmartDosingDestination.RECORDS,
     SmartDosingDestination.SETTINGS
 )
 
 /**
- * 导航路由常量
+ * 全局路由常量
  */
 object SmartDosingRoutes {
     const val HOME = "home"
@@ -65,9 +69,6 @@ object SmartDosingRoutes {
     const val RECIPE_DETAIL = "recipe_detail/{recipeId}"
     const val RECIPE_CREATE = "recipe_create"
     const val RECIPE_EDIT = "recipe_edit/{recipeId}"
-    const val DOSING = "dosing"
-    const val DOSING_CHECKLIST = "dosing_checklist/{recipeId}"
-    const val DOSING_OPERATION = "dosing_operation/{recipeId}"
     const val MATERIAL_CONFIGURATION = "material_configuration/{recipeId}?taskId={taskId}&recordId={recordId}"
     const val TASK_CENTER = "task_center"
     const val CONFIGURATION_RECORDS = "configuration_records"
@@ -78,8 +79,6 @@ object SmartDosingRoutes {
 
     fun recipeDetail(recipeId: String) = "recipe_detail/$recipeId"
     fun recipeEdit(recipeId: String) = "recipe_edit/$recipeId"
-    fun dosingChecklist(recipeId: String) = "dosing_checklist/$recipeId"
-    fun dosingOperation(recipeId: String) = "dosing_operation/$recipeId"
     fun materialConfiguration(
         recipeId: String,
         taskId: String? = null,

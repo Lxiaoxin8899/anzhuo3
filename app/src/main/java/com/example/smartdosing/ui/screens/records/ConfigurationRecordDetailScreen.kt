@@ -223,9 +223,9 @@ private fun ActionCard(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text(text = "??", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(text = "操作", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Text(
-                text = "??????????????????????????????",
+                text = "您可以重新配置此记录，或者尝试修复可能存在的问题。",
                 style = MaterialTheme.typography.bodyMedium
             )
             Row(
@@ -239,7 +239,7 @@ private fun ActionCard(
                 ) {
                     Icon(Icons.Default.Refresh, contentDescription = null)
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("????")
+                    Text("重新配置")
                 }
                 Button(
                     onClick = onFixError,
@@ -247,7 +247,7 @@ private fun ActionCard(
                 ) {
                     Icon(Icons.Default.Replay, contentDescription = null)
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("????")
+                    Text("修复问题")
                 }
             }
             actionMessage?.let {

@@ -54,7 +54,6 @@ import com.example.smartdosing.ui.theme.SmartDosingTheme
 @Composable
 fun HomeScreen(
     onNavigateToRecipes: () -> Unit = {},
-    onNavigateToDosingOperation: (String) -> Unit = {},
     onNavigateToMaterialConfiguration: (String) -> Unit = {},
     onNavigateToTaskCenter: () -> Unit = {},
     onNavigateToConfigurationRecords: () -> Unit = {},
@@ -69,25 +68,17 @@ fun HomeScreen(
 
     val actionCards = listOf(
         HomeAction(
-            title = "开始投料",
-            description = "快速进入当前批次作业",
-            icon = Icons.Default.PlayArrow,
+            title = "快速配料",
+            description = "选择配方，立即开始配料操作",
+            icon = Icons.Default.Science,
             containerColor = MaterialTheme.colorScheme.primary,
             contentColor = MaterialTheme.colorScheme.onPrimary,
             emphasize = true,
-            onClick = { onNavigateToDosingOperation("quick_start") }
-        ),
-        HomeAction(
-            title = "研发配置",
-            description = "研发环境自由材料配置",
-            icon = Icons.Default.Science,
-            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
             onClick = { onNavigateToMaterialConfiguration("quick_start") }
         ),
         HomeAction(
             title = "任务中心",
-            description = "接收并跟进配置任务",
+            description = "查看和管理配置任务",
             icon = Icons.Default.Assignment,
             containerColor = MaterialTheme.colorScheme.surfaceVariant,
             contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -95,7 +86,7 @@ fun HomeScreen(
         ),
         HomeAction(
             title = "配置记录",
-            description = "浏览历史配置及分类",
+            description = "查看历史配置记录",
             icon = Icons.Default.CheckCircle,
             containerColor = MaterialTheme.colorScheme.tertiaryContainer,
             contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
@@ -103,7 +94,7 @@ fun HomeScreen(
         ),
         HomeAction(
             title = "导入配方",
-            description = "CSV / Excel 一键生成投料清单",
+            description = "CSV / Excel 格式配方导入",
             icon = Icons.Default.FileUpload,
             containerColor = MaterialTheme.colorScheme.surface,
             contentColor = MaterialTheme.colorScheme.primary,
@@ -111,15 +102,15 @@ fun HomeScreen(
         ),
         HomeAction(
             title = "配方管理",
-            description = "创建 / 审核 / 归档生产配方",
+            description = "查看 / 编辑 / 管理配方",
             icon = Icons.Default.ViewList,
             containerColor = MaterialTheme.colorScheme.primaryContainer,
             contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
             onClick = onNavigateToRecipes
         ),
         HomeAction(
-            title = "投料记录",
-            description = "实时查看执行记录与日志",
+            title = "配料记录",
+            description = "查看历史配料记录",
             icon = Icons.Default.BarChart,
             containerColor = MaterialTheme.colorScheme.tertiaryContainer,
             contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
