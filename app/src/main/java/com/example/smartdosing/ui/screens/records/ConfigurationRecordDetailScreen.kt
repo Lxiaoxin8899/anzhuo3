@@ -1,6 +1,7 @@
 package com.example.smartdosing.ui.screens.records
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -25,8 +26,14 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -34,7 +41,10 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.smartdosing.data.ConfigurationRecord
 import com.example.smartdosing.data.ConfigurationRecordSampleData
+import com.example.smartdosing.data.ConfigurationRecordStatus
+import com.example.smartdosing.data.repository.ConfigurationRepositoryProvider
 import com.example.smartdosing.ui.theme.SmartDosingTheme
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -44,9 +54,50 @@ fun ConfigurationRecordDetailScreen(
     onReconfigure: (ConfigurationRecord) -> Unit = {},
     onFixError: (ConfigurationRecord) -> Unit = {}
 ) {
-    val record = remember(recordId) {
-        ConfigurationRecordSampleData.records().find { it.id == recordId }
-    } ?: return
+    val repository = remember { ConfigurationRepositoryProvider.recordRepository }
+    var record by remember(recordId) { mutableStateOf<ConfigurationRecord?>(null) }
+    var isLoading by remember { mutableStateOf(true) }
+    var loadError by remember { mutableStateOf<String?>(null) }
+    var actionMessage by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+
+    fun refreshDetail() {
+        scope.launch {
+            try {
+                isLoading = true
+                loadError = null
+                record = repository.fetchRecord(recordId)
+                if (record == null) {
+                    loadError = "未找到该配置记录"
+                }
+            } catch (e: Exception) {
+                loadError = e.message ?: "加载失败"
+            } finally {
+                isLoading = false
+            }
+        }
+    }
+
+    fun handleFix(recordToFix: ConfigurationRecord) {
+        scope.launch {
+            try {
+                val updated = repository.updateRecordStatus(recordToFix.id, ConfigurationRecordStatus.IN_REVIEW)
+                if (updated != null) {
+                    record = updated
+                    actionMessage = "已标记为待评估"
+                    onFixError(updated)
+                } else {
+                    actionMessage = "无法更新记录状态"
+                }
+            } catch (e: Exception) {
+                actionMessage = e.message ?: "纠错失败"
+            }
+        }
+    }
+
+    LaunchedEffect(recordId) {
+        refreshDetail()
+    }
 
     Scaffold(
         topBar = {
@@ -63,19 +114,59 @@ fun ConfigurationRecordDetailScreen(
             )
         }
     ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            DetailCard(record = record)
-            ActionCard(
-                record = record,
-                onReconfigure = onReconfigure,
-                onFixError = onFixError
-            )
+        when {
+            isLoading -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator()
+                }
+            }
+            loadError != null -> {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding)
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(loadError!!, color = MaterialTheme.colorScheme.error)
+                }
+            }
+            record == null -> {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Text("未找到配置记录", color = MaterialTheme.colorScheme.error)
+                }
+            }
+            else -> {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding)
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    record?.let { current ->
+                        DetailCard(record = current)
+                        ActionCard(
+                            record = current,
+                            actionMessage = actionMessage,
+                            onReconfigure = onReconfigure,
+                            onFixError = { handleFix(current) }
+                        )
+                    }
+                }
+            }
         }
     }
 }
@@ -117,8 +208,9 @@ private fun DetailCard(record: ConfigurationRecord) {
 @Composable
 private fun ActionCard(
     record: ConfigurationRecord,
+    actionMessage: String?,
     onReconfigure: (ConfigurationRecord) -> Unit,
-    onFixError: (ConfigurationRecord) -> Unit
+    onFixError: () -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -131,9 +223,9 @@ private fun ActionCard(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text(text = "操作", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(text = "??", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Text(
-                text = "可复用该配方快速再次配置，或在发现偏差时立即进入纠错流程。",
+                text = "??????????????????????????????",
                 style = MaterialTheme.typography.bodyMedium
             )
             Row(
@@ -147,16 +239,23 @@ private fun ActionCard(
                 ) {
                     Icon(Icons.Default.Refresh, contentDescription = null)
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("再次配置")
+                    Text("????")
                 }
                 Button(
-                    onClick = { onFixError(record) },
+                    onClick = onFixError,
                     modifier = Modifier.weight(1f)
                 ) {
                     Icon(Icons.Default.Replay, contentDescription = null)
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("纠错处理")
+                    Text("????")
                 }
+            }
+            actionMessage?.let {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.secondary
+                )
             }
         }
     }

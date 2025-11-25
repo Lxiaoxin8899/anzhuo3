@@ -84,6 +84,8 @@ class RecipeImportManager(
                 name = name,
                 category = normalizeCategory(valueMap["recipe_category"]),
                 customer = valueMap["recipe_customer"].orEmpty(),
+                salesOwner = valueMap["recipe_sales_owner"].orEmpty(),
+                perfumer = valueMap["recipe_perfumer"].orEmpty(),
                 batchNo = valueMap["recipe_design_time"].orEmpty(),
                 description = description,
                 materials = materials
@@ -150,6 +152,8 @@ class RecipeImportManager(
                 name = name,
                 category = normalizeCategory(valueMap["recipe_category"]),
                 customer = valueMap["recipe_customer"].orEmpty(),
+                salesOwner = valueMap["recipe_sales_owner"].orEmpty(),
+                perfumer = valueMap["recipe_perfumer"].orEmpty(),
                 batchNo = valueMap["recipe_design_time"].orEmpty(),
                 description = description,
                 materials = materials

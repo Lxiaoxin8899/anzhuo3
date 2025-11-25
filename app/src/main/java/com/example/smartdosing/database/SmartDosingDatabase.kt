@@ -30,7 +30,7 @@ import com.example.smartdosing.database.converters.DatabaseConverters
         DosingRecordEntity::class,
         DosingRecordDetailEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = true
 )
 @TypeConverters(DatabaseConverters::class)

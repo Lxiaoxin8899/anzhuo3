@@ -193,6 +193,14 @@ class DatabaseRecipeImportManager(
 
             // 将所有材料的备注合并为配方描述
             val allNotes = materials.map { it.notes }.filter { it.isNotBlank() }.joinToString("; ")
+            val templateNote = firstRow["task_note"].orEmpty()
+            val mergedDescription = when {
+                templateNote.isNotBlank() && allNotes.isNotBlank() -> "$templateNote；$allNotes"
+                templateNote.isNotBlank() -> templateNote
+                else -> allNotes
+            }
+            val importPriority = parseTaskPriority(firstRow["task_priority"].orEmpty())
+            val tagList = parseTagsFromValue(firstRow["task_tags"].orEmpty())
 
             requests += RecipeImportRequest(
                 code = firstRow["recipe_code"].orEmpty(),
@@ -200,13 +208,15 @@ class DatabaseRecipeImportManager(
                 category = normalizeCategory(firstRow["recipe_category"]),
                 subCategory = "",
                 customer = firstRow["recipe_customer"].orEmpty(),
+                salesOwner = firstRow["recipe_sales_owner"].orEmpty(),
+                perfumer = firstRow["recipe_perfumer"].orEmpty(),
                 batchNo = firstRow["recipe_design_time"].orEmpty(),
                 version = "1.0",
-                description = allNotes,
+                description = mergedDescription,
                 materials = materials,
                 status = RecipeStatus.ACTIVE,
-                priority = RecipePriority.NORMAL,
-                tags = emptyList(),
+                priority = importPriority,
+                tags = tagList,
                 creator = firstRow["designer"].orEmpty().ifBlank { "IMPORT" },
                 reviewer = ""
             )
@@ -359,6 +369,8 @@ class DatabaseRecipeImportManager(
                 category = normalizeCategory(firstRow["recipe_category"]),
                 subCategory = "",
                 customer = firstRow["recipe_customer"].orEmpty(),
+                salesOwner = firstRow["recipe_sales_owner"].orEmpty(),
+                perfumer = firstRow["recipe_perfumer"].orEmpty(),
                 batchNo = firstRow["recipe_design_time"].orEmpty(),
                 version = "1.0",
                 description = allNotes,
@@ -611,6 +623,17 @@ class DatabaseRecipeImportManager(
             tagsString.split(",", ";", "，", "；")
                 .map { it.trim() }
                 .filter { it.isNotEmpty() }
+        }
+    }
+
+    private fun parseTaskPriority(raw: String): RecipePriority {
+        if (raw.isBlank()) return RecipePriority.NORMAL
+        val normalized = raw.trim().uppercase(Locale.getDefault())
+        return when (normalized) {
+            "LOW", "低" -> RecipePriority.LOW
+            "HIGH", "高" -> RecipePriority.HIGH
+            "URGENT", "加急" -> RecipePriority.URGENT
+            else -> RecipePriority.NORMAL
         }
     }
 

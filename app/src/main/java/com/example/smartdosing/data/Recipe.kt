@@ -12,6 +12,8 @@ data class Recipe(
     val category: String, // 一级分类（香精、酸类、甜味剂等）
     val subCategory: String = "", // 二级分类（客户、时间等）
     val customer: String = "", // 客户名称
+    val salesOwner: String = "", // 业务员
+    val perfumer: String = "", // 调香师
     val batchNo: String = "", // 批次号
     val version: String = "1.0", // 版本号
     val description: String = "",
@@ -81,6 +83,8 @@ data class RecipeImportRequest(
     val category: String,
     val subCategory: String = "",
     val customer: String = "",
+    val salesOwner: String = "",
+    val perfumer: String = "",
     val batchNo: String = "",
     val version: String = "1.0",
     val description: String = "",

@@ -33,9 +33,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -46,8 +48,9 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.smartdosing.data.ConfigurationTask
 import com.example.smartdosing.data.TaskPriority
-import com.example.smartdosing.data.TaskSampleData
 import com.example.smartdosing.data.TaskStatus
+import com.example.smartdosing.data.repository.ConfigurationRepositoryProvider
+import kotlinx.coroutines.launch
 import com.example.smartdosing.ui.theme.SmartDosingTheme
 
 /**
@@ -59,12 +62,43 @@ fun TaskCenterScreen(
     modifier: Modifier = Modifier,
     onNavigateBack: () -> Unit = {},
     onAcceptTask: (ConfigurationTask) -> Unit = {},
-    onStartTask: (ConfigurationTask) -> Unit = {}
+    onStartTask: (ConfigurationTask) -> Unit = {},
+    onConfigureTask: (ConfigurationTask) -> Unit = {},
+    refreshSignal: Int = 0
 ) {
-    val allTasks = remember { TaskSampleData.dailyTasks() }
+    val repository = remember { ConfigurationRepositoryProvider.taskRepository }
+    var tasks by remember { mutableStateOf<List<ConfigurationTask>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(true) }
+    var loadError by remember { mutableStateOf<String?>(null) }
     var selectedStatus by remember { mutableStateOf<TaskStatus?>(null) }
-    val displayedTasks = remember(selectedStatus, allTasks) {
-        selectedStatus?.let { status -> allTasks.filter { it.status == status } } ?: allTasks
+    val scope = rememberCoroutineScope()
+
+    fun refreshTasks() {
+        scope.launch {
+            try {
+                isLoading = true
+                loadError = null
+                tasks = repository.fetchTasks()
+            } catch (e: Exception) {
+                loadError = "加载任务失败：${e.message ?: "未知错误"}"
+            } finally {
+                isLoading = false
+            }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        refreshTasks()
+    }
+
+    LaunchedEffect(refreshSignal) {
+        if (refreshSignal >= 0) {
+            refreshTasks()
+        }
+    }
+
+    val displayedTasks = remember(selectedStatus, tasks) {
+        selectedStatus?.let { status -> tasks.filter { it.status == status } } ?: tasks
     }
 
     Scaffold(
@@ -93,21 +127,43 @@ fun TaskCenterScreen(
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            TaskSummarySection(tasks = allTasks)
+            TaskSummarySection(tasks = tasks)
             TaskStatusFilterRow(
                 selected = selectedStatus,
                 onSelected = { selectedStatus = it }
             )
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                items(displayedTasks, key = { it.id }) { task ->
-                    TaskCard(
-                        task = task,
-                        onAccept = { onAcceptTask(task) },
-                        onStart = { onStartTask(task) }
-                    )
+            when {
+                isLoading -> TaskLoadingState()
+                loadError != null -> TaskErrorState(message = loadError!!, onRetry = { refreshTasks() })
+                displayedTasks.isEmpty() -> TaskEmptyState()
+                else -> {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(displayedTasks, key = { it.id }) { task ->
+                            TaskCard(
+                                task = task,
+                                onAccept = {
+                                    scope.launch {
+                                        repository.updateTaskStatus(task.id, TaskStatus.IN_PROGRESS)
+                                        refreshTasks()
+                                    }
+                                    onAcceptTask(task)
+                                },
+                                onStart = {
+                                    scope.launch {
+                                        repository.updateTaskStatus(task.id, TaskStatus.IN_PROGRESS)
+                                        refreshTasks()
+                                    }
+                                    onStartTask(task)
+                                },
+                                onConfigure = {
+                                    onConfigureTask(task)
+                                }
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -119,8 +175,10 @@ fun TaskCenterScreen(
  */
 @Composable
 private fun TaskSummarySection(tasks: List<ConfigurationTask>) {
-    val waitingCount = tasks.count { it.status == TaskStatus.WAITING }
-    val progressingCount = tasks.count { it.status == TaskStatus.IN_PROGRESS }
+    val waitingStatuses = setOf(TaskStatus.DRAFT, TaskStatus.READY)
+    val runningStatuses = setOf(TaskStatus.PUBLISHED, TaskStatus.IN_PROGRESS)
+    val waitingCount = tasks.count { it.status in waitingStatuses }
+    val progressingCount = tasks.count { it.status in runningStatuses }
     val completedCount = tasks.count { it.status == TaskStatus.COMPLETED }
 
     Row(
@@ -169,6 +227,50 @@ private fun SummaryCard(
     }
 }
 
+@Composable
+private fun TaskLoadingState() {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 48.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        androidx.compose.material3.CircularProgressIndicator()
+        Text("正在加载任务，请稍候…", color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+private fun TaskErrorState(message: String, onRetry: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Text(text = message, color = MaterialTheme.colorScheme.error)
+        TextButton(onClick = onRetry) {
+            Text("重试")
+        }
+    }
+}
+
+@Composable
+private fun TaskEmptyState() {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text("暂无符合条件的任务", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("可尝试调整筛选条件或稍后再试", style = MaterialTheme.typography.bodySmall)
+    }
+}
+
 /**
  * 状态筛选：快速切换不同任务阶段
  */
@@ -187,14 +289,16 @@ private fun TaskStatusFilterRow(
             AssistChip(
                 onClick = { onSelected(if (isSelected) null else status) },
                 label = {
-                    Text(
-                        when (status) {
-                            null -> "全部"
-                            TaskStatus.WAITING -> "待接单"
-                            TaskStatus.IN_PROGRESS -> "进行中"
-                            TaskStatus.COMPLETED -> "已完成"
-                        }
-                    )
+                    val label = when (status) {
+                        null -> "全部"
+                        TaskStatus.DRAFT -> "草稿"
+                        TaskStatus.READY -> "待发布"
+                        TaskStatus.PUBLISHED -> "已下发"
+                        TaskStatus.IN_PROGRESS -> "执行中"
+                        TaskStatus.COMPLETED -> "已完成"
+                        TaskStatus.CANCELLED -> "已取消"
+                    }
+                    Text(label)
                 },
                 colors = AssistChipDefaults.assistChipColors(
                     containerColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
@@ -212,7 +316,8 @@ private fun TaskStatusFilterRow(
 private fun TaskCard(
     task: ConfigurationTask,
     onAccept: () -> Unit,
-    onStart: () -> Unit
+    onStart: () -> Unit,
+    onConfigure: () -> Unit
 ) {
     var detailExpanded by remember(task.id) { mutableStateOf(false) }
 
@@ -234,7 +339,7 @@ private fun TaskCard(
             ) {
                 PriorityTag(priority = task.priority)
                 Text(
-                    text = task.recipeName,
+                    text = task.title.ifBlank { task.recipeName },
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.weight(1f),
@@ -259,7 +364,7 @@ private fun TaskCard(
                 )
                 InfoRow(
                     title = "调香师",
-                    value = task.requestedBy.ifBlank { "未指定" },
+                    value = task.perfumer.ifBlank { task.requestedBy.ifBlank { "未指定" } },
                     secondary = "客户 ${task.customer.ifBlank { "未指定" }}"
                 )
                 InfoRow(
@@ -354,18 +459,27 @@ private fun TaskCard(
                 horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                if (task.status == TaskStatus.WAITING) {
+                if (task.status == TaskStatus.DRAFT || task.status == TaskStatus.READY) {
                     TextButton(onClick = onAccept) {
                         Text("接单")
                     }
                 }
+                val canConfigure = task.status != TaskStatus.COMPLETED && task.status != TaskStatus.CANCELLED
+                TextButton(onClick = onConfigure, enabled = canConfigure) {
+                    Text("去配置")
+                }
                 FilledTonalButton(
                     onClick = onStart,
-                    enabled = task.status != TaskStatus.COMPLETED
+                    enabled = canConfigure
                 ) {
                     Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text(if (task.status == TaskStatus.IN_PROGRESS) "继续配置" else "开始配置")
+                    val startLabel = when (task.status) {
+                        TaskStatus.IN_PROGRESS -> "继续配置"
+                        TaskStatus.PUBLISHED -> "进入设备"
+                        else -> "开始配置"
+                    }
+                    Text(startLabel)
                 }
             }
         }
@@ -399,9 +513,12 @@ private fun PriorityTag(priority: TaskPriority) {
 @Composable
 private fun StatusTag(status: TaskStatus) {
     val (label, color) = when (status) {
-        TaskStatus.WAITING -> "待接单" to MaterialTheme.colorScheme.primary
-        TaskStatus.IN_PROGRESS -> "进行中" to MaterialTheme.colorScheme.tertiary
+        TaskStatus.DRAFT -> "草稿" to MaterialTheme.colorScheme.surfaceVariant
+        TaskStatus.READY -> "待发布" to MaterialTheme.colorScheme.primary
+        TaskStatus.PUBLISHED -> "已下发" to MaterialTheme.colorScheme.tertiary
+        TaskStatus.IN_PROGRESS -> "执行中" to MaterialTheme.colorScheme.tertiary
         TaskStatus.COMPLETED -> "已完成" to MaterialTheme.colorScheme.secondary
+        TaskStatus.CANCELLED -> "已取消" to MaterialTheme.colorScheme.error
     }
     Text(
         text = label,

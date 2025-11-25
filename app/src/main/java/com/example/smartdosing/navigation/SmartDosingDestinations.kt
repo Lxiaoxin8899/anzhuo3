@@ -68,7 +68,7 @@ object SmartDosingRoutes {
     const val DOSING = "dosing"
     const val DOSING_CHECKLIST = "dosing_checklist/{recipeId}"
     const val DOSING_OPERATION = "dosing_operation/{recipeId}"
-    const val MATERIAL_CONFIGURATION = "material_configuration/{recipeId}"
+    const val MATERIAL_CONFIGURATION = "material_configuration/{recipeId}?taskId={taskId}&recordId={recordId}"
     const val TASK_CENTER = "task_center"
     const val CONFIGURATION_RECORDS = "configuration_records"
     const val CONFIGURATION_RECORD_DETAIL = "configuration_record_detail/{recordId}"
@@ -80,7 +80,19 @@ object SmartDosingRoutes {
     fun recipeEdit(recipeId: String) = "recipe_edit/$recipeId"
     fun dosingChecklist(recipeId: String) = "dosing_checklist/$recipeId"
     fun dosingOperation(recipeId: String) = "dosing_operation/$recipeId"
-    fun materialConfiguration(recipeId: String) = "material_configuration/$recipeId"
+    fun materialConfiguration(
+        recipeId: String,
+        taskId: String? = null,
+        recordId: String? = null
+    ): String {
+        val normalizedId = recipeId.ifBlank { "quick_start" }
+        val params = buildList {
+            taskId?.takeIf { it.isNotBlank() }?.let { add("taskId=$it") }
+            recordId?.takeIf { it.isNotBlank() }?.let { add("recordId=$it") }
+        }
+        val query = if (params.isNotEmpty()) "?${params.joinToString("&")}" else ""
+        return "material_configuration/$normalizedId$query"
+    }
     fun configurationRecordDetail(recordId: String) = "configuration_record_detail/$recordId"
     fun recordDetail(recordId: String) = "record_detail/$recordId"
 }

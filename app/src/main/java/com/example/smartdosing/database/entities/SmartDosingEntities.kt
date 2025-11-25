@@ -31,6 +31,11 @@ data class RecipeEntity(
 
     val customer: String = "",                      // 客户名称
 
+    @ColumnInfo(name = "sales_owner")
+    val salesOwner: String = "",                    // 业务员
+
+    val perfumer: String = "",                      // 调香师
+
     @ColumnInfo(name = "batch_no")
     val batchNo: String = "",                       // 批次号
 

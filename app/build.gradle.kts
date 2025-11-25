@@ -1,15 +1,18 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
-    alias(libs.plugins.kotlin.compose)
     kotlin("kapt")
+}
+
+kapt {
+    arguments {
+        arg("room.schemaLocation", "$projectDir/schemas")
+    }
 }
 
 android {
     namespace = "com.example.smartdosing"
-    compileSdk {
-        version = release(36)
-    }
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.example.quickdev"
@@ -40,6 +43,10 @@ android {
     buildFeatures {
         compose = true
     }
+    // 明确指定 Compose 编译器版本，避免与 Kotlin/Compose 版本不匹配导致的构建问题
+    composeOptions {
+        kotlinCompilerExtensionVersion = libs.versions.composeCompiler.get()
+    }
 
     packaging {
         resources {
@@ -65,6 +72,7 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.material.icons.extended)
+    implementation(libs.androidx.compose.foundation)
 
     // Room数据库依赖
     implementation("androidx.room:room-runtime:2.6.1")
@@ -82,6 +90,9 @@ dependencies {
 
     // JSON序列化
     implementation("com.google.code.gson:gson:2.10.1")
+    implementation("com.squareup.retrofit2:retrofit:2.9.0")
+    implementation("com.squareup.retrofit2:converter-gson:2.9.0")
+    implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
 
     // DataStore配置存储
     implementation("androidx.datastore:datastore-preferences:1.1.1")

@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.sp
 import com.example.smartdosing.data.DatabaseRecipeRepository
 import com.example.smartdosing.data.Material as DataMaterial
 import com.example.smartdosing.data.Recipe
+import com.example.smartdosing.data.repository.ConfigurationRepositoryProvider
 import com.example.smartdosing.ui.theme.SmartDosingTheme
 import java.text.DecimalFormat
 import java.text.SimpleDateFormat
@@ -44,20 +45,41 @@ import java.util.Locale
 @Composable
 fun MaterialConfigurationScreen(
     recipeId: String? = null,
+    taskId: String = "",
+    recordId: String = "",
     onNavigateBack: () -> Unit = {},
     onSaveConfiguration: (MaterialConfigurationData) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val repository = remember { DatabaseRecipeRepository.getInstance(context) }
+    val taskRepository = remember { ConfigurationRepositoryProvider.taskRepository }
+    val recordRepository = remember { ConfigurationRepositoryProvider.recordRepository }
     var recipe by remember { mutableStateOf<Recipe?>(null) }
     var materialStates by remember { mutableStateOf<List<MaterialConfigState>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var loadError by remember { mutableStateOf<String?>(null) }
+    var customer by remember { mutableStateOf("") }
+    var salesOwner by remember { mutableStateOf("") }
+    var perfumer by remember { mutableStateOf("") }
+    var notes by remember { mutableStateOf("") }
+    var currentTaskId by remember { mutableStateOf(taskId) }
+    var currentRecordId by remember { mutableStateOf(recordId) }
+
+    fun resetMetaInfo() {
+        customer = ""
+        salesOwner = ""
+        perfumer = ""
+        notes = ""
+    }
 
     // 统一封装配方与材料状态的赋值，避免多处重复代码
     fun updateRecipeState(targetRecipe: Recipe) {
         recipe = targetRecipe
+        customer = targetRecipe.customer
+        salesOwner = targetRecipe.salesOwner
+        perfumer = targetRecipe.perfumer
+        notes = targetRecipe.description
         materialStates = targetRecipe.materials.map { material ->
             MaterialConfigState(
                 material = material,
@@ -76,7 +98,7 @@ fun MaterialConfigurationScreen(
     }
 
     // 加载配方数据
-    LaunchedEffect(recipeId) {
+    LaunchedEffect(recipeId, taskId, recordId) {
         isLoading = true
         loadError = null
         try {
@@ -85,18 +107,44 @@ fun MaterialConfigurationScreen(
                 loadDemoRecipe()
             } else {
                 val loadedRecipe = repository.getRecipeById(normalizedId)
+                    ?: recordRepository.fetchRecord(recordId)?.let { record ->
+                        currentRecordId = record.id
+                        repository.getRecipeById(record.recipeId)
+                            ?: repository.getRecipeByCode(record.recipeCode)
+                    }
                 if (loadedRecipe != null) {
                     updateRecipeState(loadedRecipe)
                 } else {
                     loadError = "未找到配方（ID: $normalizedId），可以加载示例数据体验流程"
                     recipe = null
                     materialStates = emptyList()
+                    resetMetaInfo()
+                }
+            }
+
+            if (taskId.isNotBlank()) {
+                taskRepository.fetchTask(taskId)?.let { task ->
+                    currentTaskId = task.id
+                    customer = task.customer
+                    salesOwner = task.salesOwner
+                    perfumer = task.requestedBy
+                }
+            }
+
+            if (recordId.isNotBlank()) {
+                recordRepository.fetchRecord(recordId)?.let { record ->
+                    currentRecordId = record.id
+                    customer = record.customer
+                    salesOwner = record.salesOwner
+                    perfumer = record.operator
+                    notes = record.note
                 }
             }
         } catch (e: Exception) {
             loadError = "加载配方失败：${e.message ?: "未知错误"}"
             recipe = null
             materialStates = emptyList()
+            resetMetaInfo()
         } finally {
             isLoading = false
         }
@@ -118,6 +166,16 @@ fun MaterialConfigurationScreen(
             MaterialConfigurationContent(
                 recipe = recipe,
                 materialStates = materialStates,
+                customer = customer,
+                salesOwner = salesOwner,
+                perfumer = perfumer,
+                notes = notes,
+                taskId = currentTaskId,
+                recordId = currentRecordId,
+                onCustomerChange = { customer = it },
+                onSalesOwnerChange = { salesOwner = it },
+                onPerfumerChange = { perfumer = it },
+                onNotesChange = { notes = it },
                 onMaterialWeightChanged = { index, weight ->
                     materialStates = materialStates.toMutableList().apply {
                         this[index] = this[index].copy(actualWeight = weight, hasError = false)
@@ -140,7 +198,12 @@ fun MaterialConfigurationScreen(
                     }
                 },
                 onSaveConfiguration = { configData ->
-                    onSaveConfiguration(configData)
+                    onSaveConfiguration(
+                        configData.copy(
+                            taskId = currentTaskId,
+                            recordId = currentRecordId
+                        )
+                    )
                 },
                 onNavigateBack = onNavigateBack,
                 modifier = modifier
@@ -166,6 +229,12 @@ data class MaterialConfigurationData(
     val recipeId: String,
     val recipeCode: String,
     val recipeName: String,
+    val taskId: String = "",
+    val recordId: String = "",
+    val customer: String = "",
+    val salesOwner: String = "",
+    val perfumer: String = "",
+    val notes: String = "",
     val materials: List<MaterialConfigResult>
 )
 
@@ -263,6 +332,16 @@ private fun MaterialConfigurationEmptyState(
 private fun MaterialConfigurationContent(
     recipe: Recipe?,
     materialStates: List<MaterialConfigState>,
+    customer: String,
+    salesOwner: String,
+    perfumer: String,
+    notes: String,
+    taskId: String,
+    recordId: String,
+    onCustomerChange: (String) -> Unit,
+    onSalesOwnerChange: (String) -> Unit,
+    onPerfumerChange: (String) -> Unit,
+    onNotesChange: (String) -> Unit,
     onMaterialWeightChanged: (Int, String) -> Unit,
     onMaterialConfirmed: (Int) -> Unit,
     onMaterialEdit: (Int) -> Unit,
@@ -283,6 +362,19 @@ private fun MaterialConfigurationContent(
                 totalCount = materialStates.size
             )
         }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        StakeholderSection(
+            customer = customer,
+            salesOwner = salesOwner,
+            perfumer = perfumer,
+            notes = notes,
+            onCustomerChange = onCustomerChange,
+            onSalesOwnerChange = onSalesOwnerChange,
+            onPerfumerChange = onPerfumerChange,
+            onNotesChange = onNotesChange
+        )
 
         Spacer(modifier = Modifier.height(12.dp))
 
@@ -314,9 +406,78 @@ private fun MaterialConfigurationContent(
         BottomActions(
             recipe = recipe,
             materialStates = materialStates,
+            taskId = taskId,
+            recordId = recordId,
+            customer = customer,
+            salesOwner = salesOwner,
+            perfumer = perfumer,
+            notes = notes,
             onSaveConfiguration = onSaveConfiguration,
             onNavigateBack = onNavigateBack
         )
+    }
+}
+
+@Composable
+private fun StakeholderSection(
+    customer: String,
+    salesOwner: String,
+    perfumer: String,
+    notes: String,
+    onCustomerChange: (String) -> Unit,
+    onSalesOwnerChange: (String) -> Unit,
+    onPerfumerChange: (String) -> Unit,
+    onNotesChange: (String) -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                OutlinedTextField(
+                    value = customer,
+                    onValueChange = onCustomerChange,
+                    label = { Text("客户") },
+                    singleLine = true,
+                    modifier = Modifier.weight(1f)
+                )
+                OutlinedTextField(
+                    value = salesOwner,
+                    onValueChange = onSalesOwnerChange,
+                    label = { Text("业务员") },
+                    singleLine = true,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                OutlinedTextField(
+                    value = perfumer,
+                    onValueChange = onPerfumerChange,
+                    label = { Text("调香师") },
+                    singleLine = true,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+            OutlinedTextField(
+                value = notes,
+                onValueChange = onNotesChange,
+                label = { Text("备注") },
+                modifier = Modifier.fillMaxWidth(),
+                minLines = 2
+            )
+        }
     }
 }
 
@@ -553,6 +714,12 @@ private fun MaterialConfigCard(
 private fun BottomActions(
     recipe: Recipe?,
     materialStates: List<MaterialConfigState>,
+    taskId: String,
+    recordId: String,
+    customer: String,
+    salesOwner: String,
+    perfumer: String,
+    notes: String,
     onSaveConfiguration: (MaterialConfigurationData) -> Unit,
     onNavigateBack: () -> Unit
 ) {
@@ -576,6 +743,12 @@ private fun BottomActions(
                         recipeId = r.id,
                         recipeCode = r.code,
                         recipeName = r.name,
+                        taskId = taskId,
+                        recordId = recordId,
+                        customer = customer,
+                        salesOwner = salesOwner,
+                        perfumer = perfumer,
+                        notes = notes,
                         materials = materialStates.mapIndexed { idx, state ->
                             val actualWeight = state.actualWeight.toDoubleOrNull() ?: 0.0
                             val deviation = actualWeight - state.material.weight
@@ -687,9 +860,23 @@ private fun MaterialConfigurationScreenPreview() {
                 category = "研发演示",
                 materials = sampleMaterials,
                 totalWeight = 100.0,
-                createTime = "2024-01-01 00:00:00"
+                createTime = "2024-01-01 00:00:00",
+                customer = "示例客户",
+                salesOwner = "王业务",
+                perfumer = "李调香",
+                description = "保持低温混合"
             ),
             materialStates = sampleStates,
+            customer = "示例客户",
+            salesOwner = "王业务",
+            perfumer = "李调香",
+            notes = "保持低温混合",
+            taskId = "",
+            recordId = "",
+            onCustomerChange = {},
+            onSalesOwnerChange = {},
+            onPerfumerChange = {},
+            onNotesChange = {},
             onMaterialWeightChanged = { _, _ -> },
             onMaterialConfirmed = { },
             onMaterialEdit = { },

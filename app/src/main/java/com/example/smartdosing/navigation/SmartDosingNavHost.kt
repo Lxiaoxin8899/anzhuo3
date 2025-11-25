@@ -3,18 +3,25 @@ package com.example.smartdosing.navigation
 import android.content.Context
 import android.widget.Toast
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
-import com.example.smartdosing.data.DosingRecordDetailInput
-import com.example.smartdosing.data.DosingRecordRepository
-import com.example.smartdosing.data.DosingRecordSaveRequest
+import androidx.navigation.NavType
+import androidx.navigation.navArgument
+import com.example.smartdosing.data.ConfigurationRecord
+import com.example.smartdosing.data.ConfigurationRecordStatus
+import com.example.smartdosing.data.TaskStatus
 import com.example.smartdosing.ui.screens.dosing.DosingOperationScreen
 import com.example.smartdosing.ui.screens.dosing.DosingScreen
 import com.example.smartdosing.ui.screens.dosing.MaterialConfigurationScreen
 import com.example.smartdosing.ui.screens.dosing.MaterialConfigurationData
+import com.example.smartdosing.data.repository.ConfigurationRepositoryProvider
 import com.example.smartdosing.ui.screens.home.HomeScreen
 import com.example.smartdosing.ui.screens.records.ConfigurationRecordDetailScreen
 import com.example.smartdosing.ui.screens.records.ConfigurationRecordsScreen
@@ -29,7 +36,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlin.math.abs
 
 /**
  * SmartDosing 应用导航主机
@@ -39,6 +45,9 @@ fun SmartDosingNavHost(
     navController: NavHostController,
     modifier: Modifier = Modifier
 ) {
+    var taskRefreshTrigger by remember { mutableIntStateOf(0) }
+    var recordRefreshTrigger by remember { mutableIntStateOf(0) }
+
     fun handleDosingNavigation(recipeId: String) {
         val normalizedId = recipeId.trim().ifBlank { "quick_start" }
         val directOperation = normalizedId == "quick_start" || normalizedId == "import_csv"
@@ -173,16 +182,33 @@ fun SmartDosingNavHost(
         }
 
         // 材料配置页面 (研发环境)
-        composable(SmartDosingRoutes.MATERIAL_CONFIGURATION) { backStackEntry ->
-            val recipeId = backStackEntry.arguments?.getString("recipeId") ?: ""
+        composable(
+            route = SmartDosingRoutes.MATERIAL_CONFIGURATION,
+            arguments = listOf(
+                navArgument("recipeId") { type = NavType.StringType; defaultValue = "quick_start" },
+                navArgument("taskId") { type = NavType.StringType; defaultValue = "" },
+                navArgument("recordId") { type = NavType.StringType; defaultValue = "" }
+            )
+        ) { backStackEntry ->
+            val recipeId = backStackEntry.arguments?.getString("recipeId") ?: "quick_start"
+            val taskId = backStackEntry.arguments?.getString("taskId").orEmpty()
+            val recordId = backStackEntry.arguments?.getString("recordId").orEmpty()
             val context = LocalContext.current
             MaterialConfigurationScreen(
                 recipeId = recipeId,
+                taskId = taskId,
+                recordId = recordId,
                 onNavigateBack = { navController.popBackStack() },
                 onSaveConfiguration = { configData ->
-                    // 保存配置数据到本地存储或数据库
-                    saveMaterialConfiguration(context, configData)
-                    navController.popBackStack()
+                    saveMaterialConfiguration(
+                        context = context,
+                        configData = configData,
+                        onSuccess = {
+                            taskRefreshTrigger++
+                            recordRefreshTrigger++
+                            navController.popBackStack()
+                        }
+                    )
                 }
             )
         }
@@ -190,13 +216,23 @@ fun SmartDosingNavHost(
         // 任务中心页面
         composable(SmartDosingRoutes.TASK_CENTER) {
             TaskCenterScreen(
-                onNavigateBack = { navController.popBackStack() }
+                refreshSignal = taskRefreshTrigger,
+                onNavigateBack = { navController.popBackStack() },
+                onConfigureTask = { task ->
+                    navController.navigate(
+                        SmartDosingRoutes.materialConfiguration(
+                            recipeId = task.recipeId,
+                            taskId = task.id
+                        )
+                    )
+                }
             )
         }
 
         // 配置记录页面
         composable(SmartDosingRoutes.CONFIGURATION_RECORDS) {
             ConfigurationRecordsScreen(
+                refreshSignal = recordRefreshTrigger,
                 onNavigateBack = { navController.popBackStack() },
                 onRecordSelected = { recordId ->
                     navController.navigate(SmartDosingRoutes.configurationRecordDetail(recordId))
@@ -208,7 +244,18 @@ fun SmartDosingNavHost(
             val recordId = backStackEntry.arguments?.getString("recordId") ?: return@composable
             ConfigurationRecordDetailScreen(
                 recordId = recordId,
-                onNavigateBack = { navController.popBackStack() }
+                onNavigateBack = { navController.popBackStack() },
+                onReconfigure = { record ->
+                    navController.navigate(
+                        SmartDosingRoutes.materialConfiguration(
+                            recipeId = record.recipeId.ifBlank { record.recipeCode },
+                            recordId = record.id
+                        )
+                    )
+                },
+                onFixError = { _ ->
+                    recordRefreshTrigger++
+                }
             )
         }
 
@@ -236,50 +283,24 @@ fun SmartDosingNavHost(
 
 /**
  * 保存材料配置数据
- * 将研发环境的材料配置保存为投料记录
+ * 将研发环境的材料配置写入配置记录仓库，便于 Task Center 与配置记录联动
  */
-fun saveMaterialConfiguration(context: Context, configData: MaterialConfigurationData) {
-    val tolerancePercent = 5f
-    val recordRepository = DosingRecordRepository.getInstance(context)
-    // 生成检查项概览文本，方便在记录列表中快速预览
-    val checklistItems = configData.materials.mapIndexed { index, material ->
-        val targetText = String.format(Locale.getDefault(), "%.2f", material.targetWeight)
-        val actualText = String.format(Locale.getDefault(), "%.2f", material.actualWeight)
-        "材料${index + 1}：${material.materialName}（目标${targetText}g，实际${actualText}g）"
-    }
-    // 构建投料明细数据，与数据库字段保持一致
-    val detailInputs = configData.materials.mapIndexed { index, material ->
-        DosingRecordDetailInput(
-            sequence = index + 1,
-            materialCode = material.materialCode.ifBlank { material.materialName },
-            materialName = material.materialName,
-            targetWeight = material.targetWeight,
-            actualWeight = material.actualWeight,
-            unit = "g",
-            isOverLimit = abs(material.deviationPercentage) > tolerancePercent,
-            overLimitPercent = material.deviationPercentage
-        )
-    }
-
-    // 启动后台协程执行保存逻辑，完成后回到主线程提示结果
+fun saveMaterialConfiguration(
+    context: Context,
+    configData: MaterialConfigurationData,
+    onSuccess: () -> Unit = {}
+) {
+    val recordRepository = ConfigurationRepositoryProvider.recordRepository
+    val taskRepository = ConfigurationRepositoryProvider.taskRepository
     CoroutineScope(Dispatchers.IO).launch {
-        val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
-        val request = DosingRecordSaveRequest(
-            recipeId = configData.recipeId,
-            recipeCode = configData.recipeCode.ifBlank { "R&D-${System.currentTimeMillis()}" },
-            recipeName = configData.recipeName,
-            operatorName = "研发人员",
-            checklistItems = checklistItems,
-            startTime = timestamp,
-            endTime = timestamp,
-            totalMaterials = detailInputs.size,
-            tolerancePercent = tolerancePercent,
-            details = detailInputs
-        )
         try {
-            recordRepository.saveRecord(request)
+            recordRepository.createRecord(configData.toConfigurationRecord())
+            if (configData.taskId.isNotBlank()) {
+                taskRepository.updateTaskStatus(configData.taskId, TaskStatus.COMPLETED)
+            }
             withContext(Dispatchers.Main) {
-                Toast.makeText(context, "材料配置已保存", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "研发配置已保存", Toast.LENGTH_SHORT).show()
+                onSuccess()
             }
         } catch (e: Exception) {
             withContext(Dispatchers.Main) {
@@ -287,4 +308,45 @@ fun saveMaterialConfiguration(context: Context, configData: MaterialConfiguratio
             }
         }
     }
+}
+
+/**
+ * 将界面层数据映射为配置记录，默认以研发配置为分类
+ */
+private fun MaterialConfigurationData.toConfigurationRecord(): ConfigurationRecord {
+    val targetTotal = materials.sumOf { it.targetWeight }
+    val actualTotal = materials.sumOf { it.actualWeight }
+    val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date())
+    val highlight = materials.take(3).joinToString(" / ") { material ->
+        val actualText = String.format(Locale.getDefault(), "%.2f", material.actualWeight)
+        "${material.materialName}:$actualText g"
+    }
+    val extra = if (materials.size > 3) " · 等${materials.size}种材料" else ""
+    val summaryNote = "目标${String.format(Locale.getDefault(), "%.2f", targetTotal)}g，" +
+        "实际${String.format(Locale.getDefault(), "%.2f", actualTotal)}g。$highlight$extra"
+    val resolvedCustomer = customer.ifBlank { "未指定" }
+    val resolvedSalesOwner = salesOwner.ifBlank { "未指定" }
+    val resolvedPerfumer = perfumer.ifBlank { "研发助理" }
+    val combinedNote = listOf(notes.trim().takeIf { it.isNotEmpty() }, summaryNote)
+        .filterNotNull()
+        .joinToString(" / ")
+
+    return ConfigurationRecord(
+        id = recordId.takeIf { it.isNotBlank() } ?: "CR-${System.currentTimeMillis()}",
+        taskId = taskId.ifBlank { "TASK-${System.currentTimeMillis()}" },
+        recipeId = recipeId.ifBlank { recipeCode.ifBlank { "R&D-${System.currentTimeMillis()}" } },
+        recipeName = recipeName.ifBlank { "研发配置" },
+        recipeCode = recipeCode.ifBlank { "R&D-${System.currentTimeMillis()}" },
+        category = "研发配置",
+        operator = resolvedPerfumer,
+        quantity = targetTotal,
+        unit = "g",
+        actualQuantity = actualTotal,
+        customer = resolvedCustomer,
+        salesOwner = resolvedSalesOwner,
+        resultStatus = ConfigurationRecordStatus.COMPLETED,
+        updatedAt = timestamp,
+        tags = listOf("快速录入"),
+        note = combinedNote
+    )
 }

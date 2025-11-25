@@ -287,61 +287,106 @@ class TemplateRepository private constructor() {
 
     private fun buildDefaultTemplates(): List<TemplateDefinition> {
         val now = now()
-        // 垂直展开格式：每个材料占一行
+        // 垂直展开格式：每个材料占一行，同时补齐任务中心所需字段
         val standardFields = listOf(
             TemplateField(
                 id = UUID.randomUUID().toString(),
                 key = "recipe_name",
-                label = "配方名称",
-                description = "配方的唯一标识名称，同一配方的多行材料应填写相同的配方名称",
+                label = "任务名称 / 配方名称",
+                description = "任务中心显示的名称，同一配方的多行材料必须保持一致",
                 required = true,
-                example = "草莓烟油",
+                example = "薄荷雾化调试",
                 order = 1
             ),
             TemplateField(
                 id = UUID.randomUUID().toString(),
                 key = "recipe_code",
-                label = "配方编码",
-                description = "配方唯一编号，同一配方的多行材料应填写相同的配方编码",
+                label = "任务编号 / 配方编码",
+                description = "任务与配方的唯一编号，设备端将使用该编码做追溯",
                 required = false,
-                example = "S000001",
+                example = "TASK-202412-001",
                 order = 2
             ),
             TemplateField(
                 id = UUID.randomUUID().toString(),
-                key = "recipe_category",
-                label = "配方分类",
-                description = "一级分类，仅支持“烟油”或“辅料”",
+                key = "task_priority",
+                label = "任务优先级（LOW/NORMAL/HIGH/URGENT）",
+                description = "留空默认 NORMAL，可填写 LOW/NORMAL/HIGH/URGENT",
                 required = false,
-                example = "烟油",
+                example = "HIGH",
                 order = 3
             ),
             TemplateField(
                 id = UUID.randomUUID().toString(),
                 key = "recipe_customer",
-                label = "客户名称",
-                description = "用于过滤和追踪的客户/项目名称",
+                label = "客户 / 项目",
+                description = "便于回溯的客户或项目名称，将在任务详情中展示",
                 required = false,
-                example = "华南OEM工厂",
+                example = "内部研发",
                 order = 4
             ),
             TemplateField(
                 id = UUID.randomUUID().toString(),
-                key = "recipe_design_time",
-                label = "配方设计时间",
-                description = "记录完成设计的日期，建议格式：2024-05-01",
+                key = "recipe_sales_owner",
+                label = "业务负责人",
+                description = "负责对接该任务的业务/联络人",
                 required = false,
-                example = "2024-05-01",
+                example = "李商务",
                 order = 5
             ),
             TemplateField(
                 id = UUID.randomUUID().toString(),
+                key = "recipe_perfumer",
+                label = "调香师 / 研发人员",
+                description = "设备端展示的执行人，便于快速指派任务",
+                required = false,
+                example = "陈调香",
+                order = 6
+            ),
+            TemplateField(
+                id = UUID.randomUUID().toString(),
+                key = "task_tags",
+                label = "任务标签（逗号分隔）",
+                description = "用于任务看板筛选的标签，例如“验证,回归”",
+                required = false,
+                example = "验证,首批",
+                order = 7
+            ),
+            TemplateField(
+                id = UUID.randomUUID().toString(),
+                key = "task_note",
+                label = "任务备注",
+                description = "整体备注或注意事项，将直接同步到任务详情",
+                required = false,
+                example = "用于本机调试批次",
+                order = 8
+            ),
+            TemplateField(
+                id = UUID.randomUUID().toString(),
+                key = "recipe_category",
+                label = "配方分类",
+                description = "一级分类，默认为“烟油”",
+                required = false,
+                example = "烟油",
+                order = 9
+            ),
+            TemplateField(
+                id = UUID.randomUUID().toString(),
+                key = "recipe_design_time",
+                label = "计划日期",
+                description = "任务计划日期或批次日期，格式示例：2024-05-01",
+                required = false,
+                example = "2024-05-01",
+                order = 10
+            ),
+            TemplateField(
+                id = UUID.randomUUID().toString(),
                 key = "designer",
-                label = "设计师",
-                description = "负责配方设计/审核的人员",
+                label = "记录人",
+                description = "填写或导入本表的负责人，默认IMPORT",
                 required = false,
                 example = "张工",
-                order = 6
+                order = 11
             ),
             TemplateField(
                 id = UUID.randomUUID().toString(),
@@ -350,7 +395,7 @@ class TemplateRepository private constructor() {
                 description = "材料的名称，每个材料占一行",
                 required = true,
                 example = "草莓香精",
-                order = 7
+                order = 12
             ),
             TemplateField(
                 id = UUID.randomUUID().toString(),
@@ -359,7 +404,7 @@ class TemplateRepository private constructor() {
                 description = "材料的唯一编号或SKU，用于库存管理和追溯",
                 required = false,
                 example = "MAT001",
-                order = 8
+                order = 13
             ),
             TemplateField(
                 id = UUID.randomUUID().toString(),
@@ -368,7 +413,7 @@ class TemplateRepository private constructor() {
                 description = "材料的重量，只填数字",
                 required = true,
                 example = "50",
-                order = 9
+                order = 14
             ),
             TemplateField(
                 id = UUID.randomUUID().toString(),
@@ -377,7 +422,7 @@ class TemplateRepository private constructor() {
                 description = "重量单位，例如g、kg、ml、l",
                 required = false,
                 example = "g",
-                order = 10
+                order = 15
             ),
             TemplateField(
                 id = UUID.randomUUID().toString(),
@@ -386,7 +431,7 @@ class TemplateRepository private constructor() {
                 description = "材料的顺序编号，可选",
                 required = false,
                 example = "1",
-                order = 11
+                order = 16
             ),
             TemplateField(
                 id = UUID.randomUUID().toString(),
@@ -395,14 +440,14 @@ class TemplateRepository private constructor() {
                 description = "材料的备注信息或工艺说明",
                 required = false,
                 example = "",
-                order = 12
+                order = 17
             )
         )
 
         val standardTemplate = TemplateDefinition(
             id = "standard_recipe_template",
-            name = "标准配方导入模板",
-            description = "用于Excel/CSV批量导入配方的标准模板，可自定义列标题和示例值。",
+            name = "标准模板",
+            description = "用于Excel/CSV批量导入研发任务=配方的数据表，字段与任务中心保持一致。",
             version = 1,
             updatedAt = now,
             supportedFormats = listOf(TemplateFormat.CSV, TemplateFormat.EXCEL),

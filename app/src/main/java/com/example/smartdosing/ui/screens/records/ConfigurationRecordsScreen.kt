@@ -30,9 +30,11 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -42,8 +44,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.smartdosing.data.ConfigurationRecord
-import com.example.smartdosing.data.ConfigurationRecordSampleData
 import com.example.smartdosing.data.ConfigurationRecordStatus
+import com.example.smartdosing.data.repository.ConfigurationRecordFilter
+import com.example.smartdosing.data.repository.ConfigurationRepositoryProvider
+import kotlinx.coroutines.launch
 import com.example.smartdosing.ui.theme.SmartDosingTheme
 
 /**
@@ -52,42 +56,48 @@ import com.example.smartdosing.ui.theme.SmartDosingTheme
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ConfigurationRecordsScreen(
+    refreshSignal: Int = 0,
     onNavigateBack: () -> Unit = {},
     onRecordSelected: (String) -> Unit = {}
 ) {
-    val allRecords = remember { ConfigurationRecordSampleData.records() }
-    val customers = remember(allRecords) { allRecords.map { it.customer }.distinct() }
-    val salesOwners = remember(allRecords) { allRecords.map { it.salesOwner }.distinct() }
-    val perfumers = remember(allRecords) { allRecords.map { it.operator }.distinct() }
+    val repository = remember { ConfigurationRepositoryProvider.recordRepository }
+    var records by remember { mutableStateOf<List<ConfigurationRecord>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(true) }
+    var loadError by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
     var selectedCustomer by remember { mutableStateOf<String?>(null) }
     var selectedSales by remember { mutableStateOf<String?>(null) }
     var selectedPerfumer by remember { mutableStateOf<String?>(null) }
+    var selectedStatus by remember { mutableStateOf<ConfigurationRecordStatus?>(null) }
     var sortAscending by remember { mutableStateOf(false) }
 
-    val filteredRecords = remember(
-        selectedCustomer,
-        selectedSales,
-        selectedPerfumer,
-        sortAscending,
-        allRecords
-    ) {
-        var result = allRecords
-        selectedCustomer?.let { customer ->
-            result = result.filter { it.customer == customer }
+    fun refreshRecords() {
+        scope.launch {
+            try {
+                isLoading = true
+                loadError = null
+                val filter = ConfigurationRecordFilter(
+                    customer = selectedCustomer,
+                    salesOwner = selectedSales,
+                    operator = selectedPerfumer,
+                    status = selectedStatus,
+                    sortAscending = sortAscending
+                )
+                records = repository.fetchRecords(filter)
+            } catch (e: Exception) {
+                loadError = "加载配置记录失败：${e.message ?: "未知错误"}"
+            } finally {
+                isLoading = false
+            }
         }
-        selectedSales?.let { sales ->
-            result = result.filter { it.salesOwner == sales }
-        }
-        selectedPerfumer?.let { perfumer ->
-            result = result.filter { it.operator == perfumer }
-        }
-        result = if (sortAscending) {
-            result.sortedBy { it.updatedAt }
-        } else {
-            result.sortedByDescending { it.updatedAt }
-        }
-        result
     }
+
+    LaunchedEffect(Unit) { refreshRecords() }
+    LaunchedEffect(refreshSignal) { refreshRecords() }
+
+    val customers = remember(records) { records.map { it.customer }.distinct() }
+    val salesOwners = remember(records) { records.map { it.salesOwner }.distinct() }
+    val perfumers = remember(records) { records.map { it.operator }.distinct() }
 
     Scaffold(
         topBar = {
@@ -111,39 +121,65 @@ fun ConfigurationRecordsScreen(
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            RecordSummaryRow(records = allRecords)
+            RecordSummaryRow(records = records)
             MultiFilterRow(
                 label = "客户",
                 options = customers,
                 selected = selectedCustomer,
-                onSelected = { selectedCustomer = it }
+                onSelected = {
+                    selectedCustomer = it
+                    refreshRecords()
+                }
             )
             MultiFilterRow(
                 label = "业务员",
                 options = salesOwners,
                 selected = selectedSales,
-                onSelected = { selectedSales = it }
+                onSelected = {
+                    selectedSales = it
+                    refreshRecords()
+                }
             )
             MultiFilterRow(
                 label = "调香师",
                 options = perfumers,
                 selected = selectedPerfumer,
-                onSelected = { selectedPerfumer = it }
+                onSelected = {
+                    selectedPerfumer = it
+                    refreshRecords()
+                }
+            )
+            StatusFilterRow(
+                selected = selectedStatus,
+                onSelected = {
+                    selectedStatus = it
+                    refreshRecords()
+                }
             )
             SortBar(
                 ascending = sortAscending,
-                onToggle = { sortAscending = !sortAscending }
+                onToggle = {
+                    sortAscending = !sortAscending
+                    refreshRecords()
+                }
             )
 
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                items(filteredRecords, key = { it.id }) { record ->
-                    ConfigurationRecordCard(
-                        record = record,
-                        onClick = { onRecordSelected(record.id) }
-                    )
+            when {
+                isLoading -> RecordLoadingState()
+                loadError != null -> RecordErrorState(message = loadError!!, onRetry = { refreshRecords() })
+                records.isEmpty() -> RecordEmptyState()
+                else -> {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        items(records, key = { it.id }) { record ->
+                            ConfigurationRecordCard(
+                                record = record,
+                                onClick = { onRecordSelected(record.id) }
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -219,6 +255,40 @@ private fun MultiFilterRow(
 }
 
 @Composable
+private fun StatusFilterRow(
+    selected: ConfigurationRecordStatus?,
+    onSelected: (ConfigurationRecordStatus?) -> Unit
+) {
+    val options = listOf<Pair<ConfigurationRecordStatus?, String>>(null to "全部") +
+        ConfigurationRecordStatus.entries.map { status ->
+            status to when (status) {
+                ConfigurationRecordStatus.IN_REVIEW -> "待评估"
+                ConfigurationRecordStatus.RUNNING -> "进行中"
+                ConfigurationRecordStatus.COMPLETED -> "已完成"
+                ConfigurationRecordStatus.ARCHIVED -> "已归档"
+            }
+        }
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(text = "状态", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        options.forEach { (status, label) ->
+            val isSelected = selected == status
+            AssistChip(
+                onClick = { onSelected(if (isSelected) null else status) },
+                label = { Text(label) },
+                colors = AssistChipDefaults.assistChipColors(
+                    containerColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                    labelColor = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            )
+        }
+    }
+}
+
+@Composable
 private fun SortBar(
     ascending: Boolean,
     onToggle: () -> Unit
@@ -236,6 +306,50 @@ private fun SortBar(
         TextButton(onClick = onToggle) {
             Text(if (ascending) "改为倒序" else "改为顺序")
         }
+    }
+}
+
+@Composable
+private fun RecordLoadingState() {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 48.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        androidx.compose.material3.CircularProgressIndicator()
+        Text("正在加载配置记录…", color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+private fun RecordErrorState(message: String, onRetry: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Text(text = message, color = MaterialTheme.colorScheme.error)
+        TextButton(onClick = onRetry) {
+            Text("重试")
+        }
+    }
+}
+
+@Composable
+private fun RecordEmptyState() {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text("没有符合条件的配置记录", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("可以调整筛选或稍后再试", style = MaterialTheme.typography.bodySmall)
     }
 }
 

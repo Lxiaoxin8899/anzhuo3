@@ -13,96 +13,322 @@ fun BODY.generateMainPageScript() {
     script {
         unsafe {
             +"""
-// 主页JavaScript功能
-document.addEventListener('DOMContentLoaded', function() {
-    // 加载统计数据
-    loadQuickStats();
+const dashboardState = {
+    tasks: [],
+    devices: [],
+    publishLog: []
+};
 
-    // 设备状态检查
-    document.getElementById('device-status-btn').addEventListener('click', checkDeviceStatus);
-
-    // 定期更新统计
-    setInterval(loadQuickStats, 30000); // 30秒更新一次
+document.addEventListener('DOMContentLoaded', () => {
+    prefillQuickPublishForm();
+    loadDashboardOverview();
+    loadPublishRecipes();
+    document.getElementById('reload-tasks-btn')?.addEventListener('click', loadDashboardOverview);
+    document.getElementById('refresh-devices-btn')?.addEventListener('click', loadDashboardOverview);
+    document.getElementById('refresh-device-target')?.addEventListener('click', event => {
+        event.preventDefault();
+        loadDashboardOverview();
+    });
+    document.getElementById('submit-publish')?.addEventListener('click', submitQuickPublish);
+    document.getElementById('reset-publish')?.addEventListener('click', resetPublishForm);
+    document.getElementById('open-publish-panel')?.addEventListener('click', () => {
+        document.querySelector('.publish-panel')?.scrollIntoView({ behavior: 'smooth' });
+    });
 });
 
-// 加载快速统计
-async function loadQuickStats() {
+function prefillQuickPublishForm() {
+    const cached = localStorage.getItem('quickPublishRecipe');
+    if (!cached) return;
     try {
-        const response = await fetch('/api/stats');
-        const data = await response.json();
-
-        if (data.success) {
-            const stats = data.data;
-            document.getElementById('total-recipes').textContent = stats.totalRecipes;
-            document.getElementById('categories-count').textContent = Object.keys(stats.categoryCounts).length;
-            document.getElementById('recent-used').textContent = stats.recentlyUsed.length;
-        }
+        const payload = JSON.parse(cached);
+        selectPublishRecipe(payload);
     } catch (error) {
-        console.error('加载统计数据失败:', error);
+        console.warn('读取预填信息失败', error);
+    } finally {
+        localStorage.removeItem('quickPublishRecipe');
     }
 }
 
-// 检查设备状态
-function checkDeviceStatus() {
-    const btn = document.getElementById('device-status-btn');
-    btn.textContent = '检查中...';
-    btn.disabled = true;
+const publishRecipeState = {
+    all: [],
+    selected: null
+};
 
-    // 模拟设备状态检查
-    setTimeout(() => {
-        btn.textContent = '设备正常';
-        btn.className = 'btn btn-success';
-        setTimeout(() => {
-            btn.textContent = '检查设备';
-            btn.className = 'btn btn-warning';
-            btn.disabled = false;
-        }, 2000);
-    }, 1000);
+async function loadPublishRecipes() {
+    try {
+        const response = await fetch('/api/recipes');
+        const data = await response.json();
+        if (data.success) {
+            publishRecipeState.all = data.data || [];
+            setupPublishRecipeSuggestions();
+        }
+    } catch (error) {
+        console.warn('加载配方列表失败', error);
+    }
 }
 
-// 工具函数
+function setupPublishRecipeSuggestions() {
+    const input = document.getElementById('publish-recipe');
+    const panel = document.getElementById('recipe-suggestions');
+    if (!input || !panel) return;
+
+    input.addEventListener('input', () => {
+        const keyword = input.value.trim().toLowerCase();
+        if (!keyword) {
+            panel.innerHTML = '';
+            panel.classList.remove('active');
+            publishRecipeState.selected = null;
+            return;
+        }
+        const matches = publishRecipeState.all.filter(item =>
+            item.name.toLowerCase().includes(keyword) ||
+            (item.code || '').toLowerCase().includes(keyword)
+        ).slice(0, 5);
+
+        if (!matches.length) {
+            panel.innerHTML = `<ul><li><span class="suggest-name">暂无匹配结果</span></li></ul>`;
+            panel.classList.add('active');
+            publishRecipeState.selected = null;
+            return;
+        }
+
+        panel.innerHTML = `
+            <ul>
+                ${'$'}{matches.map(item => `
+                    <li data-id="${'$'}{item.id}">
+                        <span class="suggest-name">${'$'}{item.name}</span>
+                        <span class="suggest-code">${'$'}{item.code || '未编号'} · ${'$'}{item.customer || '客户未指定'}</span>
+                    </li>
+                `).join('')}
+            </ul>
+        `;
+        panel.classList.add('active');
+        panel.querySelectorAll('li').forEach(li => {
+            li.addEventListener('click', () => {
+                const recipeId = li.dataset.id;
+                const recipe = publishRecipeState.all.find(item => item.id === recipeId);
+                if (recipe) {
+                    selectPublishRecipe(recipe);
+                    panel.classList.remove('active');
+                    panel.innerHTML = '';
+                }
+            });
+        });
+    });
+
+    document.addEventListener('click', event => {
+        if (!panel.contains(event.target) && event.target !== input) {
+            panel.classList.remove('active');
+            panel.innerHTML = '';
+        }
+    });
+}
+
+function selectPublishRecipe(recipe) {
+    const input = document.getElementById('publish-recipe');
+    const titleInput = document.getElementById('publish-title');
+    const prioritySelect = document.getElementById('publish-priority');
+    if (input) input.value = recipe.code || recipe.name;
+    if (titleInput && !titleInput.value) titleInput.value = recipe.title || recipe.name;
+    if (prioritySelect && recipe.priority) prioritySelect.value = recipe.priority;
+    publishRecipeState.selected = recipe;
+}
+
+async function loadDashboardOverview() {
+    try {
+        const response = await fetch('/api/tasks/overview');
+        const data = await response.json();
+        if (!data.success) {
+            showNotification(data.message || '加载任务数据失败', 'error');
+            return;
+        }
+        const overview = data.data;
+        dashboardState.tasks = overview.tasks || [];
+        dashboardState.devices = overview.devices || [];
+        dashboardState.publishLog = overview.publishLog || [];
+
+        document.getElementById('pending-task-count').textContent = overview.pendingCount ?? 0;
+        document.getElementById('running-task-count').textContent = overview.runningCount ?? 0;
+        document.getElementById('completed-task-count').textContent = overview.completedToday ?? 0;
+        document.getElementById('device-heartbeat-window').textContent = overview.heartbeatWindow || '--';
+
+        renderTaskList(dashboardState.tasks);
+        renderDeviceList(dashboardState.devices);
+        renderPublishLog(dashboardState.publishLog);
+        renderCurrentDevice(dashboardState.devices);
+    } catch (error) {
+        console.error('加载概览失败', error);
+        showNotification('网络异常，无法加载概览信息', 'error');
+    }
+}
+
+function renderTaskList(tasks) {
+    const list = document.getElementById('today-task-list');
+    if (!list) return;
+    list.innerHTML = '';
+    if (!tasks.length) {
+        const empty = document.createElement('div');
+        empty.className = 'empty-placeholder';
+        empty.textContent = '暂无任务，请先导入配方并使用“快速发布”。';
+        list.appendChild(empty);
+        return;
+    }
+    tasks.slice(0, 5).forEach(task => {
+        const card = document.createElement('div');
+        card.className = 'task-card';
+        card.innerHTML = `
+            <div class="task-title">${'$'}{task.title}</div>
+            <div class="task-meta">
+                <span>${'$'}{task.recipeName || task.recipeCode}</span>
+                <span>${'$'}{task.customer || '未指定'}</span>
+            </div>
+            <div class="task-status task-status-${'$'}{task.status?.toLowerCase()}">${'$'}{renderStatusLabel(task.status)}</div>
+        `;
+        list.appendChild(card);
+    });
+}
+
+function renderStatusLabel(status) {
+    switch(status) {
+        case 'READY': return '待发布';
+        case 'PUBLISHED': return '已下发';
+        case 'IN_PROGRESS': return '执行中';
+        case 'COMPLETED': return '已完成';
+        case 'DRAFT': return '草稿';
+        case 'CANCELLED': return '已取消';
+        default: return status || '未知';
+    }
+}
+
+function renderDeviceList(devices) {
+    const container = document.getElementById('device-list');
+    if (!container) return;
+    container.innerHTML = '';
+    if (!devices.length) {
+        const empty = document.createElement('div');
+        empty.className = 'empty-placeholder';
+        empty.textContent = '未检测到本机设备，请检查 Web 服务。';
+        container.appendChild(empty);
+        return;
+    }
+    devices.forEach(device => {
+        const item = document.createElement('div');
+        item.className = `device-card device-${'$'}{(device.status || 'offline').toLowerCase()}`;
+        item.innerHTML = `
+            <div class="device-name">${'$'}{device.name}</div>
+            <div class="device-status">${'$'}{renderDeviceStatus(device.status)}</div>
+            <div class="device-task">${'$'}{device.currentTaskName || '空闲'}</div>
+            <div class="device-heartbeat">上次心跳：${'$'}{device.lastHeartbeat || '--'}</div>
+        `;
+        container.appendChild(item);
+    });
+}
+
+function renderDeviceStatus(status) {
+    switch(status) {
+        case 'ONLINE': return '在线';
+        case 'BUSY': return '执行中';
+        case 'OFFLINE': return '离线';
+        case 'ERROR': return '异常';
+        default: return '未知';
+    }
+}
+
+function renderCurrentDevice(devices) {
+    const display = document.getElementById('current-device-name');
+    const hiddenInput = document.getElementById('publish-device-id');
+    const device = Array.isArray(devices) && devices.length ? devices[0] : null;
+    if (hiddenInput) hiddenInput.value = device?.id || '';
+    if (display) {
+        display.textContent = device ? `${'$'}{device.name}（${'$'}{renderDeviceStatus(device.status)}）` : '未检测到设备，请刷新页面';
+    }
+}
+
+function renderPublishLog(logItems) {
+    const container = document.getElementById('publish-log-list');
+    if (!container) return;
+    container.innerHTML = '';
+    if (!logItems.length) {
+        const empty = document.createElement('div');
+        empty.className = 'empty-placeholder';
+        empty.textContent = '暂无发布记录';
+        container.appendChild(empty);
+        return;
+    }
+    logItems.slice(0, 5).forEach(item => {
+        const row = document.createElement('div');
+        row.className = 'publish-log-item';
+        row.innerHTML = `
+            <div class="log-time">${'$'}{item.time}</div>
+            <div class="log-body">
+                <div class="log-title">${'$'}{item.title}</div>
+                <div class="log-desc">${'$'}{item.description}</div>
+            </div>
+        `;
+        container.appendChild(row);
+    });
+}
+
+async function submitQuickPublish() {
+    const titleInput = document.getElementById('publish-title');
+    const recipeInput = document.getElementById('publish-recipe');
+    const priorityInput = document.getElementById('publish-priority');
+    const deviceIdInput = document.getElementById('publish-device-id');
+
+    const payload = {
+        title: titleInput?.value?.trim(),
+        recipeKeyword: publishRecipeState.selected?.code || recipeInput?.value?.trim(),
+        priority: priorityInput?.value || 'NORMAL',
+        deviceId: deviceIdInput?.value?.trim()
+    };
+
+    if (!publishRecipeState.selected && !payload.recipeKeyword) {
+        showNotification('请先选择配方', 'warning');
+        return;
+    }
+    if (!payload.title) {
+        showNotification('请填写任务名称', 'warning');
+        return;
+    }
+    if (!payload.deviceId) {
+        showNotification('当前设备不可用，请重新检测或检查连接', 'warning');
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/tasks/quick-publish', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const data = await response.json();
+        if (data.success) {
+            showNotification('任务发布成功', 'success');
+            resetPublishForm();
+            loadDashboardOverview();
+        } else {
+            showNotification(data.message || '发布失败', 'error');
+        }
+    } catch (error) {
+        console.error('发布任务失败', error);
+        showNotification('网络异常，发布失败', 'error');
+    }
+}
+
+function resetPublishForm() {
+    document.getElementById('publish-title')?.value = '';
+    document.getElementById('publish-recipe')?.value = '';
+    publishRecipeState.selected = null;
+}
+
 function showNotification(message, type = 'info') {
     const notification = document.createElement('div');
     notification.className = `notification notification-${'$'}{type}`;
     notification.textContent = message;
-    notification.style.cssText = `
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        padding: 15px 25px;
-        border-radius: 8px;
-        color: white;
-        font-weight: 500;
-        z-index: 10000;
-        opacity: 0;
-        transform: translateX(100%);
-        transition: all 0.3s ease;
-    `;
-
-    switch(type) {
-        case 'success':
-            notification.style.background = 'linear-gradient(135deg, #28a745, #20c997)';
-            break;
-        case 'error':
-            notification.style.background = 'linear-gradient(135deg, #dc3545, #e74c3c)';
-            break;
-        case 'warning':
-            notification.style.background = 'linear-gradient(135deg, #ffc107, #fd7e14)';
-            break;
-        default:
-            notification.style.background = 'linear-gradient(135deg, #17a2b8, #007bff)';
-    }
-
     document.body.appendChild(notification);
-
-    requestAnimationFrame(() => {
-        notification.style.opacity = '1';
-        notification.style.transform = 'translateX(0)';
-    });
-
+    requestAnimationFrame(() => notification.classList.add('active'));
     setTimeout(() => {
-        notification.style.opacity = '0';
-        notification.style.transform = 'translateX(100%)';
+        notification.classList.remove('active');
         setTimeout(() => notification.remove(), 300);
     }, 3000);
 }
@@ -111,268 +337,482 @@ function showNotification(message, type = 'info') {
     }
 }
 
-/**
- * 生成配方管理页JavaScript
- */
+fun BODY.generateTaskCenterPageScript() {
+    script {
+        unsafe {
+            +"""
+const taskCenterState = {
+    filterStatus: '',
+    searchText: ''
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('task-status-filter')?.addEventListener('change', event => {
+        taskCenterState.filterStatus = event.target.value;
+        loadKanbanBoard();
+    });
+    document.getElementById('task-search-input')?.addEventListener('input', event => {
+        taskCenterState.searchText = event.target.value.trim();
+        debounce(loadKanbanBoard, 300)();
+    });
+    document.getElementById('create-task-btn')?.addEventListener('click', () => {
+        showNotification('任务创建入口即将开放，请通过移动端或API创建', 'info');
+    });
+
+    loadKanbanBoard();
+    loadPublishLog();
+});
+
+async function loadKanbanBoard() {
+    const params = new URLSearchParams();
+    if (taskCenterState.filterStatus) params.append('status', taskCenterState.filterStatus);
+    if (taskCenterState.searchText) params.append('search', taskCenterState.searchText);
+
+    try {
+        const response = await fetch(`/api/tasks?${'$'}{params.toString()}`);
+        const data = await response.json();
+        if (!data.success) {
+            showNotification(data.message || '加载任务失败', 'error');
+            return;
+        }
+        renderKanbanBoard(data.data || []);
+    } catch (error) {
+        console.error('加载看板失败', error);
+        showNotification('网络异常，无法加载任务', 'error');
+    }
+}
+
+function renderKanbanBoard(tasks) {
+    const readyList = document.getElementById('kanban-ready');
+    const progressList = document.getElementById('kanban-progress');
+    const doneList = document.getElementById('kanban-done');
+    [readyList, progressList, doneList].forEach(list => { if (list) list.innerHTML = ''; });
+
+    const ready = tasks.filter(t => t.status === 'READY' || t.status === 'DRAFT');
+    const running = tasks.filter(t => t.status === 'PUBLISHED' || t.status === 'IN_PROGRESS');
+    const completed = tasks.filter(t => t.status === 'COMPLETED');
+
+    ready.forEach(task => appendKanbanCard(readyList, task));
+    running.forEach(task => appendKanbanCard(progressList, task));
+    completed.forEach(task => appendKanbanCard(doneList, task));
+
+    if (!ready.length) appendEmptyCard(readyList, '暂无待发布任务');
+    if (!running.length) appendEmptyCard(progressList, '暂无进行中任务');
+    if (!completed.length) appendEmptyCard(doneList, '今日暂无完成任务');
+}
+
+function appendKanbanCard(container, task) {
+    if (!container) return;
+    const card = document.createElement('div');
+    card.className = 'kanban-card';
+    card.innerHTML = `
+        <div class="card-title">${'$'}{task.title}</div>
+        <div class="card-meta">${'$'}{task.recipeName || task.recipeCode}</div>
+        <div class="card-footer">
+            <span>${'$'}{renderStatusLabel(task.status)}</span>
+            <button class="btn btn-link" data-task="${'$'}{task.id}">详情</button>
+        </div>
+    `;
+    card.querySelector('button')?.addEventListener('click', () => loadTaskDetail(task.id));
+    container.appendChild(card);
+}
+
+function appendEmptyCard(container, message) {
+    if (!container) return;
+    const empty = document.createElement('div');
+    empty.className = 'kanban-empty';
+    empty.textContent = message;
+    container.appendChild(empty);
+}
+
+async function loadTaskDetail(taskId) {
+    const detailBody = document.getElementById('task-detail-body');
+    const emptyPlaceholder = document.getElementById('task-detail-empty');
+    if (emptyPlaceholder) emptyPlaceholder.style.display = 'none';
+    if (detailBody) detailBody.innerHTML = '<div class="skeleton">加载中...</div>';
+
+    try {
+        const response = await fetch(`/api/tasks/${'$'}{taskId}`);
+        const data = await response.json();
+        if (!data.success) {
+            showNotification(data.message || '加载任务详情失败', 'error');
+            return;
+        }
+        renderTaskDetail(data.data);
+    } catch (error) {
+        console.error('加载任务详情失败', error);
+        showNotification('网络异常，无法加载详情', 'error');
+    }
+}
+
+function renderTaskDetail(task) {
+    const detailBody = document.getElementById('task-detail-body');
+    if (!detailBody) return;
+    detailBody.innerHTML = `
+        <div class="detail-row"><span>任务名称</span><span>${'$'}{task.title}</span></div>
+        <div class="detail-row"><span>关联配方</span><span>${'$'}{task.recipeName || task.recipeCode}</span></div>
+        <div class="detail-row"><span>客户/项目</span><span>${'$'}{task.customer || '未指定'}</span></div>
+        <div class="detail-row"><span>业务负责人</span><span>${'$'}{task.salesOwner || '未指定'}</span></div>
+        <div class="detail-row"><span>调香师</span><span>${'$'}{task.requestedBy || task.perfumer || '未指定'}</span></div>
+        <div class="detail-row"><span>状态</span><span>${'$'}{renderStatusLabel(task.status)}</span></div>
+        <div class="detail-row"><span>目标设备</span><span>${'$'}{(task.targetDevices || []).join(', ') || '未指派'}</span></div>
+        <div class="detail-row"><span>备注</span><span>${'$'}{task.note || '—'}</span></div>
+    `;
+}
+
+async function loadPublishLog() {
+    const container = document.getElementById('publish-log-list');
+    if (!container) return;
+    container.innerHTML = '<div class="skeleton">加载中...</div>';
+    try {
+        const response = await fetch('/api/publish-log');
+        const data = await response.json();
+        if (!data.success) {
+            container.innerHTML = '';
+            showNotification(data.message || '加载发布日志失败', 'error');
+            return;
+        }
+        container.innerHTML = '';
+        const items = data.data || [];
+        if (!items.length) {
+            appendEmptyCard(container, '暂无发布记录');
+            return;
+        }
+        items.forEach(entry => {
+            const row = document.createElement('div');
+            row.className = 'publish-log-item';
+            row.innerHTML = `
+                <div class="log-time">${'$'}{entry.time}</div>
+                <div class="log-body">
+                    <div class="log-title">${'$'}{entry.title}</div>
+                    <div class="log-desc">${'$'}{entry.description}</div>
+                </div>
+            `;
+            container.appendChild(row);
+        });
+    } catch (error) {
+        console.error('加载发布日志失败', error);
+        container.innerHTML = '';
+        appendEmptyCard(container, '日志加载失败');
+    }
+}
+
+function debounce(fn, delay) {
+    let timer = null;
+    return function(...args) {
+        clearTimeout(timer);
+        timer = setTimeout(() => fn.apply(this, args), delay);
+    };
+}
+            """
+        }
+    }
+}
+
 fun BODY.generateRecipesPageScript() {
     script {
         unsafe {
             +"""
-// 配方管理页JavaScript
+const recipeFilters = {
+    search: '',
+    category: '全部',
+    priority: '',
+    tag: '',
+    recentOnly: false
+};
+
 let allRecipes = [];
 let filteredRecipes = [];
 
-document.addEventListener('DOMContentLoaded', function() {
-    // 初始加载配方
+document.addEventListener('DOMContentLoaded', () => {
     loadRecipes();
-
-    // 搜索功能
-    document.getElementById('search-input').addEventListener('input', handleSearch);
-
-    // 分类筛选
-    document.getElementById('category-filter').addEventListener('change', handleCategoryFilter);
-
-    // 模态框关闭
-    document.getElementById('modal-close').addEventListener('click', closeModal);
-    window.addEventListener('click', function(event) {
-        const modal = document.getElementById('recipe-modal');
-        if (event.target === modal) {
-            closeModal();
-        }
+    document.getElementById('recipes-search')?.addEventListener('input', event => {
+        recipeFilters.search = event.target.value.trim().toLowerCase();
+        applyRecipeFilters();
     });
+    document.getElementById('recipes-category')?.addEventListener('change', event => {
+        recipeFilters.category = event.target.value;
+        applyRecipeFilters();
+    });
+    document.getElementById('recipes-priority')?.addEventListener('change', event => {
+        recipeFilters.priority = event.target.value;
+        applyRecipeFilters();
+    });
+    document.getElementById('recipes-tag')?.addEventListener('input', event => {
+        recipeFilters.tag = event.target.value.trim().toLowerCase();
+        applyRecipeFilters();
+    });
+    document.getElementById('recipes-recent')?.addEventListener('change', event => {
+        recipeFilters.recentOnly = event.target.checked;
+        applyRecipeFilters();
+    });
+    document.getElementById('recipes-reset')?.addEventListener('click', resetRecipeFilters);
+    document.getElementById('recipes-refresh')?.addEventListener('click', loadRecipes);
 });
 
-// 加载配方列表
-async function loadRecipes() {
+function loadRecipes() {
     const loadingIndicator = document.getElementById('loading-indicator');
-    const recipesList = document.getElementById('recipes-list');
-
-    loadingIndicator.style.display = 'block';
-
-    try {
-        const response = await fetch('/api/recipes');
-        const data = await response.json();
-
-        if (data.success) {
-            allRecipes = data.data;
-            filteredRecipes = [...allRecipes];
-            renderRecipes();
-        } else {
-            showNotification('加载配方失败: ' + data.message, 'error');
-        }
-    } catch (error) {
-        console.error('加载配方失败:', error);
-        showNotification('网络错误，请检查连接', 'error');
-    } finally {
-        loadingIndicator.style.display = 'none';
-    }
+    if (loadingIndicator) loadingIndicator.style.display = 'block';
+    fetch('/api/recipes')
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                allRecipes = data.data || [];
+                applyRecipeFilters();
+            } else {
+                showNotification('加载配方失败：' + (data.message || '未知错误'), 'error');
+            }
+        })
+        .catch(error => {
+            console.error('加载配方失败', error);
+            showNotification('网络错误，请检查连接', 'error');
+        })
+        .finally(() => {
+            if (loadingIndicator) loadingIndicator.style.display = 'none';
+        });
 }
 
-// 渲染配方列表
+function applyRecipeFilters() {
+    filteredRecipes = allRecipes.filter(recipe => {
+        const keyword = recipeFilters.search;
+        const matchesSearch = !keyword ||
+            recipe.name.toLowerCase().includes(keyword) ||
+            (recipe.code || '').toLowerCase().includes(keyword) ||
+            (recipe.description || '').toLowerCase().includes(keyword) ||
+            (recipe.materials || []).some(material => material.name.toLowerCase().includes(keyword));
+        const matchesCategory = recipeFilters.category === '全部' || recipe.category === recipeFilters.category;
+        const matchesPriority = !recipeFilters.priority || (recipe.priority || 'NORMAL') === recipeFilters.priority;
+        const matchesTag = !recipeFilters.tag || (recipe.tags || []).some(tag => tag.toLowerCase().includes(recipeFilters.tag));
+        const matchesRecent = !recipeFilters.recentOnly || !!recipe.lastUsed;
+        return matchesSearch && matchesCategory && matchesPriority && matchesTag && matchesRecent;
+    });
+    updateRecipeCount();
+    renderRecipes();
+}
+
+function resetRecipeFilters() {
+    recipeFilters.search = '';
+    recipeFilters.category = '全部';
+    recipeFilters.priority = '';
+    recipeFilters.tag = '';
+    recipeFilters.recentOnly = false;
+    const searchInput = document.getElementById('recipes-search');
+    const categorySelect = document.getElementById('recipes-category');
+    const prioritySelect = document.getElementById('recipes-priority');
+    const tagInput = document.getElementById('recipes-tag');
+    const recentCheckbox = document.getElementById('recipes-recent');
+    if (searchInput) searchInput.value = '';
+    if (categorySelect) categorySelect.value = '全部';
+    if (prioritySelect) prioritySelect.value = '';
+    if (tagInput) tagInput.value = '';
+    if (recentCheckbox) recentCheckbox.checked = false;
+    applyRecipeFilters();
+}
+
+function updateRecipeCount() {
+    const counter = document.getElementById('recipes-count');
+    if (counter) counter.textContent = `${'$'}{filteredRecipes.length} 个配方`;
+}
+
 function renderRecipes() {
     const recipesList = document.getElementById('recipes-list');
-
-    if (filteredRecipes.length === 0) {
+    if (!recipesList) return;
+    if (!filteredRecipes.length) {
         recipesList.innerHTML = `
-            <div style="text-align: center; padding: 3rem; color: #7f8c8d;">
+            <div class="empty-state">
                 <h3>暂无配方</h3>
-                <p>请添加新配方或调整筛选条件</p>
+                <p>请使用“导入配方”按钮上传标准模板，或调整筛选条件。</p>
             </div>
         `;
         return;
     }
+    recipesList.innerHTML = filteredRecipes.map(recipe => buildRecipeCard(recipe)).join('');
+    bindPrefillButtons();
+}
 
-    recipesList.innerHTML = filteredRecipes.map(recipe => `
-        <div class="recipe-card fade-in">
+function buildRecipeCard(recipe) {
+    const tags = (recipe.tags || []).length
+        ? (recipe.tags || []).map(tag => `<span class="tag-chip">${'$'}{tag}</span>`).join('')
+        : '<span class="tag-chip">未打标签</span>';
+    const priorityLevel = (recipe.priority || 'NORMAL').toUpperCase();
+    return `
+        <div class="recipe-card">
             <div class="recipe-header">
                 <div>
                     <div class="recipe-title">${'$'}{recipe.name}</div>
-                    <span class="recipe-category">${'$'}{recipe.category}</span>
+                    <div class="recipe-code">${'$'}{recipe.code || '未编号'}</div>
                 </div>
+                <span class="priority-badge" data-level="${'$'}{priorityLevel}">${'$'}{renderPriorityText(priorityLevel)}</span>
+            </div>
+            <div class="recipe-meta">
+                <span>${'$'}{recipe.customer || '客户未指定'}</span>
+                <span>${'$'}{recipe.salesOwner || '负责人未指定'}</span>
             </div>
             <div class="recipe-info">
-                <div>材料数量: ${'$'}{recipe.materials.length}</div>
-                <div>总重量: ${'$'}{recipe.totalWeight}g</div>
-                <div>使用次数: ${'$'}{recipe.usageCount}</div>
-                <div>最后使用: ${'$'}{recipe.lastUsed || '未使用'}</div>
+                <div>材料：${'$'}{(recipe.materials || []).length} 项</div>
+                <div>总量：${'$'}{recipe.totalWeight} g</div>
+                <div>最近使用：${'$'}{recipe.lastUsed || '未使用'}</div>
+                <div>优先级：${'$'}{renderPriorityText(priorityLevel)}</div>
             </div>
-            <p style="color: #7f8c8d; margin: 1rem 0; font-size: 0.9rem;">
-                ${'$'}{recipe.description || '暂无描述'}
-            </p>
+            <div class="recipe-tags">${'$'}{tags}</div>
+            <p style="color:#7f8c8d; margin:0.5rem 0 0;">${'$'}{recipe.description || '暂无说明'}</p>
             <div class="recipe-actions">
+                <button class="btn btn-secondary prefill-publish-btn" data-recipe-id="${'$'}{recipe.id}">填入快速发布</button>
                 <button class="btn btn-info" onclick="viewRecipeDetails('${'$'}{recipe.id}')">查看详情</button>
-                <button class="btn btn-primary" onclick="useRecipe('${'$'}{recipe.id}')">开始投料</button>
-                <button class="btn btn-secondary" onclick="editRecipe('${'$'}{recipe.id}')">编辑</button>
+                <button class="btn btn-primary" onclick="useRecipe('${'$'}{recipe.id}')">标记使用</button>
                 <button class="btn btn-outline" onclick="deleteRecipe('${'$'}{recipe.id}')">删除</button>
             </div>
         </div>
-    `).join('');
+    `;
 }
 
-// 搜索功能
-function handleSearch(event) {
-    const query = event.target.value.toLowerCase();
-    applyFilters();
-}
-
-// 分类筛选
-function handleCategoryFilter(event) {
-    applyFilters();
-}
-
-// 应用筛选
-function applyFilters() {
-    const searchQuery = document.getElementById('search-input').value.toLowerCase();
-    const selectedCategory = document.getElementById('category-filter').value;
-
-    filteredRecipes = allRecipes.filter(recipe => {
-        const matchesSearch = !searchQuery ||
-            recipe.name.toLowerCase().includes(searchQuery) ||
-            recipe.description.toLowerCase().includes(searchQuery) ||
-            recipe.materials.some(material => material.name.toLowerCase().includes(searchQuery));
-
-        const matchesCategory = selectedCategory === '全部' || recipe.category === selectedCategory;
-
-        return matchesSearch && matchesCategory;
+function bindPrefillButtons() {
+    document.querySelectorAll('.prefill-publish-btn').forEach(button => {
+        button.addEventListener('click', () => {
+            const recipeId = button.dataset.recipeId;
+            const recipe = allRecipes.find(item => item.id === recipeId);
+            if (!recipe) return;
+            const payload = {
+                code: recipe.code || '',
+                title: recipe.name,
+                priority: (recipe.priority || 'NORMAL').toUpperCase()
+            };
+            localStorage.setItem('quickPublishRecipe', JSON.stringify(payload));
+            window.location.href = '/';
+        });
     });
-
-    renderRecipes();
 }
 
-// 查看配方详情
+function renderPriorityText(priority) {
+    switch(priority) {
+        case 'URGENT': return '加急';
+        case 'HIGH': return '高';
+        case 'LOW': return '低';
+        default: return '标准';
+    }
+}
+
 async function viewRecipeDetails(recipeId) {
     try {
         const response = await fetch(`/api/recipes/${'$'}{recipeId}`);
         const data = await response.json();
-
         if (data.success) {
-            const recipe = data.data;
-            showRecipeModal(recipe);
+            showRecipeModal(data.data);
         } else {
             showNotification('获取配方详情失败', 'error');
         }
     } catch (error) {
-        console.error('获取配方详情失败:', error);
+        console.error('获取配方详情失败', error);
         showNotification('网络错误', 'error');
     }
 }
 
-// 显示配方模态框
 function showRecipeModal(recipe) {
     const modal = document.getElementById('recipe-modal');
     const modalTitle = document.getElementById('modal-title');
     const modalBody = document.getElementById('modal-body');
-
     modalTitle.textContent = recipe.name;
+    const tags = (recipe.tags || []).length ? (recipe.tags || []).join('、') : '未设置';
     modalBody.innerHTML = `
-        <div style="margin-bottom: 2rem;">
-            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin-bottom: 1rem;">
-                <div><strong>分类:</strong> ${'$'}{recipe.category}</div>
-                <div><strong>总重量:</strong> ${'$'}{recipe.totalWeight}g</div>
-                <div><strong>材料数量:</strong> ${'$'}{recipe.materials.length}</div>
-                <div><strong>使用次数:</strong> ${'$'}{recipe.usageCount}</div>
+        <div class="modal-detail">
+            <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0.75rem;">
+                <div><strong>任务编号：</strong>${'$'}{recipe.code || '未编号'}</div>
+                <div><strong>优先级：</strong>${'$'}{renderPriorityText((recipe.priority || 'NORMAL').toUpperCase())}</div>
+                <div><strong>客户/项目：</strong>${'$'}{recipe.customer || '未指定'}</div>
+                <div><strong>业务负责人：</strong>${'$'}{recipe.salesOwner || '未指定'}</div>
+                <div><strong>调香师：</strong>${'$'}{recipe.perfumer || '未指定'}</div>
+                <div><strong>标签：</strong>${'$'}{tags}</div>
             </div>
-            <div style="margin-bottom: 1rem;">
-                <strong>描述:</strong> ${'$'}{recipe.description || '暂无描述'}
-            </div>
-            <div style="margin-bottom: 1rem;">
-                <strong>创建时间:</strong> ${'$'}{recipe.createTime}
-            </div>
-            ${'$'}{recipe.lastUsed ? `<div><strong>最后使用:</strong> ${'$'}{recipe.lastUsed}</div>` : ''}
+            <p style="margin-top:1rem;"><strong>备注：</strong>${'$'}{recipe.description || '暂无说明'}</p>
         </div>
-
-        <h4 style="margin-bottom: 1rem;">配方材料</h4>
-        <div style="overflow-x: auto;">
-            <table style="width: 100%; border-collapse: collapse;">
+        <h4 style="margin:1.5rem 0 1rem;">配方材料</h4>
+        <div style="overflow-x:auto;">
+            <table style="width:100%;border-collapse:collapse;">
                 <thead>
-                    <tr style="background: #f8f9fa;">
-                        <th style="padding: 12px; border: 1px solid #dee2e6; text-align: left;">序号</th>
-                        <th style="padding: 12px; border: 1px solid #dee2e6; text-align: left;">材料名称</th>
-                        <th style="padding: 12px; border: 1px solid #dee2e6; text-align: left;">重量</th>
-                        <th style="padding: 12px; border: 1px solid #dee2e6; text-align: left;">单位</th>
-                        <th style="padding: 12px; border: 1px solid #dee2e6; text-align: left;">备注</th>
+                    <tr style="background:#f8f9fa;">
+                        <th style="padding:12px;border:1px solid #dee2e6;text-align:left;">序号</th>
+                        <th style="padding:12px;border:1px solid #dee2e6;text-align:left;">材料名称</th>
+                        <th style="padding:12px;border:1px solid #dee2e6;text-align:left;">编码</th>
+                        <th style="padding:12px;border:1px solid #dee2e6;text-align:left;">重量</th>
+                        <th style="padding:12px;border:1px solid #dee2e6;text-align:left;">单位</th>
+                        <th style="padding:12px;border:1px solid #dee2e6;text-align:left;">备注</th>
                     </tr>
                 </thead>
                 <tbody>
-                    ${'$'}{recipe.materials.map(material => `
+                    ${'$'}{(recipe.materials || []).map(material => `
                         <tr>
-                            <td style="padding: 12px; border: 1px solid #dee2e6;">${'$'}{material.sequence}</td>
-                            <td style="padding: 12px; border: 1px solid #dee2e6;">${'$'}{material.name}</td>
-                            <td style="padding: 12px; border: 1px solid #dee2e6;">${'$'}{material.weight}</td>
-                            <td style="padding: 12px; border: 1px solid #dee2e6;">${'$'}{material.unit}</td>
-                            <td style="padding: 12px; border: 1px solid #dee2e6;">${'$'}{material.notes || '-'}</td>
+                            <td style="padding:12px;border:1px solid #dee2e6;">${'$'}{material.sequence}</td>
+                            <td style="padding:12px;border:1px solid #dee2e6;">${'$'}{material.name}</td>
+                            <td style="padding:12px;border:1px solid #dee2e6;">${'$'}{material.code || '-'}</td>
+                            <td style="padding:12px;border:1px solid #dee2e6;">${'$'}{material.weight}</td>
+                            <td style="padding:12px;border:1px solid #dee2e6;">${'$'}{material.unit}</td>
+                            <td style="padding:12px;border:1px solid #dee2e6;">${'$'}{material.notes || '-'}</td>
                         </tr>
                     `).join('')}
                 </tbody>
             </table>
         </div>
-
-        <div style="margin-top: 2rem; display: flex; gap: 1rem; justify-content: flex-end;">
-            <button class="btn btn-primary" onclick="useRecipe('${'$'}{recipe.id}'); closeModal();">开始投料</button>
-            <button class="btn btn-secondary" onclick="editRecipe('${'$'}{recipe.id}'); closeModal();">编辑配方</button>
+        <div style="margin-top:1.5rem;display:flex;gap:0.75rem;justify-content:flex-end;">
+            <button class="btn btn-secondary" onclick="prefillFromModal('${'$'}{recipe.id}')">填入快速发布</button>
             <button class="btn btn-outline" onclick="closeModal();">关闭</button>
         </div>
     `;
-
     modal.style.display = 'block';
 }
 
-// 关闭模态框
+function prefillFromModal(recipeId) {
+    const recipe = allRecipes.find(item => item.id === recipeId);
+    if (!recipe) return;
+    const payload = {
+        code: recipe.code || '',
+        title: recipe.name,
+        priority: (recipe.priority || 'NORMAL').toUpperCase()
+    };
+    localStorage.setItem('quickPublishRecipe', JSON.stringify(payload));
+    window.location.href = '/';
+}
+
 function closeModal() {
     document.getElementById('recipe-modal').style.display = 'none';
 }
 
-// 使用配方
 async function useRecipe(recipeId) {
     try {
-        const response = await fetch(`/api/recipes/${'$'}{recipeId}/use`, {
-            method: 'POST'
-        });
+        const response = await fetch(`/api/recipes/${'$'}{recipeId}/use`, { method: 'POST' });
         const data = await response.json();
-
         if (data.success) {
-            showNotification('配方投料开始', 'success');
-            // 刷新配方列表以更新使用次数
+            showNotification('已记录使用次数', 'success');
             loadRecipes();
         } else {
-            showNotification('启动投料失败: ' + data.message, 'error');
+            showNotification('标记失败：' + data.message, 'error');
         }
     } catch (error) {
-        console.error('启动投料失败:', error);
+        console.error('标记失败', error);
         showNotification('网络错误', 'error');
     }
 }
 
-// 编辑配方
 function editRecipe(recipeId) {
     window.location.href = `/import?edit=${'$'}{recipeId}`;
 }
 
-// 删除配方
 async function deleteRecipe(recipeId) {
-    if (!confirm('确定要删除这个配方吗？此操作不可撤销。')) {
-        return;
-    }
-
+    if (!confirm('确定要删除这个配方吗？此操作不可撤销。')) return;
     try {
-        const response = await fetch(`/api/recipes/${'$'}{recipeId}`, {
-            method: 'DELETE'
-        });
+        const response = await fetch(`/api/recipes/${'$'}{recipeId}`, { method: 'DELETE' });
         const data = await response.json();
-
         if (data.success) {
             showNotification('配方删除成功', 'success');
             loadRecipes();
         } else {
-            showNotification('删除失败: ' + data.message, 'error');
+            showNotification('删除失败：' + data.message, 'error');
         }
     } catch (error) {
-        console.error('删除配方失败:', error);
+        console.error('删除配方失败', error);
         showNotification('网络错误', 'error');
     }
 }
 
-// 通用通知函数
 function showNotification(message, type = 'info') {
     const notification = document.createElement('div');
     notification.className = `notification notification-${'$'}{type}`;
@@ -385,47 +825,16 @@ function showNotification(message, type = 'info') {
         border-radius: 8px;
         color: white;
         font-weight: 500;
-        z-index: 10000;
-        opacity: 0;
-        transform: translateX(100%);
-        transition: all 0.3s ease;
+        z-index: 2000;
     `;
-
-    switch(type) {
-        case 'success':
-            notification.style.background = 'linear-gradient(135deg, #28a745, #20c997)';
-            break;
-        case 'error':
-            notification.style.background = 'linear-gradient(135deg, #dc3545, #e74c3c)';
-            break;
-        case 'warning':
-            notification.style.background = 'linear-gradient(135deg, #ffc107, #fd7e14)';
-            break;
-        default:
-            notification.style.background = 'linear-gradient(135deg, #17a2b8, #007bff)';
-    }
-
     document.body.appendChild(notification);
-
-    requestAnimationFrame(() => {
-        notification.style.opacity = '1';
-        notification.style.transform = 'translateX(0)';
-    });
-
-    setTimeout(() => {
-        notification.style.opacity = '0';
-        notification.style.transform = 'translateX(100%)';
-        setTimeout(() => notification.remove(), 300);
-    }, 3000);
+    setTimeout(() => notification.remove(), 3000);
 }
             """
         }
     }
 }
 
-/**
- * 生成配方导入页JavaScript
- */
 fun BODY.generateImportPageScript() {
     script {
         unsafe {
