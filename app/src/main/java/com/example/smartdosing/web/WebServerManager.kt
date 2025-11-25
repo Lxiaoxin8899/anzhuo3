@@ -5,6 +5,7 @@ import android.util.Log
 import com.example.smartdosing.data.*
 import com.example.smartdosing.data.repository.ConfigurationRecordPayload
 import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 import io.ktor.http.*
 import io.ktor.http.content.*
 import io.ktor.serialization.gson.*
@@ -23,6 +24,7 @@ import kotlinx.html.stream.createHTML
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -40,7 +42,7 @@ class WebServerManager(private val context: Context) {
     private val importManager = DatabaseRecipeImportManager.getInstance(context, recipeRepository)
     private val gson = Gson()
     private val taskStore = ConfigurationTaskStore(recipeRepository)
-    private val recordStore = ConfigurationRecordStore()
+    private val recordStore = ConfigurationRecordStore(context, gson)
     private val deviceStore = TaskDeviceStore()
 
     companion object {
@@ -984,12 +986,64 @@ private class TaskDeviceStore {
 }
 
 /**
- * 配置记录内存仓库
+ * 配置记录存储：持久化至应用私有目录，确保展示真实数据
  */
-private class ConfigurationRecordStore {
+private class ConfigurationRecordStore(
+    private val context: Context,
+    private val gson: Gson
+) {
+    companion object {
+        private const val STORE_TAG = "ConfigurationRecordStore"
+        private const val STORE_FILE_NAME = "configuration_records.json"
+    }
+
     private val mutex = Mutex()
     private val formatter = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
-    private val records = ConfigurationRecordSampleData.records().toMutableList()
+    private val storageFile = File(context.filesDir, STORE_FILE_NAME)
+    private val listType = object : TypeToken<List<ConfigurationRecord>>() {}.type
+    private val records = mutableListOf<ConfigurationRecord>()
+
+    init {
+        loadRecordsFromDisk()
+    }
+
+    private fun loadRecordsFromDisk() {
+        runCatching {
+            if (!storageFile.exists() || storageFile.length() == 0L) {
+                ensureStorageFile()
+                return
+            }
+            val json = storageFile.readText()
+            if (json.isBlank()) return
+            val parsed: List<ConfigurationRecord>? = gson.fromJson(json, listType)
+            if (parsed != null) {
+                records.clear()
+                records.addAll(parsed)
+            }
+        }.onFailure {
+            Log.e(STORE_TAG, "加载配置记录文件失败", it)
+        }
+    }
+
+    private fun ensureStorageFile() {
+        runCatching {
+            storageFile.parentFile?.mkdirs()
+            if (!storageFile.exists()) {
+                storageFile.createNewFile()
+            }
+        }.onFailure {
+            Log.e(STORE_TAG, "创建配置记录文件失败", it)
+        }
+    }
+
+    private fun persistRecordsLocked() {
+        runCatching {
+            ensureStorageFile()
+            storageFile.writeText(gson.toJson(records))
+        }.onFailure {
+            Log.e(STORE_TAG, "保存配置记录失败", it)
+        }
+    }
 
     suspend fun getRecords(filter: ConfigurationRecordFilterQuery): List<ConfigurationRecord> = mutex.withLock {
         var result = records.toList()
@@ -1040,6 +1094,7 @@ private class ConfigurationRecordStore {
             note = payload.note
         )
         records.add(0, record)
+        persistRecordsLocked()
         record
     }
 
@@ -1053,6 +1108,7 @@ private class ConfigurationRecordStore {
                 updatedAt = formatter.format(Date())
             )
             records[index] = updated
+            persistRecordsLocked()
             updated
         }
 }

@@ -92,6 +92,12 @@ fun SmartDosingNavHost(
             TaskCenterScreen(
                 refreshSignal = taskRefreshSignal,
                 onNavigateBack = { navController.popBackStack() },
+                onStartTask = { task ->
+                    navController.navigateToMaterialConfiguration(
+                        recipeId = task.recipeId.ifBlank { "quick_start" },
+                        taskId = task.id
+                    )
+                },
                 onConfigureTask = { task ->
                     navController.navigateToMaterialConfiguration(
                         recipeId = task.recipeId.ifBlank { "quick_start" },
@@ -189,6 +195,9 @@ fun SmartDosingNavHost(
                 taskId = taskId,
                 recordId = recordId,
                 onNavigateBack = { navController.popBackStack() },
+                onNavigateToTaskCenter = {
+                    navController.navigate(SmartDosingRoutes.TASK_CENTER)
+                },
                 onSaveConfiguration = { configData ->
                     scope.launch {
                         saveMaterialConfiguration(

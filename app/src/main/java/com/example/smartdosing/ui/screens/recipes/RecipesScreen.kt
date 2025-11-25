@@ -43,10 +43,12 @@ import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -60,7 +62,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -90,6 +94,9 @@ fun RecipesScreen(
 ) {
     val context = LocalContext.current
     val repository = remember { DatabaseRecipeRepository.getInstance(context) }
+    val configuration = LocalConfiguration.current
+    val screenWidthDp = configuration.screenWidthDp
+    val isCompactScreen = screenWidthDp < 900
 
     var recipes by remember { mutableStateOf<List<Recipe>>(emptyList()) }
     var filteredRecipes by remember { mutableStateOf<List<Recipe>>(emptyList()) }
@@ -102,7 +109,8 @@ fun RecipesScreen(
     var selectedQuickCollection by remember { mutableStateOf(QuickCollectionType.ALL) }
     var selectedFolderId by remember { mutableStateOf<String?>(null) }
     var viewMode by remember { mutableStateOf(RecipeViewMode.CARD) }
-    var isFilterExpanded by remember { mutableStateOf(true) }
+    var isFilterExpanded by remember { mutableStateOf(!isCompactScreen) }
+    var isFilterSheetOpen by remember { mutableStateOf(false) }
     var loadError by remember { mutableStateOf<String?>(null) }
 
     val customFolders = remember { mutableStateListOf<RecipeFolder>() }
@@ -237,72 +245,53 @@ fun RecipesScreen(
 
         filteredRecipes = filtered
     }
-    Row(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        horizontalArrangement = Arrangement.spacedBy(16.dp)
+    val activeFilters = remember(
+        selectedCategory,
+        selectedSubCategory,
+        selectedCustomer,
+        selectedStatus,
+        selectedTimeRange,
+        selectedQuickCollection,
+        selectedFolderId,
+        folderSnapshot
     ) {
-        if (isFilterExpanded) {
-            RecipeFilterPanel(
-                modifier = Modifier
-                    .widthIn(min = 260.dp, max = 320.dp)
-                    .fillMaxHeight(),
-                categories = categories,
-                subCategories = subCategories,
-                selectedCategory = selectedCategory,
-                selectedSubCategory = selectedSubCategory,
-                onCategorySelected = {
-                    selectedCategory = it
-                    selectedSubCategory = ""
-                },
-                onSubCategorySelected = { selectedSubCategory = it },
-                timeRanges = timeRanges,
-                selectedTimeRange = selectedTimeRange,
-                onTimeRangeSelected = { selectedTimeRange = it },
-                customers = customers,
-                selectedCustomer = selectedCustomer,
-                onCustomerSelected = { selectedCustomer = it },
-                selectedStatus = selectedStatus,
-                onStatusSelected = { selectedStatus = it },
-                folders = folderSnapshot,
-                selectedFolderId = selectedFolderId,
-                onFolderSelected = {
-                    selectedFolderId = it
-                    if (it != null) {
-                        selectedQuickCollection = QuickCollectionType.ALL
-                    }
-                },
-                onAddFolder = { name ->
-                    if (name.isNotBlank() && folderSnapshot.none { it.name == name }) {
-                        customFolders.add(RecipeFolder(id = UUID.randomUUID().toString(), name = name, recipeIds = emptySet()))
-                    }
-                },
-                onCollectCurrent = { folderId ->
-                    val index = customFolders.indexOfFirst { it.id == folderId }
-                    if (index != -1) {
-                        val folder = customFolders[index]
-                        val newSet = folder.recipeIds + filteredRecipes.map { it.id }
-                        customFolders[index] = folder.copy(recipeIds = newSet)
-                    }
-                },
-                onCollapse = { isFilterExpanded = false },
-                filteredSize = filteredRecipes.size
-            )
-        } else {
-            FilterCollapsedCard(
-                modifier = Modifier
-                    .width(48.dp)
-                    .fillMaxHeight(),
-                filteredSize = filteredRecipes.size,
-                onExpand = { isFilterExpanded = true }
-            )
+        buildList {
+            if (selectedQuickCollection != QuickCollectionType.ALL) add(selectedQuickCollection.label)
+            if (selectedFolderId != null) {
+                folderSnapshot.firstOrNull { it.id == selectedFolderId }?.name?.let { add(it) }
+            }
+            if (selectedCategory.isNotEmpty()) add(selectedCategory)
+            if (selectedSubCategory.isNotEmpty()) add(selectedSubCategory)
+            if (selectedCustomer.isNotEmpty()) add("客户：$selectedCustomer")
+            if (selectedTimeRange.isNotEmpty()) add("时间：$selectedTimeRange")
+            selectedStatus?.label?.let { add(it) }
         }
+    }
 
+    fun clearFilters() {
+        selectedCategory = ""
+        selectedSubCategory = ""
+        selectedCustomer = ""
+        selectedStatus = null
+        selectedTimeRange = ""
+        selectedQuickCollection = QuickCollectionType.ALL
+        selectedFolderId = null
+    }
+
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    LaunchedEffect(isCompactScreen) {
+        if (isCompactScreen) {
+            isFilterExpanded = false
+        } else {
+            isFilterSheetOpen = false
+        }
+    }
+
+    if (isCompactScreen) {
         Column(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxHeight(),
+            modifier = modifier
+                .fillMaxSize()
+                .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             loadError?.let { message ->
@@ -318,9 +307,14 @@ fun RecipesScreen(
                 onSearchTextChange = { searchText = it },
                 viewMode = viewMode,
                 onViewModeChange = { viewMode = it },
-                resultCount = filteredRecipes.size
+                resultCount = filteredRecipes.size,
+                isCompact = true,
+                onFilterClick = { isFilterSheetOpen = true }
             )
-
+            ActiveFilterSummary(
+                activeFilters = activeFilters,
+                onClear = { clearFilters() }
+            )
             QuickCollectionSection(
                 selectedQuickCollection = selectedQuickCollection,
                 onCollectionSelected = {
@@ -328,7 +322,6 @@ fun RecipesScreen(
                     selectedFolderId = null
                 }
             )
-
             RecipeStatsOverview(
                 stats = stats,
                 filteredCount = filteredRecipes.size
@@ -358,7 +351,8 @@ fun RecipesScreen(
                             folders = folderSnapshot,
                             onAddToFolder = { recipeId, folderId ->
                                 addRecipeToFolder(recipeId, folderId)
-                            }
+                            },
+                            compactCards = true
                         )
                     } else {
                         RecipeTableView(
@@ -370,6 +364,204 @@ fun RecipesScreen(
                                 addRecipeToFolder(recipeId, folderId)
                             }
                         )
+                    }
+                }
+            }
+        }
+        if (isFilterSheetOpen) {
+            ModalBottomSheet(
+                onDismissRequest = { isFilterSheetOpen = false },
+                sheetState = sheetState
+            ) {
+                RecipeFilterPanel(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    categories = categories,
+                    subCategories = subCategories,
+                    selectedCategory = selectedCategory,
+                    selectedSubCategory = selectedSubCategory,
+                    onCategorySelected = {
+                        selectedCategory = it
+                        selectedSubCategory = ""
+                    },
+                    onSubCategorySelected = { selectedSubCategory = it },
+                    timeRanges = timeRanges,
+                    selectedTimeRange = selectedTimeRange,
+                    onTimeRangeSelected = { selectedTimeRange = it },
+                    customers = customers,
+                    selectedCustomer = selectedCustomer,
+                    onCustomerSelected = { selectedCustomer = it },
+                    selectedStatus = selectedStatus,
+                    onStatusSelected = { selectedStatus = it },
+                    folders = folderSnapshot,
+                    selectedFolderId = selectedFolderId,
+                    onFolderSelected = {
+                        selectedFolderId = it
+                        if (it != null) {
+                            selectedQuickCollection = QuickCollectionType.ALL
+                        }
+                    },
+                    onAddFolder = { name ->
+                        if (name.isNotBlank() && folderSnapshot.none { it.name == name }) {
+                            customFolders.add(RecipeFolder(id = UUID.randomUUID().toString(), name = name, recipeIds = emptySet()))
+                        }
+                    },
+                    onCollectCurrent = { folderId ->
+                        val index = customFolders.indexOfFirst { it.id == folderId }
+                        if (index != -1) {
+                            val folder = customFolders[index]
+                            val newSet = folder.recipeIds + filteredRecipes.map { it.id }
+                            customFolders[index] = folder.copy(recipeIds = newSet)
+                        }
+                    },
+                    onCollapse = { isFilterSheetOpen = false },
+                    filteredSize = filteredRecipes.size,
+                    showCollapseHint = false
+                )
+            }
+        }
+    } else {
+        Row(
+            modifier = modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            if (isFilterExpanded) {
+                RecipeFilterPanel(
+                    modifier = Modifier
+                        .widthIn(min = 240.dp, max = 280.dp)
+                        .fillMaxHeight(),
+                    categories = categories,
+                    subCategories = subCategories,
+                    selectedCategory = selectedCategory,
+                    selectedSubCategory = selectedSubCategory,
+                    onCategorySelected = {
+                        selectedCategory = it
+                        selectedSubCategory = ""
+                    },
+                    onSubCategorySelected = { selectedSubCategory = it },
+                    timeRanges = timeRanges,
+                    selectedTimeRange = selectedTimeRange,
+                    onTimeRangeSelected = { selectedTimeRange = it },
+                    customers = customers,
+                    selectedCustomer = selectedCustomer,
+                    onCustomerSelected = { selectedCustomer = it },
+                    selectedStatus = selectedStatus,
+                    onStatusSelected = { selectedStatus = it },
+                    folders = folderSnapshot,
+                    selectedFolderId = selectedFolderId,
+                    onFolderSelected = {
+                        selectedFolderId = it
+                        if (it != null) {
+                            selectedQuickCollection = QuickCollectionType.ALL
+                        }
+                    },
+                    onAddFolder = { name ->
+                        if (name.isNotBlank() && folderSnapshot.none { it.name == name }) {
+                            customFolders.add(RecipeFolder(id = UUID.randomUUID().toString(), name = name, recipeIds = emptySet()))
+                        }
+                    },
+                    onCollectCurrent = { folderId ->
+                        val index = customFolders.indexOfFirst { it.id == folderId }
+                        if (index != -1) {
+                            val folder = customFolders[index]
+                            val newSet = folder.recipeIds + filteredRecipes.map { it.id }
+                            customFolders[index] = folder.copy(recipeIds = newSet)
+                        }
+                    },
+                    onCollapse = { isFilterExpanded = false },
+                    filteredSize = filteredRecipes.size
+                )
+            } else {
+                FilterCollapsedCard(
+                    modifier = Modifier
+                        .width(44.dp)
+                        .fillMaxHeight(),
+                    filteredSize = filteredRecipes.size,
+                    onExpand = { isFilterExpanded = true }
+                )
+            }
+
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight(),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                loadError?.let { message ->
+                    Text(
+                        text = "配方加载失败：$message",
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(horizontal = 8.dp)
+                    )
+                }
+                RecipeWorkspaceHeader(
+                    searchText = searchText,
+                    onSearchTextChange = { searchText = it },
+                    viewMode = viewMode,
+                    onViewModeChange = { viewMode = it },
+                    resultCount = filteredRecipes.size,
+                    isCompact = false,
+                    onFilterClick = null
+                )
+                ActiveFilterSummary(
+                    activeFilters = activeFilters,
+                    onClear = { clearFilters() }
+                )
+
+                QuickCollectionSection(
+                    selectedQuickCollection = selectedQuickCollection,
+                    onCollectionSelected = {
+                        selectedQuickCollection = it
+                        selectedFolderId = null
+                    }
+                )
+
+                RecipeStatsOverview(
+                    stats = stats,
+                    filteredCount = filteredRecipes.size
+                )
+                statsError?.let { message ->
+                    Text(
+                        text = "统计信息加载失败：$message",
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(horizontal = 8.dp)
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp))
+                ) {
+                    if (filteredRecipes.isEmpty()) {
+                        EmptyState()
+                    } else {
+                        if (viewMode == RecipeViewMode.CARD) {
+                            RecipeCardList(
+                                recipes = filteredRecipes,
+                                onRecipeClick = onNavigateToRecipeDetail,
+                                onMaterialConfiguration = onNavigateToMaterialConfiguration,
+                                folders = folderSnapshot,
+                                onAddToFolder = { recipeId, folderId ->
+                                    addRecipeToFolder(recipeId, folderId)
+                                }
+                            )
+                        } else {
+                            RecipeTableView(
+                                recipes = filteredRecipes,
+                                onRecipeClick = onNavigateToRecipeDetail,
+                                onMaterialConfiguration = onNavigateToMaterialConfiguration,
+                                folders = folderSnapshot,
+                                onAddToFolder = { recipeId, folderId ->
+                                    addRecipeToFolder(recipeId, folderId)
+                                }
+                            )
+                        }
                     }
                 }
             }
@@ -403,7 +595,8 @@ fun RecipeFilterPanel(
     onAddFolder: (String) -> Unit,
     onCollectCurrent: (String) -> Unit,
     onCollapse: () -> Unit,
-    filteredSize: Int
+    filteredSize: Int,
+    showCollapseHint: Boolean = true
 ) {
     var newFolderName by remember { mutableStateOf("") }
 
@@ -432,11 +625,13 @@ fun RecipeFilterPanel(
                 Icon(Icons.Default.ChevronLeft, contentDescription = "收起筛选")
             }
         }
-        Text(
-            text = "通过折叠筛选区可腾出更多空间，保留常用组合后一键展开即可继续使用。",
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontSize = 12.sp
-        )
+        if (showCollapseHint) {
+            Text(
+                text = "通过折叠筛选区可腾出更多空间，保留常用组合后一键展开即可继续使用。",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 12.sp
+            )
+        }
 
         SectionTitle(icon = Icons.Default.Category, text = "一级分类")
         FilterChipGroup(
@@ -593,24 +788,35 @@ fun RecipeWorkspaceHeader(
     onSearchTextChange: (String) -> Unit,
     viewMode: RecipeViewMode,
     onViewModeChange: (RecipeViewMode) -> Unit,
-    resultCount: Int
+    resultCount: Int,
+    isCompact: Boolean,
+    onFilterClick: (() -> Unit)?
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(if (isCompact) 8.dp else 12.dp)) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween,
             modifier = Modifier.fillMaxWidth()
         ) {
             Column {
-                Text("工业配方投料看板", fontSize = 24.sp, fontWeight = FontWeight.Bold)
                 Text(
-                    text = "结果数：$resultCount",
+                    text = "配方管理中心",
+                    fontSize = if (isCompact) 20.sp else 24.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "结果：$resultCount",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 14.sp
                 )
             }
 
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (isCompact) {
+                    IconButton(onClick = { onFilterClick?.invoke() }) {
+                        Icon(Icons.Default.Tune, contentDescription = "筛选")
+                    }
+                }
                 IconToggleChip(
                     label = "卡片",
                     icon = Icons.Default.ViewModule,
@@ -642,6 +848,42 @@ fun RecipeWorkspaceHeader(
             singleLine = true,
             shape = RoundedCornerShape(12.dp)
         )
+    }
+}
+
+/**
+ * 当前激活的筛选标签，方便在折叠筛选区时也能一目了然
+ */
+@Composable
+fun ActiveFilterSummary(
+    activeFilters: List<String>,
+    onClear: () -> Unit
+) {
+    if (activeFilters.isEmpty()) return
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.weight(1f)
+        ) {
+            items(activeFilters) { tag ->
+                FilterChip(
+                    selected = true,
+                    onClick = {},
+                    label = { Text(tag, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                )
+            }
+        }
+        TextButton(
+            onClick = onClear,
+            enabled = activeFilters.isNotEmpty(),
+            modifier = Modifier.padding(start = 8.dp)
+        ) {
+            Text("清除筛选")
+        }
     }
 }
 /**
@@ -733,7 +975,8 @@ fun RecipeCardList(
     onRecipeClick: (String) -> Unit,
     onMaterialConfiguration: (String) -> Unit = {},
     folders: List<RecipeFolder>,
-    onAddToFolder: (String, String) -> Unit
+    onAddToFolder: (String, String) -> Unit,
+    compactCards: Boolean = false
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -741,13 +984,14 @@ fun RecipeCardList(
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         items(recipes) { recipe ->
-                DosingRecipeCard(
-                    recipe = recipe,
-                    onRecipeClick = onRecipeClick,
-                    onMaterialConfiguration = onMaterialConfiguration,
-                    folders = folders,
-                    onAddToFolder = onAddToFolder
-                )
+            DosingRecipeCard(
+                recipe = recipe,
+                onRecipeClick = onRecipeClick,
+                onMaterialConfiguration = onMaterialConfiguration,
+                folders = folders,
+                onAddToFolder = onAddToFolder,
+                compact = compactCards
+            )
             }
         }
 }
@@ -875,7 +1119,8 @@ fun DosingRecipeCard(
     onMaterialConfiguration: (String) -> Unit = {},
     folders: List<RecipeFolder>,
     onAddToFolder: (String, String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    compact: Boolean = false
 ) {
     Card(
         onClick = { onRecipeClick(recipe.id) },
@@ -884,10 +1129,17 @@ fun DosingRecipeCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
         shape = RoundedCornerShape(12.dp)
     ) {
-        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(
+            modifier = Modifier.padding(if (compact) 10.dp else 12.dp),
+            verticalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 8.dp)
+        ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(recipe.name, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        recipe.name,
+                        fontSize = if (compact) 15.sp else 16.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text("编码：${recipe.code}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         if (recipe.customer.isNotEmpty()) {
@@ -907,19 +1159,25 @@ fun DosingRecipeCard(
                     Button(
                         onClick = { onMaterialConfiguration(recipe.id) },
                         shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                        contentPadding = PaddingValues(
+                            horizontal = if (compact) 8.dp else 10.dp,
+                            vertical = if (compact) 2.dp else 4.dp
+                        ),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = MaterialTheme.colorScheme.secondary
                         )
                     ) {
                         Icon(Icons.Default.Science, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("研发配置", fontSize = 12.sp)
+                        Text(if (compact) "配置" else "研发配置", fontSize = 12.sp)
                     }
                 }
             }
 
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
                 StatusPill(
                     text = recipe.status.label,
                     color = when (recipe.status) {
@@ -942,6 +1200,11 @@ fun DosingRecipeCard(
                 )
                 Text(
                     text = "材料：${recipe.materials.size} 项",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = "最近：${recipe.lastUsed?.takeIf { it.isNotBlank() } ?: "未记录"}",
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

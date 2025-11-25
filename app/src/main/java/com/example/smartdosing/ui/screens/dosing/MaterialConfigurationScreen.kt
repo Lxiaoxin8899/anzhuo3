@@ -28,15 +28,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.smartdosing.data.ConfigurationRecord
 import com.example.smartdosing.data.DatabaseRecipeRepository
 import com.example.smartdosing.data.Material as DataMaterial
 import com.example.smartdosing.data.Recipe
 import com.example.smartdosing.data.repository.ConfigurationRepositoryProvider
 import com.example.smartdosing.ui.theme.SmartDosingTheme
 import java.text.DecimalFormat
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 /**
  * 材料配置界面 - 研发配置核心页面
@@ -48,6 +46,7 @@ fun MaterialConfigurationScreen(
     taskId: String = "",
     recordId: String = "",
     onNavigateBack: () -> Unit = {},
+    onNavigateToTaskCenter: () -> Unit = {},
     onSaveConfiguration: (MaterialConfigurationData) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -65,6 +64,7 @@ fun MaterialConfigurationScreen(
     var notes by remember { mutableStateOf("") }
     var currentTaskId by remember { mutableStateOf(taskId) }
     var currentRecordId by remember { mutableStateOf(recordId) }
+    var showTaskSelectionHint by remember { mutableStateOf(false) }
 
     fun resetMetaInfo() {
         customer = ""
@@ -90,36 +90,44 @@ fun MaterialConfigurationScreen(
         }
     }
 
-    // 快速生成示例配方，确保在没有真实配方时也能展示界面
-    val loadDemoRecipe: () -> Unit = {
-        val demoRecipe = createQuickStartRecipe()
-        updateRecipeState(demoRecipe)
-        loadError = null
-    }
-
     // 加载配方数据
     LaunchedEffect(recipeId, taskId, recordId) {
         isLoading = true
         loadError = null
+        showTaskSelectionHint = false
         try {
-            val normalizedId = recipeId?.takeIf { it.isNotBlank() } ?: "quick_start"
-            if (normalizedId == "quick_start") {
-                loadDemoRecipe()
-            } else {
-                val loadedRecipe = repository.getRecipeById(normalizedId)
-                    ?: recordRepository.fetchRecord(recordId)?.let { record ->
-                        currentRecordId = record.id
-                        repository.getRecipeById(record.recipeId)
-                            ?: repository.getRecipeByCode(record.recipeCode)
-                    }
-                if (loadedRecipe != null) {
-                    updateRecipeState(loadedRecipe)
-                } else {
-                    loadError = "未找到配方（ID: $normalizedId），可以加载示例数据体验流程"
-                    recipe = null
-                    materialStates = emptyList()
-                    resetMetaInfo()
+            val normalizedId = recipeId?.takeIf { it.isNotBlank() && it != "quick_start" }
+            val cachedRecord: ConfigurationRecord? = if (recordId.isNotBlank()) {
+                recordRepository.fetchRecord(recordId)?.also { record ->
+                    currentRecordId = record.id
                 }
+            } else {
+                null
+            }
+            val recipeFromRecord = cachedRecord?.let { record ->
+                repository.getRecipeById(record.recipeId)
+                    ?: repository.getRecipeByCode(record.recipeCode)
+            }
+            val loadedRecipe = when {
+                normalizedId != null -> repository.getRecipeById(normalizedId) ?: recipeFromRecord
+                else -> recipeFromRecord
+            }
+
+            if (loadedRecipe != null) {
+                updateRecipeState(loadedRecipe)
+                loadError = null
+            } else {
+                val shouldGuideTask = normalizedId == null && recordId.isBlank()
+                loadError = if (shouldGuideTask) {
+                    "当前没有可用配方，请先导入配方或前往任务中心选择任务后再进入快速配料。"
+                } else {
+                    val missingId = normalizedId ?: recipeId.orEmpty()
+                    "未找到配方（ID: $missingId），请确认配方是否存在或重新导入。"
+                }
+                recipe = null
+                materialStates = emptyList()
+                resetMetaInfo()
+                showTaskSelectionHint = shouldGuideTask
             }
 
             if (taskId.isNotBlank()) {
@@ -132,7 +140,7 @@ fun MaterialConfigurationScreen(
             }
 
             if (recordId.isNotBlank()) {
-                recordRepository.fetchRecord(recordId)?.let { record ->
+                (cachedRecord ?: recordRepository.fetchRecord(recordId))?.let { record ->
                     currentRecordId = record.id
                     customer = record.customer
                     salesOwner = record.salesOwner
@@ -156,9 +164,10 @@ fun MaterialConfigurationScreen(
         }
         recipe == null || materialStates.isEmpty() -> {
             MaterialConfigurationEmptyState(
-                message = loadError ?: "当前配方没有配置材料，请返回或加载示例数据",
+                message = loadError ?: "当前配方没有配置材料，请返回后重新选择。",
                 onNavigateBack = onNavigateBack,
-                onLoadDemo = loadDemoRecipe,
+                actionLabel = if (showTaskSelectionHint) "前往任务中心" else null,
+                onAction = if (showTaskSelectionHint) onNavigateToTaskCenter else null,
                 modifier = modifier
             )
         }
@@ -277,13 +286,14 @@ private fun MaterialConfigurationLoadingState(
 }
 
 /**
- * 没有配方或材料时的提示界面，支持直接注入示例数据
+ * 没有配方或材料时的提示界面
  */
 @Composable
 private fun MaterialConfigurationEmptyState(
     message: String,
     onNavigateBack: () -> Unit,
-    onLoadDemo: (() -> Unit)?,
+    actionLabel: String? = null,
+    onAction: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     Box(
@@ -308,7 +318,7 @@ private fun MaterialConfigurationEmptyState(
                 textAlign = TextAlign.Center
             )
             Text(
-                text = "可返回重新选择配方，或直接载入示例材料开始体验。",
+                text = "可返回重新选择配方，或根据提示完成配方导入/任务选择后再次进入。",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
@@ -316,9 +326,9 @@ private fun MaterialConfigurationEmptyState(
             Button(onClick = onNavigateBack) {
                 Text("返回上一页")
             }
-            onLoadDemo?.let { loadDemo ->
-                OutlinedButton(onClick = loadDemo) {
-                    Text("加载示例数据")
+            if (actionLabel != null && onAction != null) {
+                OutlinedButton(onClick = onAction) {
+                    Text(actionLabel)
                 }
             }
         }
@@ -732,37 +742,6 @@ private fun BottomActions(
             Text(if (allConfirmed) "保存配置" else "请完成所有材料配置")
         }
     }
-}
-
-/**
- * 构造一个默认的示例配方，保证研发助理在没有真实数据时也能体验流程
- */
-private fun createQuickStartRecipe(): Recipe {
-    val defaultMaterials = listOf(
-        DataMaterial(id = "rd-1", name = "基底溶剂 VG", code = "VG-BASE", weight = 70.0, unit = "g"),
-        DataMaterial(id = "rd-2", name = "基底溶剂 PG", code = "PG-BASE", weight = 20.0, unit = "g"),
-        DataMaterial(id = "rd-3", name = "薄荷香精", code = "FLV-MINT", weight = 6.0, unit = "g"),
-        DataMaterial(id = "rd-4", name = "甜味调节剂", code = "SW-CTRL", weight = 3.0, unit = "g"),
-        DataMaterial(id = "rd-5", name = "稳定剂", code = "STB-01", weight = 1.0, unit = "g"),
-        DataMaterial(id = "rd-6", name = "冷却剂 WS-23", code = "WS23", weight = 0.5, unit = "g"),
-        DataMaterial(id = "rd-7", name = "润喉添加剂", code = "THROAT", weight = 0.3, unit = "g"),
-        DataMaterial(id = "rd-8", name = "天然提味剂", code = "BOOST", weight = 0.8, unit = "g"),
-        DataMaterial(id = "rd-9", name = "抗氧化剂", code = "AOX", weight = 0.5, unit = "g"),
-        DataMaterial(id = "rd-10", name = "工艺验证对照", code = "CTRL", weight = 0.2, unit = "g")
-    ).mapIndexed { index, material ->
-        material.copy(sequence = index + 1)
-    }
-
-    return Recipe(
-        id = "quick_start_demo",
-        code = "RD-DEMO-001",
-        name = "基础研发示例配方",
-        category = "研发配置",
-        materials = defaultMaterials,
-        totalWeight = defaultMaterials.sumOf { it.weight },
-        createTime = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date()),
-        description = "示例配方，帮助研发助理快速演练材料配置流程"
-    )
 }
 
 // Preview函数
