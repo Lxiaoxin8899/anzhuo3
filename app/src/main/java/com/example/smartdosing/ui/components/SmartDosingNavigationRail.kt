@@ -7,8 +7,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
@@ -95,6 +97,29 @@ fun SmartDosingNavigationRail(
             )
         }
         Spacer(modifier = Modifier.weight(1f))
+
+        // 后退按钮 - 在系统设置上方
+        NavigationRailItem(
+            selected = false,
+            onClick = {
+                if (navController.previousBackStackEntry != null) {
+                    navController.popBackStack()
+                }
+            },
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.ArrowBack,
+                    contentDescription = "后退"
+                )
+            },
+            label = { Text("返回") },
+            colors = NavigationRailItemDefaults.colors(
+                selectedIconColor = MaterialTheme.colorScheme.primary,
+                selectedTextColor = MaterialTheme.colorScheme.primary,
+                indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+            )
+        )
+
         // 只有存在trailing destination时才显示
         trailingDestination?.let { destination ->
             NavigationRailItem(
