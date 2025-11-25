@@ -69,6 +69,9 @@ object SmartDosingRoutes {
     const val DOSING_CHECKLIST = "dosing_checklist/{recipeId}"
     const val DOSING_OPERATION = "dosing_operation/{recipeId}"
     const val MATERIAL_CONFIGURATION = "material_configuration/{recipeId}"
+    const val TASK_CENTER = "task_center"
+    const val CONFIGURATION_RECORDS = "configuration_records"
+    const val CONFIGURATION_RECORD_DETAIL = "configuration_record_detail/{recordId}"
     const val RECORDS = "records"
     const val RECORD_DETAIL = "record_detail/{recordId}"
     const val SETTINGS = "settings"
@@ -78,5 +81,6 @@ object SmartDosingRoutes {
     fun dosingChecklist(recipeId: String) = "dosing_checklist/$recipeId"
     fun dosingOperation(recipeId: String) = "dosing_operation/$recipeId"
     fun materialConfiguration(recipeId: String) = "material_configuration/$recipeId"
+    fun configurationRecordDetail(recordId: String) = "configuration_record_detail/$recordId"
     fun recordDetail(recordId: String) = "record_detail/$recordId"
 }

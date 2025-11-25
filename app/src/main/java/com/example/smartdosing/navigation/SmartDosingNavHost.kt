@@ -16,9 +16,12 @@ import com.example.smartdosing.ui.screens.dosing.DosingScreen
 import com.example.smartdosing.ui.screens.dosing.MaterialConfigurationScreen
 import com.example.smartdosing.ui.screens.dosing.MaterialConfigurationData
 import com.example.smartdosing.ui.screens.home.HomeScreen
+import com.example.smartdosing.ui.screens.records.ConfigurationRecordDetailScreen
+import com.example.smartdosing.ui.screens.records.ConfigurationRecordsScreen
 import com.example.smartdosing.ui.screens.records.RecordsScreen
 import com.example.smartdosing.ui.screens.recipes.RecipesScreen
 import com.example.smartdosing.ui.screens.settings.SettingsScreen
+import com.example.smartdosing.ui.screens.tasks.TaskCenterScreen
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -63,6 +66,12 @@ fun SmartDosingNavHost(
                 },
                 onNavigateToMaterialConfiguration = { recipeId ->
                     navController.navigate(SmartDosingRoutes.materialConfiguration(recipeId))
+                },
+                onNavigateToTaskCenter = {
+                    navController.navigate(SmartDosingRoutes.TASK_CENTER)
+                },
+                onNavigateToConfigurationRecords = {
+                    navController.navigate(SmartDosingRoutes.CONFIGURATION_RECORDS)
                 },
                 onNavigateToRecords = {
                     navController.navigate(SmartDosingRoutes.RECORDS)
@@ -175,6 +184,31 @@ fun SmartDosingNavHost(
                     saveMaterialConfiguration(context, configData)
                     navController.popBackStack()
                 }
+            )
+        }
+
+        // 任务中心页面
+        composable(SmartDosingRoutes.TASK_CENTER) {
+            TaskCenterScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        // 配置记录页面
+        composable(SmartDosingRoutes.CONFIGURATION_RECORDS) {
+            ConfigurationRecordsScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onRecordSelected = { recordId ->
+                    navController.navigate(SmartDosingRoutes.configurationRecordDetail(recordId))
+                }
+            )
+        }
+
+        composable(SmartDosingRoutes.CONFIGURATION_RECORD_DETAIL) { backStackEntry ->
+            val recordId = backStackEntry.arguments?.getString("recordId") ?: return@composable
+            ConfigurationRecordDetailScreen(
+                recordId = recordId,
+                onNavigateBack = { navController.popBackStack() }
             )
         }
 

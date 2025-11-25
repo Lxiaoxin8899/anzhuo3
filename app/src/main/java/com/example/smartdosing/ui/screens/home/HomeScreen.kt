@@ -15,6 +15,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Assignment
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Cloud
@@ -55,6 +56,8 @@ fun HomeScreen(
     onNavigateToRecipes: () -> Unit = {},
     onNavigateToDosingOperation: (String) -> Unit = {},
     onNavigateToMaterialConfiguration: (String) -> Unit = {},
+    onNavigateToTaskCenter: () -> Unit = {},
+    onNavigateToConfigurationRecords: () -> Unit = {},
     onNavigateToRecords: () -> Unit = {},
     onNavigateToSettings: () -> Unit = {},
     onImportRecipe: () -> Unit = {},
@@ -81,6 +84,22 @@ fun HomeScreen(
             containerColor = MaterialTheme.colorScheme.secondaryContainer,
             contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
             onClick = { onNavigateToMaterialConfiguration("quick_start") }
+        ),
+        HomeAction(
+            title = "任务中心",
+            description = "接收并跟进配置任务",
+            icon = Icons.Default.Assignment,
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            onClick = onNavigateToTaskCenter
+        ),
+        HomeAction(
+            title = "配置记录",
+            description = "浏览历史配置及分类",
+            icon = Icons.Default.CheckCircle,
+            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+            contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+            onClick = onNavigateToConfigurationRecords
         ),
         HomeAction(
             title = "导入配方",
