@@ -2,6 +2,7 @@ package com.example.smartdosing.ui.screens.dosing
 
 import android.net.Uri
 import android.speech.tts.TextToSpeech
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
@@ -14,24 +15,35 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.smartdosing.data.DosingRecordDetailInput
+import com.example.smartdosing.data.DosingRecordRepository
+import com.example.smartdosing.data.DosingRecordSaveRequest
 import com.example.smartdosing.data.RecipeRepository
 import com.example.smartdosing.data.DatabaseRecipeRepository
+import com.example.smartdosing.data.settings.DosingPreferencesManager
+import com.example.smartdosing.data.settings.DosingPreferencesState
 import com.example.smartdosing.data.Material as RecipeMaterial
 import com.example.smartdosing.ui.theme.SmartDosingTheme
 import java.io.BufferedReader
 import java.io.InputStreamReader
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 data class Material(
     val id: String,
     val name: String,
     val targetWeight: Float,
-    val unit: String = "KG"
+    val unit: String = "KG",
+    val sequence: Int = 1
 )
 
 /**
@@ -203,7 +215,7 @@ class VoiceAnnouncementManager(private val context: android.content.Context) {
     /**
      * 播报材料信息 - 材料名称、编号、重量
      */
-    fun announceMaterial(material: Material) {
+    fun announceMaterial(material: Material, repeatCount: Int = 1) {
         if (!isInitialized) return
 
         val announcement = buildString {
@@ -213,7 +225,11 @@ class VoiceAnnouncementManager(private val context: android.content.Context) {
             append("重量：${formatWeight(material.targetWeight, material.unit)}")
         }
 
-        speak(announcement)
+        val safeRepeat = repeatCount.coerceAtLeast(1)
+        repeat(safeRepeat) { index ->
+            val queueMode = if (index == 0) TextToSpeech.QUEUE_FLUSH else TextToSpeech.QUEUE_ADD
+            speak(announcement, queueMode)
+        }
     }
 
     /**
@@ -243,11 +259,11 @@ class VoiceAnnouncementManager(private val context: android.content.Context) {
     /**
      * 重复播报当前材料信息
      */
-    fun repeatCurrentAnnouncement(material: Material) {
-        announceMaterial(material)
+    fun repeatCurrentAnnouncement(material: Material, repeatCount: Int = 1) {
+        announceMaterial(material, repeatCount)
     }
 
-    private fun speak(text: String) {
+    private fun speak(text: String, queueMode: Int = TextToSpeech.QUEUE_FLUSH) {
         android.util.Log.d("VoiceManager", "尝试播放语音: $text")
 
         if (!isInitialized) {
@@ -263,7 +279,8 @@ class VoiceAnnouncementManager(private val context: android.content.Context) {
 
         try {
             // 使用社区推荐的简化播放方式
-            ttsInstance.speak(text, TextToSpeech.QUEUE_FLUSH, null, null)
+            val utteranceId = "utterance_${System.currentTimeMillis()}"
+            ttsInstance.speak(text, queueMode, null, utteranceId)
             android.util.Log.d("VoiceManager", "✅ 语音播放命令已发送")
         } catch (e: Exception) {
             android.util.Log.e("VoiceManager", "❌ 语音播放异常", e)
@@ -301,6 +318,27 @@ fun DosingOperationScreen(
 ) {
     val context = LocalContext.current
     val repository = remember { DatabaseRecipeRepository.getInstance(context) }
+    val dosingRecordRepository = remember { DosingRecordRepository.getInstance(context) }
+    val preferencesManager = remember { DosingPreferencesManager(context) }
+    val preferencesState by preferencesManager.preferencesFlow.collectAsState(initial = DosingPreferencesState())
+    val coroutineScope = rememberCoroutineScope()
+    val checklistItems = remember {
+        mutableStateListOf(
+            ChecklistItemState("称量设备已校准"),
+            ChecklistItemState("原料批次已核对"),
+            ChecklistItemState("安全防护已到位")
+        )
+    }
+    var operatorName by remember { mutableStateOf("") }
+    val detailInputs = remember { mutableStateListOf<DosingRecordDetailInput>() }
+    var overLimitWarning by remember { mutableStateOf<OverLimitWarning?>(null) }
+    var isPreCheckCompleted by remember { mutableStateOf(false) }
+    var showPreCheckDialog by remember { mutableStateOf(false) }
+    val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()) }
+    var operationStartTime by remember { mutableStateOf(dateFormat.format(Date())) }
+    var recipeName by remember { mutableStateOf("临时配方") }
+    var recipeCode by remember { mutableStateOf<String?>(null) }
+    var isRecordSaved by remember { mutableStateOf(false) }
     val normalizedRecipeId = recipeId?.trim().orEmpty()
     val isCsvMode = normalizedRecipeId.isEmpty() || normalizedRecipeId == "import_csv" || normalizedRecipeId == "quick_start"
     var recipe by remember(normalizedRecipeId) { mutableStateOf<List<Material>?>(null) }
@@ -323,7 +361,8 @@ fun DosingOperationScreen(
                                     id = tokens[0].trim(),
                                     name = tokens[1].trim(),
                                     targetWeight = tokens[2].trim().toFloat(),
-                                    unit = "KG"
+                                    unit = "KG",
+                                    sequence = parsedRecipe.size + 1
                                 )
                                 parsedRecipe.add(material)
                             }
@@ -331,6 +370,11 @@ fun DosingOperationScreen(
                     }
                 }
                 if (parsedRecipe.isNotEmpty()) {
+                    recipeName = "CSV导入(${parsedRecipe.size}项)"
+                    recipeCode = null
+                    operationStartTime = dateFormat.format(Date())
+                    detailInputs.clear()
+                    isRecordSaved = false
                     recipe = parsedRecipe
                 }
             } catch (e: Exception) {
@@ -341,6 +385,18 @@ fun DosingOperationScreen(
 
     LaunchedEffect(normalizedRecipeId) {
         loadError = null
+        detailInputs.clear()
+        overLimitWarning = null
+        isRecordSaved = false
+        isPreCheckCompleted = false
+        showPreCheckDialog = false
+        operationStartTime = dateFormat.format(Date())
+        recipeCode = null
+        if (isCsvMode) {
+            recipeName = "CSV临时配方"
+        }
+        checklistItems.forEach { it.checked = false }
+        operatorName = ""
         if (!isCsvMode) {
             isLoading = true
             recipe = null
@@ -354,6 +410,8 @@ fun DosingOperationScreen(
                 if (materials.isEmpty()) {
                     loadError = "该配方没有材料，请返回重新选择。"
                 } else {
+                    recipeName = targetRecipe.name
+                    recipeCode = targetRecipe.code
                     recipe = materials
                 }
             }
@@ -390,13 +448,106 @@ fun DosingOperationScreen(
                 // 非 CSV 模式下直接退回配方管理，避免用户还要手动退出检查清单
                 { onNavigateToRecipeList() }
             }
-            DosingScreen(
-                recipe = recipe!!,
-                onSelectNewRecipe = onSelectNewRecipeAction,
-                selectNewRecipeLabel = selectNewRecipeLabel,
-                onNavigateBack = onNavigateBack,
-                modifier = modifier
+            overLimitWarning?.let { warning ->
+                OverLimitDialog(warning = warning, onDismiss = { overLimitWarning = null })
+            }
+
+            // 预检查对话框
+            PreCheckDialog(
+                operatorName = operatorName,
+                onOperatorNameChange = { operatorName = it },
+                checklistItems = checklistItems,
+                isVisible = showPreCheckDialog,
+                onConfirm = {
+                    isPreCheckCompleted = true
+                    showPreCheckDialog = false
+                    operationStartTime = dateFormat.format(Date()) // 确认开始时记录开始时间
+                },
+                onCancel = onNavigateBack
             )
+
+            if (!isPreCheckCompleted) {
+                // 显示开始投料准备页面
+                Column(
+                    modifier = Modifier.fillMaxSize().padding(32.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        text = "配方投料准备",
+                        style = MaterialTheme.typography.headlineLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    Text(
+                        text = recipeName,
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Text(
+                        text = "共 ${recipe!!.size} 种材料",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    Spacer(modifier = Modifier.height(40.dp))
+
+                    Button(
+                        onClick = { showPreCheckDialog = true },
+                        modifier = Modifier.size(width = 200.dp, height = 60.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary
+                        )
+                    ) {
+                        Text(
+                            text = "开始投料准备",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    OutlinedButton(
+                        onClick = onNavigateBack,
+                        modifier = Modifier.size(width = 200.dp, height = 50.dp)
+                    ) {
+                        Text("返回")
+                    }
+                }
+            } else {
+                // 预检查完成后显示投料界面
+                DosingScreen(
+                    recipe = recipe!!,
+                    onSelectNewRecipe = onSelectNewRecipeAction,
+                    selectNewRecipeLabel = selectNewRecipeLabel,
+                    onNavigateBack = onNavigateBack,
+                    preferencesState = preferencesState,
+                    operatorName = operatorName,
+                    onOperatorNameChange = { operatorName = it },
+                    checklistItems = checklistItems,
+                    detailInputs = detailInputs,
+                    overLimitWarning = overLimitWarning,
+                    onOverLimitWarningChange = { overLimitWarning = it },
+                    isRecordSaved = isRecordSaved,
+                    onRecordSavedChange = { isRecordSaved = it },
+                    isCsvMode = isCsvMode,
+                    normalizedRecipeId = normalizedRecipeId,
+                    recipeCode = recipeCode,
+                    recipeName = recipeName,
+                    operationStartTime = operationStartTime,
+                    dateFormat = dateFormat,
+                    dosingRecordRepository = dosingRecordRepository,
+                    coroutineScope = coroutineScope,
+                    modifier = modifier
+                )
+            }
         }
     }
 }
@@ -506,6 +657,136 @@ private fun DosingLoadingState(modifier: Modifier = Modifier) {
 }
 
 @Composable
+fun PreCheckDialog(
+    operatorName: String,
+    onOperatorNameChange: (String) -> Unit,
+    checklistItems: List<ChecklistItemState>,
+    isVisible: Boolean,
+    onConfirm: () -> Unit,
+    onCancel: () -> Unit
+) {
+    if (isVisible) {
+        AlertDialog(
+            onDismissRequest = onCancel,
+            title = {
+                Text(
+                    text = "投料前准备检查",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Text(
+                        text = "请完成以下准备工作后再开始投料操作：",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    // 操作员姓名输入
+                    OutlinedTextField(
+                        value = operatorName,
+                        onValueChange = onOperatorNameChange,
+                        label = { Text("操作人员姓名") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // 检查清单
+                    checklistItems.forEach { item ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Checkbox(
+                                checked = item.checked,
+                                onCheckedChange = { checked -> item.checked = checked }
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = item.label,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                    }
+
+                    val isAllReady = operatorName.isNotBlank() && checklistItems.all { it.checked }
+
+                    if (!isAllReady) {
+                        Text(
+                            text = "⚠️ 请完成操作员信息填写和全部检查事项",
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                val isAllReady = operatorName.isNotBlank() && checklistItems.all { it.checked }
+                Button(
+                    onClick = onConfirm,
+                    enabled = isAllReady
+                ) {
+                    Text("开始投料")
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = onCancel) {
+                    Text("取消")
+                }
+            },
+            modifier = Modifier.widthIn(min = 400.dp, max = 600.dp)
+        )
+    }
+}
+
+@Composable
+fun TaskChecklistCard(
+    operatorName: String,
+    onOperatorNameChange: (String) -> Unit,
+    checklistItems: List<ChecklistItemState>
+) {
+    val isChecklistReady = operatorName.isNotBlank() && checklistItems.all { it.checked }
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFF5F5F5))
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(text = "任务检查清单", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+            OutlinedTextField(
+                value = operatorName,
+                onValueChange = onOperatorNameChange,
+                label = { Text("操作人员姓名") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words),
+                modifier = Modifier.fillMaxWidth()
+            )
+            checklistItems.forEach { item ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = item.checked, onCheckedChange = { checked -> item.checked = checked })
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(text = item.label)
+                }
+            }
+            Text(
+                text = if (isChecklistReady) "✅ 检查就绪，可开始投料" else "⚠️ 请完成全部检查事项",
+                color = if (isChecklistReady) Color(0xFF2E7D32) else Color(0xFFD32F2F),
+                fontSize = 14.sp
+            )
+        }
+    }
+}
+
+@Composable
 fun InfoCard(title: String, content: String, modifier: Modifier = Modifier) {
     Card(
         modifier = modifier,
@@ -520,7 +801,20 @@ fun InfoCard(title: String, content: String, modifier: Modifier = Modifier) {
         ) {
             Text(text = title, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(modifier = Modifier.height(16.dp))
-            Text(text = content, style = MaterialTheme.typography.displayMedium, maxLines = 1, fontWeight = FontWeight.Bold)
+            val contentLength = content.length
+            val fontSize = when {
+                contentLength > 20 -> 26.sp
+                contentLength > 12 -> 30.sp
+                else -> MaterialTheme.typography.displayMedium.fontSize
+            }
+            Text(
+                text = content,
+                fontSize = fontSize,
+                fontWeight = FontWeight.Bold,
+                maxLines = 2,
+                lineHeight = fontSize * 1.2f,
+                textAlign = TextAlign.Center
+            )
         }
     }
 }
@@ -531,6 +825,23 @@ fun DosingScreen(
     onSelectNewRecipe: () -> Unit,
     selectNewRecipeLabel: String = "选择新配方",
     onNavigateBack: () -> Unit = {},
+    preferencesState: DosingPreferencesState,
+    operatorName: String,
+    onOperatorNameChange: (String) -> Unit,
+    checklistItems: List<ChecklistItemState>,
+    detailInputs: MutableList<DosingRecordDetailInput>,
+    overLimitWarning: OverLimitWarning?,
+    onOverLimitWarningChange: (OverLimitWarning?) -> Unit,
+    isRecordSaved: Boolean,
+    onRecordSavedChange: (Boolean) -> Unit,
+    isCsvMode: Boolean,
+    normalizedRecipeId: String,
+    recipeCode: String?,
+    recipeName: String,
+    operationStartTime: String,
+    dateFormat: SimpleDateFormat,
+    dosingRecordRepository: DosingRecordRepository,
+    coroutineScope: kotlinx.coroutines.CoroutineScope,
     modifier: Modifier = Modifier
 ) {
     var currentStep by remember { mutableStateOf(0) }
@@ -551,14 +862,42 @@ fun DosingScreen(
     val currentMaterial = if (currentStep < recipe.size) recipe[currentStep] else null
 
     // 当材料切换时进行语音播报
-    LaunchedEffect(currentMaterial) {
+    LaunchedEffect(currentMaterial, preferencesState.repeatCountForPlayback) {
         if (currentMaterial != null) {
             // 先播报步骤，稍等片刻再播报材料信息
             voiceManager.announceStep(currentStep, recipe.size)
             delay(800) // 等待步骤播报完成
-            voiceManager.announceMaterial(currentMaterial)
+            voiceManager.announceMaterial(currentMaterial, preferencesState.repeatCountForPlayback)
         } else {
             voiceManager.announceCompletion()
+        }
+    }
+
+    LaunchedEffect(currentStep, recipe) {
+        val materials = recipe
+        if (materials != null && currentStep >= materials.size && detailInputs.isNotEmpty() && !isRecordSaved) {
+            val recordRecipeId = if (isCsvMode) null else normalizedRecipeId.ifBlank { null }
+            val request = DosingRecordSaveRequest(
+                recipeId = recordRecipeId,
+                recipeCode = recipeCode,
+                recipeName = recipeName,
+                operatorName = operatorName.ifBlank { "未填写" },
+                checklistItems = checklistItems.filter { it.checked }.map { it.label },
+                startTime = operationStartTime,
+                endTime = dateFormat.format(Date()),
+                totalMaterials = materials.size,
+                tolerancePercent = preferencesState.overLimitTolerancePercent,
+                details = detailInputs.map { it.copy() }
+            )
+            coroutineScope.launch {
+                try {
+                    dosingRecordRepository.saveRecord(request)
+                    onRecordSavedChange(true)
+                    Toast.makeText(context, "投料记录已保存", Toast.LENGTH_SHORT).show()
+                } catch (e: Exception) {
+                    Toast.makeText(context, "保存投料记录失败: ${e.message}", Toast.LENGTH_LONG).show()
+                }
+            }
         }
     }
 
@@ -592,7 +931,13 @@ fun DosingScreen(
                 Spacer(modifier = Modifier.width(80.dp)) // 平衡布局
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Text(
+                text = "当前步骤：${currentStep + 1}/${recipe.size} · 材料编号：${currentMaterial.id}",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary
+            )
 
             // Middle Info Row
             Row(
@@ -617,15 +962,41 @@ fun DosingScreen(
                 onWeightChange = { newWeight -> actualWeight = newWeight },
                 onClearWeight = { actualWeight = "" },
                 onConfirmNext = {
-                    if (actualWeight.isNotBlank()) {
-                        currentStep++
-                        actualWeight = ""
+                    // 预检查已在前面完成，这里直接进行重量验证
+                    val materialForLog = currentMaterial ?: return@BottomControlArea
+                    val normalizedInput = actualWeight.replace(',', '.')
+                    val actualValue = normalizedInput.toDoubleOrNull()
+                    if (actualValue == null) {
+                        Toast.makeText(context, "请输入有效的投料重量", Toast.LENGTH_SHORT).show()
+                        return@BottomControlArea
                     }
+                    val target = materialForLog.targetWeight.toDouble()
+                    val tolerance = preferencesState.overLimitTolerancePercent.toDouble()
+                    val limit = target * (1 + tolerance / 100.0)
+                    val isOverLimit = target > 0 && actualValue > limit
+                    val overPercent = if (target > 0) ((actualValue - target) / target) * 100.0 else 0.0
+                    detailInputs.add(
+                        DosingRecordDetailInput(
+                            sequence = materialForLog.sequence,
+                            materialCode = materialForLog.id,
+                            materialName = materialForLog.name,
+                            targetWeight = target,
+                            actualWeight = actualValue,
+                            unit = materialForLog.unit,
+                            isOverLimit = isOverLimit,
+                            overLimitPercent = overPercent
+                        )
+                    )
+                    if (isOverLimit) {
+                        onOverLimitWarningChange(OverLimitWarning(materialForLog.name, overPercent))
+                    }
+                    currentStep++
+                    actualWeight = ""
                 },
                 onRepeatAnnouncement = {
                     // 手动重复播报当前材料信息
                     currentMaterial?.let { material ->
-                        voiceManager.repeatCurrentAnnouncement(material)
+                        voiceManager.repeatCurrentAnnouncement(material, preferencesState.repeatCountForPlayback)
                     }
                 }
             )
@@ -641,7 +1012,13 @@ fun DosingScreen(
             Spacer(modifier = Modifier.height(32.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 Button(
-                    onClick = { currentStep = 0 },
+                    onClick = {
+                        currentStep = 0
+                        detailInputs.clear()
+                        onRecordSavedChange(false)
+                        // Note: operationStartTime reset is handled in parent scope
+                        onOverLimitWarningChange(null)
+                    },
                     modifier = Modifier.width(200.dp).height(60.dp)
                 ) {
                     Text("重新开始", fontSize = 24.sp)
@@ -680,7 +1057,8 @@ private fun RecipeMaterial.toOperationMaterial(): Material {
         id = normalizedId,
         name = name,
         targetWeight = weight.toFloat(),
-        unit = normalizedUnit
+        unit = normalizedUnit,
+        sequence = sequence
     )
 }
 
@@ -759,7 +1137,7 @@ fun BottomControlArea(
             onClearWeight = onClearWeight,
             onConfirmNext = onConfirmNext,
             onRepeatAnnouncement = onRepeatAnnouncement,
-            isNextEnabled = currentWeight.isNotBlank()
+            isNextEnabled = currentWeight.isNotBlank() // 预检查已完成，只需验证重量输入
         )
     }
 }
@@ -966,6 +1344,34 @@ fun FunctionControlPanel(
     }
 }
 
+class ChecklistItemState(val label: String, checked: Boolean = false) {
+    var checked by mutableStateOf(checked)
+}
+
+data class OverLimitWarning(
+    val materialName: String,
+    val percent: Double
+)
+
+@Composable
+fun OverLimitDialog(warning: OverLimitWarning, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("已知晓")
+            }
+        },
+        title = { Text("数量超标提醒") },
+        text = {
+            Text(
+                text = "材料「${warning.materialName}」超出目标 ${"%.2f".format(warning.percent)}%，请复核称量。",
+                fontSize = 16.sp
+            )
+        }
+    )
+}
+
 @Preview(showBackground = true, device = "spec:width=1280dp,height=800dp,dpi=240")
 @Composable
 fun DosingOperationScreenPreview() {
@@ -977,12 +1383,9 @@ fun DosingOperationScreenPreview() {
 @Preview(showBackground = true, device = "spec:width=1280dp,height=800dp,dpi=240")
 @Composable
 fun DosingOperationScreenDetailPreview() {
-    val previewRecipe = listOf(
-        Material("abc-001", "苹果香精", 10.5f, "KG"),
-        Material("abc-002", "柠檬酸", 22.0f, "KG"),
-        Material("def-003", "甜蜜素", 5.2f, "KG")
-    )
+    // Preview is simplified - full DosingScreen requires too many parameters
+    // Use DosingOperationScreenPreview() for full preview
     SmartDosingTheme {
-        DosingScreen(recipe = previewRecipe, onSelectNewRecipe = {})
+        DosingOperationScreen()
     }
 }

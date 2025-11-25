@@ -244,3 +244,111 @@ data class RecipeWithMaterials(
     )
     val tags: List<String>
 )
+
+
+/**
+ * 鎶曟枡璁板綍瀹炰綋
+ */
+@Entity(
+    tableName = "dosing_records",
+    indices = [
+        Index(value = ["recipe_id"]),
+        Index(value = ["start_time"]),
+        Index(value = ["operator_name"])
+    ],
+    foreignKeys = [
+        ForeignKey(
+            entity = RecipeEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["recipe_id"],
+            onDelete = ForeignKey.SET_NULL
+        )
+    ]
+)
+data class DosingRecordEntity(
+    @PrimaryKey
+    val id: String,
+    @ColumnInfo(name = "recipe_id")
+    val recipeId: String?,
+    @ColumnInfo(name = "recipe_code")
+    val recipeCode: String?,
+    @ColumnInfo(name = "recipe_name")
+    val recipeName: String,
+    @ColumnInfo(name = "operator_name")
+    val operatorName: String,
+    @ColumnInfo(name = "checklist_items")
+    val checklistItems: List<String> = emptyList(),
+    @ColumnInfo(name = "start_time")
+    val startTime: String,
+    @ColumnInfo(name = "end_time")
+    val endTime: String,
+    @ColumnInfo(name = "total_materials")
+    val totalMaterials: Int,
+    @ColumnInfo(name = "completed_materials")
+    val completedMaterials: Int,
+    @ColumnInfo(name = "total_actual_weight")
+    val totalActualWeight: Double,
+    @ColumnInfo(name = "tolerance_percent")
+    val tolerancePercent: Float,
+    @ColumnInfo(name = "over_limit_count")
+    val overLimitCount: Int,
+    @ColumnInfo(name = "avg_deviation_percent")
+    val avgDeviationPercent: Double,
+    @ColumnInfo(name = "status")
+    val status: String = "COMPLETED",
+    @ColumnInfo(name = "created_at")
+    val createdAt: String
+)
+
+/**
+ * 鎶曟枡璁板綍鏄庣粏瀹炰綋
+ */
+@Entity(
+    tableName = "dosing_record_details",
+    indices = [
+        Index(value = ["record_id"]),
+        Index(value = ["material_code"])
+    ],
+    foreignKeys = [
+        ForeignKey(
+            entity = DosingRecordEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["record_id"],
+            onDelete = ForeignKey.CASCADE
+        )
+    ]
+)
+data class DosingRecordDetailEntity(
+    @PrimaryKey
+    val id: String,
+    @ColumnInfo(name = "record_id")
+    val recordId: String,
+    @ColumnInfo(name = "sequence")
+    val sequence: Int,
+    @ColumnInfo(name = "material_code")
+    val materialCode: String,
+    @ColumnInfo(name = "material_name")
+    val materialName: String,
+    @ColumnInfo(name = "target_weight")
+    val targetWeight: Double,
+    @ColumnInfo(name = "actual_weight")
+    val actualWeight: Double,
+    val unit: String,
+    @ColumnInfo(name = "is_over_limit")
+    val isOverLimit: Boolean,
+    @ColumnInfo(name = "over_limit_percent")
+    val overLimitPercent: Double
+)
+
+/**
+ * 鎶曟枡璁板綍鍜屾壒寰佹暟鎹叧鑱?
+ */
+data class DosingRecordWithDetails(
+    @Embedded
+    val record: DosingRecordEntity,
+    @Relation(
+        parentColumn = "id",
+        entityColumn = "record_id"
+    )
+    val details: List<DosingRecordDetailEntity>
+)

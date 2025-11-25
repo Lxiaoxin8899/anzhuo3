@@ -26,9 +26,11 @@ import com.example.smartdosing.database.converters.DatabaseConverters
         RecipeTagEntity::class,
         TemplateEntity::class,
         TemplateFieldEntity::class,
-        ImportLogEntity::class
+        ImportLogEntity::class,
+        DosingRecordEntity::class,
+        DosingRecordDetailEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = true
 )
 @TypeConverters(DatabaseConverters::class)
@@ -39,6 +41,7 @@ abstract class SmartDosingDatabase : RoomDatabase() {
     abstract fun materialDao(): MaterialDao
     abstract fun templateDao(): TemplateDao
     abstract fun importLogDao(): ImportLogDao
+    abstract fun dosingRecordDao(): DosingRecordDao
 
     companion object {
         const val DATABASE_NAME = "smartdosing.db"

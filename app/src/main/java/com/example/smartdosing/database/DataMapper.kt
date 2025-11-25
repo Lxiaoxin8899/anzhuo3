@@ -291,6 +291,55 @@ object DataMapper {
     }
 
     // =================================
+    // 鎶曟枡璁板綍杞崲
+    // =================================
+
+    fun DosingRecordWithDetails.toDomainModel(): DosingRecord {
+        return record.toDomain(details)
+    }
+
+    fun DosingRecordEntity.toDomain(details: List<DosingRecordDetailEntity>): DosingRecord {
+        return DosingRecord(
+            id = id,
+            recipeId = recipeId,
+            recipeCode = recipeCode,
+            recipeName = recipeName,
+            operatorName = operatorName,
+            checklist = checklistItems,
+            startTime = startTime,
+            endTime = endTime,
+            totalMaterials = totalMaterials,
+            completedMaterials = completedMaterials,
+            totalActualWeight = totalActualWeight,
+            tolerancePercent = tolerancePercent,
+            overLimitCount = overLimitCount,
+            averageDeviationPercent = avgDeviationPercent,
+            status = parseDosingStatus(status),
+            createdAt = createdAt,
+            details = details.map { it.toDomain() }
+        )
+    }
+
+    fun DosingRecordDetailEntity.toDomain(): DosingRecordDetail {
+        return DosingRecordDetail(
+            id = id,
+            recordId = recordId,
+            materialSequence = sequence,
+            materialCode = materialCode,
+            materialName = materialName,
+            targetWeight = targetWeight,
+            actualWeight = actualWeight,
+            unit = unit,
+            isOverLimit = isOverLimit,
+            overLimitPercent = overLimitPercent
+        )
+    }
+
+    fun List<DosingRecordWithDetails>.toDomainRecords(): List<DosingRecord> {
+        return map { it.toDomainModel() }
+    }
+
+    // =================================
     // 统计数据转换
     // =================================
 
@@ -368,6 +417,12 @@ object DataMapper {
 
         return "${prefix}${dateStr}${weightCode}${timeCode}"
     }
+
+    private fun parseDosingStatus(value: String): DosingRecordStatus {
+        return runCatching { DosingRecordStatus.valueOf(value) }
+            .getOrDefault(DosingRecordStatus.COMPLETED)
+    }
+
 
     /**
      * 验证数据完整性

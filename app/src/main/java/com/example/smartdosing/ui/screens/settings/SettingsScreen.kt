@@ -12,11 +12,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.smartdosing.data.settings.DosingPreferencesManager
+import com.example.smartdosing.data.settings.DosingPreferencesState
 import com.example.smartdosing.ui.theme.SmartDosingTheme
+import kotlin.math.roundToInt
+import kotlinx.coroutines.launch
 
 /**
  * 系统设置页面
@@ -26,6 +31,11 @@ import com.example.smartdosing.ui.theme.SmartDosingTheme
 fun SettingsScreen(
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    val preferencesManager = remember { DosingPreferencesManager(context) }
+    val preferencesState by preferencesManager.preferencesFlow.collectAsState(initial = DosingPreferencesState())
+    val scope = rememberCoroutineScope()
+
     LazyColumn(
         modifier = modifier.fillMaxSize().padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -37,6 +47,34 @@ fun SettingsScreen(
                 fontSize = 28.sp,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onBackground
+            )
+        }
+
+        item {
+            SettingsSection(
+                title = "投料语音设置",
+                items = listOf(
+                    SettingsItem.Switch(
+                        title = "启用语音重复播报",
+                        subtitle = "按步骤自动重复当前材料",
+                        icon = Icons.Default.VolumeUp,
+                        isChecked = preferencesState.voiceRepeatEnabled,
+                        onCheckedChange = { enabled ->
+                            scope.launch { preferencesManager.setVoiceRepeatEnabled(enabled) }
+                        }
+                    ),
+                    SettingsItem.Slider(
+                        title = "重复次数",
+                        subtitle = "设置每个材料的播报次数",
+                        icon = Icons.Default.Repeat,
+                        value = preferencesState.voiceRepeatCount.toFloat(),
+                        onValueChange = { value ->
+                            scope.launch { preferencesManager.setVoiceRepeatCount(value.roundToInt()) }
+                        },
+                        valueRange = DosingPreferencesManager.MIN_REPEAT_COUNT.toFloat()..DosingPreferencesManager.MAX_REPEAT_COUNT.toFloat(),
+                        valueFormatter = { "${it.roundToInt()} 次" }
+                    )
+                )
             )
         }
 
@@ -113,6 +151,17 @@ fun SettingsScreen(
                         onValueChange = { },
                         valueRange = 0.85f..0.99f,
                         valueFormatter = { "${(it * 100).toInt()}%" }
+                    ),
+                    SettingsItem.Slider(
+                        title = "超标允许浮动",
+                        subtitle = "添加数量允许超过目标的百分比",
+                        icon = Icons.Default.Warning,
+                        value = preferencesState.overLimitTolerancePercent,
+                        onValueChange = { value ->
+                            scope.launch { preferencesManager.setTolerancePercent(value) }
+                        },
+                        valueRange = DosingPreferencesManager.MIN_TOLERANCE..DosingPreferencesManager.MAX_TOLERANCE,
+                        valueFormatter = { "${it.toInt()}%" }
                     ),
                     SettingsItem.Switch(
                         title = "自动进入下一步",
