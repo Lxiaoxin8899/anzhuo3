@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Science
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SpeakerPhone
 import androidx.compose.material.icons.filled.ViewList
@@ -53,6 +54,7 @@ import com.example.smartdosing.ui.theme.SmartDosingTheme
 fun HomeScreen(
     onNavigateToRecipes: () -> Unit = {},
     onNavigateToDosingOperation: (String) -> Unit = {},
+    onNavigateToMaterialConfiguration: (String) -> Unit = {},
     onNavigateToRecords: () -> Unit = {},
     onNavigateToSettings: () -> Unit = {},
     onImportRecipe: () -> Unit = {},
@@ -71,6 +73,14 @@ fun HomeScreen(
             contentColor = MaterialTheme.colorScheme.onPrimary,
             emphasize = true,
             onClick = { onNavigateToDosingOperation("quick_start") }
+        ),
+        HomeAction(
+            title = "研发配置",
+            description = "研发环境自由材料配置",
+            icon = Icons.Default.Science,
+            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+            onClick = { onNavigateToMaterialConfiguration("quick_start") }
         ),
         HomeAction(
             title = "导入配方",

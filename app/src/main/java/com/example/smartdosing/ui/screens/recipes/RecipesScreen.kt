@@ -86,6 +86,7 @@ import java.util.UUID
 fun RecipesScreen(
     onNavigateToRecipeDetail: (String) -> Unit = {},
     onNavigateToDosingOperation: (String) -> Unit = {},
+    onNavigateToMaterialConfiguration: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -355,6 +356,7 @@ fun RecipesScreen(
                             recipes = filteredRecipes,
                             onRecipeClick = onNavigateToRecipeDetail,
                             onStartDosing = onNavigateToDosingOperation,
+                            onMaterialConfiguration = onNavigateToMaterialConfiguration,
                             folders = folderSnapshot,
                             onAddToFolder = { recipeId, folderId ->
                                 addRecipeToFolder(recipeId, folderId)
@@ -365,6 +367,7 @@ fun RecipesScreen(
                             recipes = filteredRecipes,
                             onRecipeClick = onNavigateToRecipeDetail,
                             onStartDosing = onNavigateToDosingOperation,
+                            onMaterialConfiguration = onNavigateToMaterialConfiguration,
                             folders = folderSnapshot,
                             onAddToFolder = { recipeId, folderId ->
                                 addRecipeToFolder(recipeId, folderId)
@@ -732,6 +735,7 @@ fun RecipeCardList(
     recipes: List<Recipe>,
     onRecipeClick: (String) -> Unit,
     onStartDosing: (String) -> Unit,
+    onMaterialConfiguration: (String) -> Unit = {},
     folders: List<RecipeFolder>,
     onAddToFolder: (String, String) -> Unit
 ) {
@@ -745,6 +749,7 @@ fun RecipeCardList(
                     recipe = recipe,
                     onRecipeClick = onRecipeClick,
                     onStartDosing = onStartDosing,
+                    onMaterialConfiguration = onMaterialConfiguration,
                     folders = folders,
                     onAddToFolder = onAddToFolder
                 )
@@ -760,6 +765,7 @@ fun RecipeTableView(
     recipes: List<Recipe>,
     onRecipeClick: (String) -> Unit,
     onStartDosing: (String) -> Unit,
+    onMaterialConfiguration: (String) -> Unit = {},
     folders: List<RecipeFolder>,
     onAddToFolder: (String, String) -> Unit
 ) {
@@ -784,6 +790,7 @@ fun RecipeTableView(
                     recipe = recipe,
                     onRecipeClick = onRecipeClick,
                     onStartDosing = onStartDosing,
+                    onMaterialConfiguration = onMaterialConfiguration,
                     folders = folders,
                     onAddToFolder = onAddToFolder
                 )
@@ -798,6 +805,7 @@ fun RecipeTableRow(
     recipe: Recipe,
     onRecipeClick: (String) -> Unit,
     onStartDosing: (String) -> Unit,
+    onMaterialConfiguration: (String) -> Unit = {},
     folders: List<RecipeFolder>,
     onAddToFolder: (String, String) -> Unit
 ) {
@@ -849,6 +857,20 @@ fun RecipeTableRow(
                 folders = folders,
                 onFolderSelected = { folderId -> onAddToFolder(recipe.id, folderId) }
             )
+            // 材料配置按钮 (研发环境)
+            Button(
+                onClick = { onMaterialConfiguration(recipe.id) },
+                shape = RoundedCornerShape(8.dp),
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.secondary
+                )
+            ) {
+                Icon(Icons.Default.Science, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(3.dp))
+                Text("研发", fontSize = 12.sp)
+            }
+            // 标准投料按钮
             Button(
                 onClick = { onStartDosing(recipe.id) },
                 shape = RoundedCornerShape(8.dp),
@@ -870,6 +892,7 @@ fun DosingRecipeCard(
     recipe: Recipe,
     onRecipeClick: (String) -> Unit,
     onStartDosing: (String) -> Unit,
+    onMaterialConfiguration: (String) -> Unit = {},
     folders: List<RecipeFolder>,
     onAddToFolder: (String, String) -> Unit,
     modifier: Modifier = Modifier
@@ -901,6 +924,20 @@ fun DosingRecipeCard(
                         folders = folders,
                         onFolderSelected = { folderId -> onAddToFolder(recipe.id, folderId) }
                     )
+                    // 材料配置按钮 (研发环境)
+                    Button(
+                        onClick = { onMaterialConfiguration(recipe.id) },
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.secondary
+                        )
+                    ) {
+                        Icon(Icons.Default.Science, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Text("研发", fontSize = 12.sp)
+                    }
+                    // 标准投料按钮
                     Button(
                         onClick = { onStartDosing(recipe.id) },
                         shape = RoundedCornerShape(8.dp),
