@@ -12,7 +12,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.smartdosing"
+        applicationId = "com.example.quickdev"
         minSdk = 26
         targetSdk = 36
         versionCode = 1
