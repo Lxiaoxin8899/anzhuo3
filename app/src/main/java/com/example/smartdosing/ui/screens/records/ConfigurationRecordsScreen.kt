@@ -47,7 +47,9 @@ import com.example.smartdosing.data.ConfigurationRecord
 import com.example.smartdosing.data.ConfigurationRecordStatus
 import com.example.smartdosing.data.repository.ConfigurationRecordFilter
 import com.example.smartdosing.data.repository.ConfigurationRepositoryProvider
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import com.example.smartdosing.ui.theme.SmartDosingTheme
 
 /**
@@ -83,7 +85,11 @@ fun ConfigurationRecordsScreen(
                     status = selectedStatus,
                     sortAscending = sortAscending
                 )
-                records = repository.fetchRecords(filter)
+                // ?IO????????????????????
+                val result = withContext(Dispatchers.IO) {
+                    repository.fetchRecords(filter)
+                }
+                records = result
             } catch (e: Exception) {
                 loadError = "加载配置记录失败：${e.message ?: "未知错误"}"
             } finally {

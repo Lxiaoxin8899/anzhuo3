@@ -3,8 +3,16 @@ package com.example.smartdosing.web
 import android.content.Context
 import android.util.Log
 import com.example.smartdosing.data.*
+import com.example.smartdosing.data.transfer.RecipeSyncCommand
+import com.example.smartdosing.data.transfer.RecipeSyncOperation
+import com.example.smartdosing.data.transfer.RecipeSyncResult
+import com.example.smartdosing.data.transfer.toImportRequest
+import com.example.smartdosing.data.transfer.IncomingTaskRequest
+import com.example.smartdosing.data.transfer.TaskReceiveResponse
 import com.example.smartdosing.data.repository.ConfigurationRecordPayload
+import com.example.smartdosing.database.entities.AuthorizedSenderEntity
 import com.google.gson.Gson
+import com.google.gson.JsonSyntaxException
 import com.google.gson.reflect.TypeToken
 import io.ktor.http.*
 import io.ktor.http.content.*
@@ -29,6 +37,8 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.UUID
+import com.example.smartdosing.web.transfer.LanTransferProposalAdapter
+import com.example.smartdosing.web.transfer.UnsupportedSchemaException
 
 /**
  * Web服务器管理类
@@ -41,9 +51,13 @@ class WebServerManager(private val context: Context) {
     private val templateRepository = TemplateRepository.getInstance()
     private val importManager = DatabaseRecipeImportManager.getInstance(context, recipeRepository)
     private val gson = Gson()
+    private val lanAdapter = LanTransferProposalAdapter(gson)
     private val taskStore = ConfigurationTaskStore(recipeRepository)
     private val recordStore = ConfigurationRecordStore(context, gson)
     private val deviceStore = TaskDeviceStore()
+
+    // 设备通信相关
+    private val appContext: Context = context.applicationContext
 
     companion object {
         private const val TAG = "WebServerManager"
@@ -698,6 +712,340 @@ class WebServerManager(private val context: Context) {
                 }
             }
 
+            // 设备通信 API - 用于局域网任务传输
+            route("/device") {
+                // 获取本机设备信息
+                get("/info") {
+                    try {
+                        val deviceIdentity = com.example.smartdosing.data.device.DeviceUIDManager.getDeviceIdentity(appContext)
+                        call.respond(ApiResponse(
+                            success = true,
+                            data = mapOf(
+                                "uid" to deviceIdentity.uid,
+                                "deviceName" to deviceIdentity.deviceName,
+                                "ipAddress" to deviceIdentity.ipAddress,
+                                "port" to deviceIdentity.port,
+                                "appVersion" to deviceIdentity.appVersion,
+                                "status" to deviceIdentity.status.name
+                            )
+                        ))
+                    } catch (e: Exception) {
+                        Log.e(TAG, "获取设备信息失败", e)
+                        call.respond(
+                            HttpStatusCode.InternalServerError,
+                            ApiResponse<Unit>(success = false, message = "获取设备信息失败")
+                        )
+                    }
+                }
+
+                // 心跳检测
+                post("/ping") {
+                    try {
+                        val deviceIdentity = com.example.smartdosing.data.device.DeviceUIDManager.getDeviceIdentity(appContext)
+                        call.respond(ApiResponse(
+                            success = true,
+                            message = "pong",
+                            data = mapOf(
+                                "uid" to deviceIdentity.uid,
+                                "deviceName" to deviceIdentity.deviceName,
+                                "status" to deviceIdentity.status.name,
+                                "timestamp" to System.currentTimeMillis()
+                            )
+                        ))
+                    } catch (e: Exception) {
+                        call.respond(
+                            HttpStatusCode.InternalServerError,
+                            ApiResponse<Unit>(success = false, message = "心跳检测失败")
+                        )
+                    }
+                }
+
+                // 获取已授权的发送端列表
+                get("/senders") {
+                    try {
+                        val taskReceiver = com.example.smartdosing.data.transfer.TaskReceiver.getInstance(appContext)
+                        val database = com.example.smartdosing.database.SmartDosingDatabase.getDatabase(appContext)
+                        val senders = database.deviceDao().getActiveSenders()
+                        call.respond(ApiResponse(success = true, data = senders))
+                    } catch (e: Exception) {
+                        Log.e(TAG, "获取发送端列表失败", e)
+                        call.respond(
+                            HttpStatusCode.InternalServerError,
+                            ApiResponse<Unit>(success = false, message = "获取发送端列表失败")
+                        )
+                    }
+                }
+            }
+
+            // 任务传输 API
+            route("/transfer") {
+                // 接收任务（核心接口）
+                post("/task") {
+                    val rawBody = call.receiveText()
+                    val taskReceiver = com.example.smartdosing.data.transfer.TaskReceiver.getInstance(appContext)
+                    val request = try {
+                        lanAdapter.tryConvert(rawBody) ?: gson.fromJson(rawBody, IncomingTaskRequest::class.java)
+                    } catch (e: UnsupportedSchemaException) {
+                        Log.w(TAG, "协议版本不受支持: ${e.version}")
+                        val deviceIdentity = com.example.smartdosing.data.device.DeviceUIDManager.getDeviceIdentity(appContext)
+                        val response = TaskReceiveResponse(
+                            success = false,
+                            message = e.message ?: "协议版本不受支持",
+                            transferId = LanTransferProposalAdapter.extractTransferId(rawBody).orEmpty(),
+                            receiverUID = deviceIdentity.uid,
+                            receiverName = deviceIdentity.deviceName,
+                            schemaVersion = e.version,
+                            errorCode = "UNSUPPORTED_VERSION"
+                        )
+                        call.respond(
+                            HttpStatusCode.BadRequest,
+                            ApiResponse(success = false, message = response.message, data = response)
+                        )
+                        return@post
+                    } catch (e: JsonSyntaxException) {
+                        Log.w(TAG, "任务请求 JSON 解析失败", e)
+                        val deviceIdentity = com.example.smartdosing.data.device.DeviceUIDManager.getDeviceIdentity(appContext)
+                        val response = TaskReceiveResponse(
+                            success = false,
+                            message = "任务解析失败: ${e.message}",
+                            transferId = LanTransferProposalAdapter.extractTransferId(rawBody).orEmpty(),
+                            receiverUID = deviceIdentity.uid,
+                            receiverName = deviceIdentity.deviceName,
+                            errorCode = "FIELD_INVALID"
+                        )
+                        call.respond(
+                            HttpStatusCode.BadRequest,
+                            ApiResponse(success = false, message = response.message, data = response)
+                        )
+                        return@post
+                    } catch (e: IllegalArgumentException) {
+                        Log.w(TAG, "任务请求字段校验失败: ${e.message}")
+                        val deviceIdentity = com.example.smartdosing.data.device.DeviceUIDManager.getDeviceIdentity(appContext)
+                        val response = TaskReceiveResponse(
+                            success = false,
+                            message = e.message ?: "任务内容非法",
+                            transferId = LanTransferProposalAdapter.extractTransferId(rawBody).orEmpty(),
+                            receiverUID = deviceIdentity.uid,
+                            receiverName = deviceIdentity.deviceName,
+                            errorCode = "FIELD_INVALID"
+                        )
+                        call.respond(
+                            HttpStatusCode.BadRequest,
+                            ApiResponse(success = false, message = response.message, data = response)
+                        )
+                        return@post
+                    } catch (e: Exception) {
+                        Log.e(TAG, "任务解析异常", e)
+                        val deviceIdentity = com.example.smartdosing.data.device.DeviceUIDManager.getDeviceIdentity(appContext)
+                        val response = TaskReceiveResponse(
+                            success = false,
+                            message = "任务解析异常: ${e.message}",
+                            transferId = LanTransferProposalAdapter.extractTransferId(rawBody).orEmpty(),
+                            receiverUID = deviceIdentity.uid,
+                            receiverName = deviceIdentity.deviceName,
+                            errorCode = "UNKNOWN_ERROR"
+                        )
+                        call.respond(
+                            HttpStatusCode.BadRequest,
+                            ApiResponse(success = false, message = response.message, data = response)
+                        )
+                        return@post
+                    }
+
+                    try {
+                        Log.i(TAG, "收到任务传输请求: transferId=${request.transferId}, from=${request.senderName}")
+                        val response = taskReceiver.receiveTask(request)
+
+                        if (response.success) {
+                            call.respond(HttpStatusCode.Created, ApiResponse(success = true, message = response.message, data = response))
+                        } else {
+                            call.respond(HttpStatusCode.BadRequest, ApiResponse(success = false, message = response.message, data = response))
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "接收任务失败", e)
+                        val deviceIdentity = com.example.smartdosing.data.device.DeviceUIDManager.getDeviceIdentity(appContext)
+                        call.respond(
+                            HttpStatusCode.BadRequest,
+                            ApiResponse(
+                                success = false,
+                                message = "接收任务失败: ${e.message}",
+                                data = TaskReceiveResponse(
+                                    success = false,
+                                    message = e.message ?: "未知错误",
+                                    transferId = request.transferId,
+                                    receiverUID = deviceIdentity.uid,
+                                    receiverName = deviceIdentity.deviceName,
+                                    schemaVersion = request.schemaVersion,
+                                    errorCode = "UNKNOWN_ERROR"
+                                )
+                            )
+                        )
+                    }
+                }
+
+                // UID 配方同步
+                post("/recipe-sync") {
+                    try {
+                        val request = call.receive<RecipeSyncCommand>()
+                        Log.i(TAG, "收到配方同步请求: transferId=${request.transferId}, target=${request.targetUID}")
+
+                        val deviceIdentity = com.example.smartdosing.data.device.DeviceUIDManager.getDeviceIdentity(appContext)
+                        if (!request.targetUID.equals(deviceIdentity.uid, ignoreCase = true)) {
+                            call.respond(
+                                HttpStatusCode.BadRequest,
+                                ApiResponse<Unit>(success = false, message = "目标UID不匹配，拒绝同步")
+                            )
+                            return@post
+                        }
+
+                        val importRequest = request.recipe.toImportRequest()
+                        val existing = request.recipe.code
+                            .takeIf { it.isNotBlank() }
+                            ?.let { recipeRepository.getRecipeByCode(it) }
+
+                        val (syncedRecipe, operation) = when {
+                            existing != null && request.overwrite -> {
+                                val updated = recipeRepository.updateRecipe(existing.id, importRequest)
+                                    ?: throw IllegalStateException("更新配方失败")
+                                updated to RecipeSyncOperation.UPDATED
+                            }
+                            existing != null -> {
+                                call.respond(
+                                    HttpStatusCode.Conflict,
+                                    ApiResponse<Unit>(success = false, message = "配方已存在，如需覆盖请将 overwrite 设为 true")
+                                )
+                                return@post
+                            }
+                            else -> {
+                                val created = recipeRepository.addRecipe(importRequest)
+                                created to RecipeSyncOperation.CREATED
+                            }
+                        }
+
+                        val database = com.example.smartdosing.database.SmartDosingDatabase.getDatabase(appContext)
+                        val deviceDao = database.deviceDao()
+                        val now = System.currentTimeMillis()
+                        val isAuthorized = deviceDao.isSenderAuthorized(request.senderUID)
+                        if (!isAuthorized) {
+                            val newSender = AuthorizedSenderEntity(
+                                uid = request.senderUID,
+                                name = request.senderName,
+                                ipAddress = request.senderIP,
+                                authorizedAt = now,
+                                lastTaskAt = now,
+                                taskCount = 0,
+                                isActive = true
+                            )
+                            deviceDao.upsertSender(newSender)
+                        }
+                        deviceDao.updateSenderActivity(request.senderUID, now, request.senderIP, null)
+
+                        val syncResult = RecipeSyncResult(
+                            transferId = request.transferId,
+                            recipeId = syncedRecipe.id,
+                            recipeCode = syncedRecipe.code,
+                            operation = operation,
+                            receiverUID = deviceIdentity.uid,
+                            receiverName = deviceIdentity.deviceName
+                        )
+                        val message = if (operation == RecipeSyncOperation.CREATED) "配方同步成功" else "配方覆盖成功"
+
+                        call.respond(
+                            HttpStatusCode.Created,
+                            ApiResponse(success = true, message = message, data = syncResult)
+                        )
+                    } catch (e: IllegalArgumentException) {
+                        Log.e(TAG, "配方同步参数错误", e)
+                        call.respond(
+                            HttpStatusCode.BadRequest,
+                            ApiResponse<Unit>(success = false, message = e.message ?: "配方同步失败")
+                        )
+                    } catch (e: Exception) {
+                        Log.e(TAG, "配方同步失败", e)
+                        call.respond(
+                            HttpStatusCode.InternalServerError,
+                            ApiResponse<Unit>(success = false, message = e.message ?: "配方同步失败")
+                        )
+                    }
+                }
+
+                // 获取待处理的接收任务
+                get("/pending") {
+                    try {
+                        val database = com.example.smartdosing.database.SmartDosingDatabase.getDatabase(appContext)
+                        val pendingTasks = database.deviceDao().getReceivedTasksPaged(status = "PENDING", limit = 50, offset = 0)
+                        call.respond(ApiResponse(success = true, data = pendingTasks))
+                    } catch (e: Exception) {
+                        Log.e(TAG, "获取待处理任务失败", e)
+                        call.respond(
+                            HttpStatusCode.InternalServerError,
+                            ApiResponse<Unit>(success = false, message = "获取待处理任务失败")
+                        )
+                    }
+                }
+
+                // 确认接收任务
+                post("/accept/{id}") {
+                    try {
+                        val id = call.parameters["id"] ?: throw IllegalArgumentException("任务ID不能为空")
+                        val taskReceiver = com.example.smartdosing.data.transfer.TaskReceiver.getInstance(appContext)
+                        val success = taskReceiver.acceptTask(id)
+
+                        if (success) {
+                            call.respond(ApiResponse<Unit>(success = true, message = "任务已接收"))
+                        } else {
+                            call.respond(HttpStatusCode.BadRequest, ApiResponse<Unit>(success = false, message = "接收任务失败"))
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "确认任务失败", e)
+                        call.respond(
+                            HttpStatusCode.BadRequest,
+                            ApiResponse<Unit>(success = false, message = e.message ?: "确认任务失败")
+                        )
+                    }
+                }
+
+                // 拒绝任务
+                post("/reject/{id}") {
+                    try {
+                        val id = call.parameters["id"] ?: throw IllegalArgumentException("任务ID不能为空")
+                        val taskReceiver = com.example.smartdosing.data.transfer.TaskReceiver.getInstance(appContext)
+                        val success = taskReceiver.rejectTask(id)
+
+                        if (success) {
+                            call.respond(ApiResponse<Unit>(success = true, message = "任务已拒绝"))
+                        } else {
+                            call.respond(HttpStatusCode.BadRequest, ApiResponse<Unit>(success = false, message = "拒绝任务失败"))
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "拒绝任务失败", e)
+                        call.respond(
+                            HttpStatusCode.BadRequest,
+                            ApiResponse<Unit>(success = false, message = e.message ?: "拒绝任务失败")
+                        )
+                    }
+                }
+
+                // 获取所有接收任务历史
+                get("/history") {
+                    try {
+                        val status = call.request.queryParameters["status"]
+                        val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 50
+                        val offset = call.request.queryParameters["offset"]?.toIntOrNull() ?: 0
+
+                        val database = com.example.smartdosing.database.SmartDosingDatabase.getDatabase(appContext)
+                        val tasks = database.deviceDao().getReceivedTasksPaged(status = status, limit = limit, offset = offset)
+                        call.respond(ApiResponse(success = true, data = tasks))
+                    } catch (e: Exception) {
+                        Log.e(TAG, "获取任务历史失败", e)
+                        call.respond(
+                            HttpStatusCode.InternalServerError,
+                            ApiResponse<Unit>(success = false, message = "获取任务历史失败")
+                        )
+                    }
+                }
+            }
+
             post("/import/recipes") {
                 try {
                     Log.i(TAG, "[Import] 开始接收文件上传请求")
@@ -1091,7 +1439,8 @@ private class ConfigurationRecordStore(
             resultStatus = payload.resultStatus,
             updatedAt = timestamp,
             tags = payload.tags.takeIf { it.isNotEmpty() } ?: listOf("研发配置"),
-            note = payload.note
+            note = payload.note,
+            materialDetails = payload.materialDetails
         )
         records.add(0, record)
         persistRecordsLocked()

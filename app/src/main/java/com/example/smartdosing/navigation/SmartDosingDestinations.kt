@@ -2,7 +2,6 @@ package com.example.smartdosing.navigation
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Assignment
-import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Settings
@@ -36,10 +35,10 @@ enum class SmartDosingDestination(
         description = "导入、筛选、维护配方字段"
     ),
     RECORDS(
-        route = SmartDosingRoutes.RECORDS,
-        title = "投料记录",
-        icon = Icons.Default.BarChart,
-        description = "查看历史记录与统计"
+        route = SmartDosingRoutes.CONFIGURATION_RECORDS,
+        title = "配置记录",
+        icon = Icons.Default.Assignment,
+        description = "查看历史配置记录与明细"
     ),
     SETTINGS(
         route = SmartDosingRoutes.SETTINGS,
@@ -73,9 +72,8 @@ object SmartDosingRoutes {
     const val TASK_CENTER = "task_center"
     const val CONFIGURATION_RECORDS = "configuration_records"
     const val CONFIGURATION_RECORD_DETAIL = "configuration_record_detail/{recordId}"
-    const val RECORDS = "records"
-    const val RECORD_DETAIL = "record_detail/{recordId}"
     const val SETTINGS = "settings"
+    const val DEVICE_INFO = "device_info"
 
     fun recipeDetail(recipeId: String) = "recipe_detail/$recipeId"
     fun recipeEdit(recipeId: String) = "recipe_edit/$recipeId"
@@ -93,5 +91,4 @@ object SmartDosingRoutes {
         return "material_configuration/$normalizedId$query"
     }
     fun configurationRecordDetail(recordId: String) = "configuration_record_detail/$recordId"
-    fun recordDetail(recordId: String) = "record_detail/$recordId"
 }

@@ -3,6 +3,7 @@ package com.example.smartdosing.data.repository
 
 import com.example.smartdosing.data.ApiResponse
 import com.example.smartdosing.data.ConfigurationRecord
+import com.example.smartdosing.data.ConfigurationMaterialRecord
 import com.example.smartdosing.data.ConfigurationRecordSampleData
 import com.example.smartdosing.data.ConfigurationRecordStatus
 import com.example.smartdosing.data.ConfigurationTask
@@ -67,7 +68,8 @@ data class ConfigurationRecordDto(
     val resultStatus: ConfigurationRecordStatus,
     val updatedAt: String,
     val tags: List<String>,
-    val note: String
+    val note: String,
+    val materialDetails: List<ConfigurationMaterialRecord> = emptyList()
 )
 
 data class ConfigurationRecordPayload(
@@ -84,6 +86,7 @@ data class ConfigurationRecordPayload(
     val salesOwner: String,
     val tags: List<String> = emptyList(),
     val note: String = "",
+    val materialDetails: List<ConfigurationMaterialRecord> = emptyList(),
     val resultStatus: ConfigurationRecordStatus = ConfigurationRecordStatus.COMPLETED,
     val recordId: String? = null
 )
@@ -308,7 +311,8 @@ class FakeConfigurationRecordApi : ConfigurationRecordApi {
             resultStatus = payload.resultStatus,
             updatedAt = formatter.format(Date()),
             tags = payload.tags.takeIf { it.isNotEmpty() } ?: listOf("新建"),
-            note = payload.note
+            note = payload.note,
+            materialDetails = payload.materialDetails.takeIf { it.isNotEmpty() } ?: sampleMaterials(payload.recipeCode)
         )
         records.add(0, dto)
         return dto
@@ -330,6 +334,14 @@ class FakeConfigurationRecordApi : ConfigurationRecordApi {
         records[index] = updated
         return updated
     }
+}
+
+private fun sampleMaterials(prefix: String): List<ConfigurationMaterialRecord> {
+    return listOf(
+        ConfigurationMaterialRecord(1, "$prefix-基液", "$prefix-A", 5.0, 4.96, "kg"),
+        ConfigurationMaterialRecord(2, "$prefix-香精", "$prefix-B", 3.2, 3.18, "kg"),
+        ConfigurationMaterialRecord(3, "$prefix-辅料", "$prefix-C", 2.4, 2.41, "kg")
+    )
 }
 
 /** DTO ? Domain ?? */
@@ -395,7 +407,8 @@ fun ConfigurationRecordDto.toEntity(): ConfigurationRecord = ConfigurationRecord
     resultStatus = resultStatus,
     updatedAt = updatedAt,
     tags = tags,
-    note = note
+    note = note,
+    materialDetails = materialDetails
 )
 
 fun ConfigurationRecord.toDto(): ConfigurationRecordDto = ConfigurationRecordDto(
@@ -414,7 +427,8 @@ fun ConfigurationRecord.toDto(): ConfigurationRecordDto = ConfigurationRecordDto
     resultStatus = resultStatus,
     updatedAt = updatedAt,
     tags = tags,
-    note = note
+    note = note,
+    materialDetails = materialDetails
 )
 
 fun ConfigurationRecord.toPayload(): ConfigurationRecordPayload = ConfigurationRecordPayload(
@@ -431,6 +445,7 @@ fun ConfigurationRecord.toPayload(): ConfigurationRecordPayload = ConfigurationR
     salesOwner = salesOwner,
     tags = tags,
     note = note,
+    materialDetails = materialDetails,
     resultStatus = resultStatus,
     recordId = id
 )

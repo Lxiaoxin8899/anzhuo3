@@ -351,7 +351,6 @@ class XiaomiTTSManager(private val context: Context) {
                         isInitialized = true
                         initResult = true
                         Log.d(TAG, "✅ 标准TTS配置完成")
-                        testStandardTTS()
                     } else {
                         Log.w(TAG, "标准TTS不支持中文")
                     }

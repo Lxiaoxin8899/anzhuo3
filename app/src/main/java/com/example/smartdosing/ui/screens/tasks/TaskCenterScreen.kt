@@ -1,28 +1,41 @@
 package com.example.smartdosing.ui.screens.tasks
 
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Assignment
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.HourglassEmpty
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.TrendingUp
+import androidx.compose.material.icons.outlined.Inbox
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -42,16 +55,20 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.smartdosing.data.ConfigurationTask
 import com.example.smartdosing.data.TaskPriority
 import com.example.smartdosing.data.TaskStatus
 import com.example.smartdosing.data.repository.ConfigurationRepositoryProvider
 import kotlinx.coroutines.launch
+import com.example.smartdosing.ui.theme.LocalWindowSize
 import com.example.smartdosing.ui.theme.SmartDosingTheme
+import com.example.smartdosing.ui.theme.SmartDosingWindowWidthClass
 
 /**
  * 任务中心界面：展示研发阶段快速下发的配置任务
@@ -67,6 +84,8 @@ fun TaskCenterScreen(
     refreshSignal: Int = 0
 ) {
     val repository = remember { ConfigurationRepositoryProvider.taskRepository }
+    val windowSize = LocalWindowSize.current
+    val isCompactWidth = windowSize.widthClass == SmartDosingWindowWidthClass.Compact
     var tasks by remember { mutableStateOf<List<ConfigurationTask>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var loadError by remember { mutableStateOf<String?>(null) }
@@ -105,11 +124,16 @@ fun TaskCenterScreen(
         modifier = modifier.fillMaxSize(),
         topBar = {
             CenterAlignedTopAppBar(
-                title = { Text("任务中心") },
+                title = {
+                    Text(
+                        "任务中心",
+                        fontWeight = FontWeight.Bold
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(
-                            imageVector = Icons.Default.Assignment,
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "返回"
                         )
                     }
@@ -127,7 +151,7 @@ fun TaskCenterScreen(
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            TaskSummarySection(tasks = tasks)
+            TaskSummarySection(tasks = tasks, isCompact = isCompactWidth)
             TaskStatusFilterRow(
                 selected = selectedStatus,
                 onSelected = { selectedStatus = it }
@@ -141,9 +165,10 @@ fun TaskCenterScreen(
                         modifier = Modifier.fillMaxSize(),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        items(displayedTasks, key = { it.id }) { task ->
-                            TaskCard(
+                        itemsIndexed(displayedTasks, key = { _, task -> task.id }) { index, task ->
+                            AnimatedTaskCard(
                                 task = task,
+                                index = index,
                                 onAccept = {
                                     scope.launch {
                                         repository.updateTaskStatus(task.id, TaskStatus.IN_PROGRESS)
@@ -171,103 +196,301 @@ fun TaskCenterScreen(
 }
 
 /**
+ * 带动画的任务卡片
+ */
+@Composable
+private fun AnimatedTaskCard(
+    task: ConfigurationTask,
+    index: Int,
+    onAccept: () -> Unit,
+    onStart: () -> Unit,
+    onConfigure: () -> Unit
+) {
+    var visible by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(index * 60L)
+        visible = true
+    }
+
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn(animationSpec = tween(300)) +
+                slideInHorizontally(
+                    initialOffsetX = { it / 4 },
+                    animationSpec = tween(300)
+                )
+    ) {
+        TaskCard(
+            task = task,
+            onAccept = onAccept,
+            onStart = onStart,
+            onConfigure = onConfigure
+        )
+    }
+}
+
+/**
  * 顶部概览，展示待接单、进行中等数量
  */
 @Composable
-private fun TaskSummarySection(tasks: List<ConfigurationTask>) {
+private fun TaskSummarySection(tasks: List<ConfigurationTask>, isCompact: Boolean) {
     val waitingStatuses = setOf(TaskStatus.DRAFT, TaskStatus.READY)
     val runningStatuses = setOf(TaskStatus.PUBLISHED, TaskStatus.IN_PROGRESS)
     val waitingCount = tasks.count { it.status in waitingStatuses }
     val progressingCount = tasks.count { it.status in runningStatuses }
     val completedCount = tasks.count { it.status == TaskStatus.COMPLETED }
 
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        SummaryCard(
+    var visible by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        visible = true
+    }
+
+    val summaryData = listOf(
+        SummaryCardData(
             title = "待接单",
-            value = waitingCount.toString(),
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.weight(1f)
-        )
-        SummaryCard(
+            value = waitingCount,
+            icon = Icons.Default.HourglassEmpty,
+            color = MaterialTheme.colorScheme.primary
+        ),
+        SummaryCardData(
             title = "进行中",
-            value = progressingCount.toString(),
-            color = MaterialTheme.colorScheme.tertiary,
-            modifier = Modifier.weight(1f)
-        )
-        SummaryCard(
+            value = progressingCount,
+            icon = Icons.Default.TrendingUp,
+            color = MaterialTheme.colorScheme.tertiary
+        ),
+        SummaryCardData(
             title = "已完成",
-            value = completedCount.toString(),
-            color = MaterialTheme.colorScheme.secondary,
-            modifier = Modifier.weight(1f)
+            value = completedCount,
+            icon = Icons.Default.CheckCircle,
+            color = MaterialTheme.colorScheme.secondary
         )
+    )
+
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn(animationSpec = tween(400)) + expandVertically()
+    ) {
+        if (isCompact) {
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = PaddingValues(horizontal = 4.dp)
+            ) {
+                items(summaryData) { data ->
+                    SummaryCard(
+                        title = data.title,
+                        value = data.value,
+                        icon = data.icon,
+                        color = data.color,
+                        modifier = Modifier.width(180.dp)
+                    )
+                }
+            }
+        } else {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                summaryData.forEach { data ->
+                    SummaryCard(
+                        title = data.title,
+                        value = data.value,
+                        icon = data.icon,
+                        color = data.color,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+        }
     }
 }
+
+private data class SummaryCardData(
+    val title: String,
+    val value: Int,
+    val icon: ImageVector,
+    val color: androidx.compose.ui.graphics.Color
+)
 
 @Composable
 private fun SummaryCard(
     title: String,
-    value: String,
+    value: Int,
+    icon: ImageVector,
     color: androidx.compose.ui.graphics.Color,
     modifier: Modifier = Modifier
 ) {
+    val animatedValue = remember { Animatable(0f) }
+
+    LaunchedEffect(value) {
+        animatedValue.animateTo(
+            targetValue = value.toFloat(),
+            animationSpec = tween(800, easing = FastOutSlowInEasing)
+        )
+    }
+
     Card(
         modifier = modifier,
-        colors = CardDefaults.cardColors(containerColor = color.copy(alpha = 0.18f))
+        colors = CardDefaults.cardColors(containerColor = color.copy(alpha = 0.12f)),
+        shape = RoundedCornerShape(16.dp)
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Text(text = title, color = color, style = MaterialTheme.typography.bodyMedium)
-            Text(text = value, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .background(color.copy(alpha = 0.2f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = color,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+                Text(
+                    text = title,
+                    color = color,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+            Text(
+                text = animatedValue.value.toInt().toString(),
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
         }
     }
 }
 
 @Composable
 private fun TaskLoadingState() {
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 48.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+            .padding(top = 64.dp),
+        contentAlignment = Alignment.Center
     ) {
-        androidx.compose.material3.CircularProgressIndicator()
-        Text("正在加载任务，请稍候…", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(48.dp),
+                strokeWidth = 4.dp,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Text(
+                "正在加载任务，请稍候…",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodyLarge
+            )
+        }
     }
 }
 
 @Composable
 private fun TaskErrorState(message: String, onRetry: () -> Unit) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+    var visible by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        visible = true
+    }
+
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn() + scaleIn(initialScale = 0.9f)
     ) {
-        Text(text = message, color = MaterialTheme.colorScheme.error)
-        TextButton(onClick = onRetry) {
-            Text("重试")
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(72.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.errorContainer),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Assignment,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(40.dp)
+                )
+            }
+            Text(
+                text = message,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodyLarge
+            )
+            FilledTonalButton(onClick = onRetry) {
+                Text("重试")
+            }
         }
     }
 }
 
 @Composable
 private fun TaskEmptyState() {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+    var visible by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        visible = true
+    }
+
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn(animationSpec = tween(400)) + scaleIn(initialScale = 0.9f)
     ) {
-        Text("暂无符合条件的任务", color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text("可尝试调整筛选条件或稍后再试", style = MaterialTheme.typography.bodySmall)
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 48.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(100.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Inbox,
+                    contentDescription = null,
+                    modifier = Modifier.size(56.dp),
+                    tint = MaterialTheme.colorScheme.outline
+                )
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                "暂无符合条件的任务",
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 18.sp,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                "可尝试调整筛选条件或稍后再试",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
     }
 }
 
@@ -280,31 +503,44 @@ private fun TaskStatusFilterRow(
     onSelected: (TaskStatus?) -> Unit
 ) {
     val options = listOf<TaskStatus?>(null) + TaskStatus.entries
-    Row(
+
+    LazyRow(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        options.forEach { status ->
+        itemsIndexed(options) { index, status ->
             val isSelected = selected == status
-            AssistChip(
-                onClick = { onSelected(if (isSelected) null else status) },
-                label = {
-                    val label = when (status) {
-                        null -> "全部"
-                        TaskStatus.DRAFT -> "草稿"
-                        TaskStatus.READY -> "待发布"
-                        TaskStatus.PUBLISHED -> "已下发"
-                        TaskStatus.IN_PROGRESS -> "执行中"
-                        TaskStatus.COMPLETED -> "已完成"
-                        TaskStatus.CANCELLED -> "已取消"
-                    }
-                    Text(label)
-                },
-                colors = AssistChipDefaults.assistChipColors(
-                    containerColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                    labelColor = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+            var visible by remember { mutableStateOf(false) }
+
+            LaunchedEffect(Unit) {
+                kotlinx.coroutines.delay(index * 40L)
+                visible = true
+            }
+
+            AnimatedVisibility(
+                visible = visible,
+                enter = fadeIn() + scaleIn(initialScale = 0.8f)
+            ) {
+                AssistChip(
+                    onClick = { onSelected(if (isSelected) null else status) },
+                    label = {
+                        val label = when (status) {
+                            null -> "全部"
+                            TaskStatus.DRAFT -> "草稿"
+                            TaskStatus.READY -> "待发布"
+                            TaskStatus.PUBLISHED -> "已下发"
+                            TaskStatus.IN_PROGRESS -> "执行中"
+                            TaskStatus.COMPLETED -> "已完成"
+                            TaskStatus.CANCELLED -> "已取消"
+                        }
+                        Text(label)
+                    },
+                    colors = AssistChipDefaults.assistChipColors(
+                        containerColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                        labelColor = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 )
-            )
+            }
         }
     }
 }

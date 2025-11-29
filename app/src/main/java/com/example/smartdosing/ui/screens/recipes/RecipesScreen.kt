@@ -1,5 +1,7 @@
 package com.example.smartdosing.ui.screens.recipes
 
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -24,7 +26,9 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -34,7 +38,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Divider
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -45,6 +49,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -60,6 +65,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
@@ -836,17 +842,38 @@ fun RecipeWorkspaceHeader(
             value = searchText,
             onValueChange = onSearchTextChange,
             modifier = Modifier.fillMaxWidth(),
-            placeholder = { Text("搜索配方编码、名称、客户...") },
-            leadingIcon = { Icon(Icons.Default.Search, contentDescription = "搜索") },
+            placeholder = {
+                Text(
+                    "搜索配方编码、名称、客户...",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            },
+            leadingIcon = {
+                Icon(
+                    Icons.Default.Search,
+                    contentDescription = "搜索",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            },
             trailingIcon = {
                 if (searchText.isNotEmpty()) {
                     IconButton(onClick = { onSearchTextChange("") }) {
-                        Icon(Icons.Default.Clear, contentDescription = "清空搜索")
+                        Icon(
+                            Icons.Default.Clear,
+                            contentDescription = "清空搜索",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
             },
             singleLine = true,
-            shape = RoundedCornerShape(12.dp)
+            shape = RoundedCornerShape(16.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
+                focusedContainerColor = MaterialTheme.colorScheme.surface,
+                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+            )
         )
     }
 }
@@ -950,19 +977,50 @@ fun CompactStatChip(
     value: String,
     icon: ImageVector
 ) {
+    val animatedValue = remember { Animatable(0f) }
+    val targetValue = value.toFloatOrNull() ?: 0f
+
+    LaunchedEffect(value) {
+        animatedValue.animateTo(
+            targetValue = targetValue,
+            animationSpec = tween(600, easing = FastOutSlowInEasing)
+        )
+    }
+
     Surface(
         shape = RoundedCornerShape(30.dp),
-        tonalElevation = 1.dp,
+        tonalElevation = 2.dp,
         color = MaterialTheme.colorScheme.surfaceColorAtElevation(3.dp)
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Icon(icon, contentDescription = null, modifier = Modifier.size(16.dp))
-            Text(value, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-            Text(label, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Box(
+                modifier = Modifier
+                    .size(28.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    icon,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+            Text(
+                animatedValue.value.toInt().toString(),
+                fontWeight = FontWeight.Bold,
+                fontSize = 15.sp
+            )
+            Text(
+                label,
+                fontSize = 13.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }
@@ -981,19 +1039,59 @@ fun RecipeCardList(
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        items(recipes) { recipe ->
-            DosingRecipeCard(
+        itemsIndexed(recipes, key = { _, recipe -> recipe.id }) { index, recipe ->
+            AnimatedRecipeCard(
                 recipe = recipe,
+                index = index,
                 onRecipeClick = onRecipeClick,
                 onMaterialConfiguration = onMaterialConfiguration,
                 folders = folders,
                 onAddToFolder = onAddToFolder,
                 compact = compactCards
             )
-            }
         }
+    }
+}
+
+/**
+ * 带动画的配方卡片
+ */
+@Composable
+private fun AnimatedRecipeCard(
+    recipe: Recipe,
+    index: Int,
+    onRecipeClick: (String) -> Unit,
+    onMaterialConfiguration: (String) -> Unit,
+    folders: List<RecipeFolder>,
+    onAddToFolder: (String, String) -> Unit,
+    compact: Boolean
+) {
+    var visible by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(index * 50L)
+        visible = true
+    }
+
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn(animationSpec = tween(300)) +
+                slideInVertically(
+                    initialOffsetY = { it / 3 },
+                    animationSpec = tween(300)
+                )
+    ) {
+        DosingRecipeCard(
+            recipe = recipe,
+            onRecipeClick = onRecipeClick,
+            onMaterialConfiguration = onMaterialConfiguration,
+            folders = folders,
+            onAddToFolder = onAddToFolder,
+            compact = compact
+        )
+    }
 }
 
 /**
@@ -1011,27 +1109,52 @@ fun RecipeTableView(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp))
                 .background(MaterialTheme.colorScheme.surfaceVariant)
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                .padding(horizontal = 16.dp, vertical = 14.dp),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Text("配方信息", fontWeight = FontWeight.Medium)
-            Text("操作", fontWeight = FontWeight.Medium)
+            Text(
+                "配方信息",
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                "操作",
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
-        Divider()
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(vertical = 8.dp)
+            contentPadding = PaddingValues(vertical = 4.dp)
         ) {
-            items(recipes) { recipe ->
-                RecipeTableRow(
-                    recipe = recipe,
-                    onRecipeClick = onRecipeClick,
-                    onMaterialConfiguration = onMaterialConfiguration,
-                    folders = folders,
-                    onAddToFolder = onAddToFolder
-                )
-                Divider()
+            itemsIndexed(recipes, key = { _, recipe -> recipe.id }) { index, recipe ->
+                var visible by remember { mutableStateOf(false) }
+
+                LaunchedEffect(Unit) {
+                    kotlinx.coroutines.delay(index * 30L)
+                    visible = true
+                }
+
+                AnimatedVisibility(
+                    visible = visible,
+                    enter = fadeIn(animationSpec = tween(200)) + expandVertically()
+                ) {
+                    Column {
+                        RecipeTableRow(
+                            recipe = recipe,
+                            onRecipeClick = onRecipeClick,
+                            onMaterialConfiguration = onMaterialConfiguration,
+                            folders = folders,
+                            onAddToFolder = onAddToFolder
+                        )
+                        HorizontalDivider(
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                        )
+                    }
+                }
             }
         }
     }
@@ -1263,17 +1386,51 @@ fun FolderMenuButton(
 
 @Composable
 fun EmptyState() {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+    var visible by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        visible = true
+    }
+
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn(animationSpec = tween(400)) + scaleIn(initialScale = 0.9f)
     ) {
-        Icon(Icons.Outlined.Inbox, contentDescription = null, modifier = Modifier.size(72.dp))
-        Spacer(modifier = Modifier.height(12.dp))
-        Text("暂无符合条件的配方", fontWeight = FontWeight.Medium)
-        Text("尝试调整搜索或过滤条件", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(100.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Outlined.Inbox,
+                    contentDescription = null,
+                    modifier = Modifier.size(56.dp),
+                    tint = MaterialTheme.colorScheme.outline
+                )
+            }
+            Spacer(modifier = Modifier.height(20.dp))
+            Text(
+                "暂无符合条件的配方",
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 18.sp,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                "尝试调整搜索或过滤条件",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodyMedium
+            )
+        }
     }
 }
 /**

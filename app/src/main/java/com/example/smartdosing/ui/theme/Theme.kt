@@ -11,6 +11,7 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.unit.times
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
@@ -100,6 +101,7 @@ fun SmartDosingTheme(
     dynamicColor: Boolean = false, // Disable dynamic color to enforce industrial theme
     content: @Composable () -> Unit
 ) {
+    val windowSize = rememberSmartWindowSize()
     val colorScheme = when {
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val context = LocalContext.current
@@ -122,11 +124,25 @@ fun SmartDosingTheme(
         }
     }
 
+    val spacingScale = windowSize.spacingScale
+    val adaptiveSpacing = SmartDosingSpacing(
+        none = DefaultSpacing.none,
+        xxs = DefaultSpacing.xxs * spacingScale,
+        xs = DefaultSpacing.xs * spacingScale,
+        sm = DefaultSpacing.sm * spacingScale,
+        md = DefaultSpacing.md * spacingScale,
+        lg = DefaultSpacing.lg * spacingScale,
+        xl = DefaultSpacing.xl * spacingScale,
+        xxl = DefaultSpacing.xxl * spacingScale,
+        giant = DefaultSpacing.giant * spacingScale
+    )
+
     CompositionLocalProvider(
-        LocalSpacing provides DefaultSpacing,
+        LocalSpacing provides adaptiveSpacing,
         LocalRadius provides DefaultRadius,
         LocalElevation provides DefaultElevation,
-        LocalExtendedColors provides extendedColors
+        LocalExtendedColors provides extendedColors,
+        LocalWindowSize provides windowSize
     ) {
         MaterialTheme(
             colorScheme = colorScheme,

@@ -27,6 +27,8 @@ import com.example.smartdosing.data.DosingRecordDetail
 import com.example.smartdosing.data.DosingRecordRepository
 import com.example.smartdosing.data.DosingRecordStatus
 import com.example.smartdosing.ui.theme.*
+import com.example.smartdosing.ui.theme.LocalWindowSize
+import com.example.smartdosing.ui.theme.SmartDosingWindowWidthClass
 
 /**
  * 投料记录页面
@@ -195,9 +197,10 @@ fun RecordsScreen(
                         )
                     ) {
                         Text("重试")
-                    }
-                }
-            }
+    }
+}
+
+}
 
             Spacer(modifier = Modifier.height(16.dp))
         }
@@ -468,6 +471,8 @@ fun RecordCard(
 ) {
     var cardError by remember { mutableStateOf<String?>(null) }
     val context = androidx.compose.ui.platform.LocalContext.current
+    val windowSize = LocalWindowSize.current
+    val isCompactWidth = windowSize.widthClass == SmartDosingWindowWidthClass.Compact
 
     if (cardError != null) {
         ErrorCard(
@@ -548,20 +553,120 @@ fun RecordCard(
                 )
             }
 
-            // 第三行：关键统计信息（水平排列）
+        // 第三行：关键统计信息（水平排列）
+        if (isCompactWidth) {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    CompactStatItem(
+                        label = "完成",
+                        value = "${record.completedMaterials}/${record.totalMaterials}",
+                        modifier = Modifier.weight(1f)
+                    )
+                    CompactStatItem(
+                        label = "偏差",
+                        value = formatPercent(record.averageDeviationPercent),
+                        valueColor = when {
+                            record.averageDeviationPercent > 5.0 -> MaterialTheme.colorScheme.error
+                            record.averageDeviationPercent > 2.0 -> Color(0xFFFF9800)
+                            else -> Color(0xFF4CAF50)
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    CompactStatItem(
+                        label = "超标",
+                        value = if (hasOverLimit) "${record.overLimitCount}" else "0",
+                        valueColor = if (hasOverLimit) MaterialTheme.colorScheme.error else Color(0xFF4CAF50),
+                        modifier = Modifier.weight(1f)
+                    )
+                    Spacer(modifier = Modifier.weight(1f))
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Button(
+                        onClick = {
+                            Log.e("RecordCard", "===== 详情按钮被点击了！记录ID: ${record.id} =====")
+                            onRecordClick(record.id)
+                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(38.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                        ),
+                        contentPadding = PaddingValues(vertical = 6.dp)
+                    ) {
+                        Text(
+                            text = "详情",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                    Button(
+                        onClick = {
+                            Log.d("RecordCard", "===== 重新配置按钮被点击，记录ID: ${record.id} =====")
+                            val recipeId = record.recipeId
+                            if (recipeId.isNullOrBlank()) {
+                                cardError = "无法重新配置：配方ID为空"
+                            } else {
+                                runCatching {
+                                    onReconfigure(recipeId, record.id)
+                                }.onFailure { e ->
+                                    Log.e("RecordCard", "重新配置失败", e)
+                                    cardError = "重新配置失败: ${e.message}"
+                                }
+                            }
+                        },
+                        enabled = record.recipeId != null,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(38.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (record.recipeId != null) Color(0xFF4CAF50) else MaterialTheme.colorScheme.surfaceVariant,
+                            contentColor = Color.White,
+                            disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                        ),
+                        contentPadding = PaddingValues(vertical = 6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = "重新配置",
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "重新配置",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+            }
+        } else {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // 完成率
                 CompactStatItem(
                     label = "完成",
                     value = "${record.completedMaterials}/${record.totalMaterials}",
                     modifier = Modifier.weight(1f)
                 )
-
-                // 平均偏差
                 CompactStatItem(
                     label = "偏差",
                     value = formatPercent(record.averageDeviationPercent),
@@ -572,8 +677,6 @@ fun RecordCard(
                     },
                     modifier = Modifier.weight(1f)
                 )
-
-                // 超标情况
                 CompactStatItem(
                     label = "超标",
                     value = if (hasOverLimit) "${record.overLimitCount}" else "0",
@@ -650,6 +753,8 @@ fun RecordCard(
             }
         }
     }
+}
+
 }
 
 /**

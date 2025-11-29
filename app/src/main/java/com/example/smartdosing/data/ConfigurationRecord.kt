@@ -20,7 +20,20 @@ data class ConfigurationRecord(
     val resultStatus: ConfigurationRecordStatus,
     val updatedAt: String,
     val tags: List<String> = emptyList(),
-    val note: String = ""
+    val note: String = "",
+    val materialDetails: List<ConfigurationMaterialRecord> = emptyList()
+)
+
+/**
+ * 配置材料记录，用于在配置记录详情中显示每个材料的投料情况
+ */
+data class ConfigurationMaterialRecord(
+    val sequence: Int,
+    val name: String,
+    val code: String,
+    val targetWeight: Double,
+    val actualWeight: Double,
+    val unit: String
 )
 
 enum class ConfigurationRecordStatus {
@@ -48,7 +61,8 @@ object ConfigurationRecordSampleData {
             resultStatus = ConfigurationRecordStatus.COMPLETED,
             updatedAt = "今天 14:10",
             tags = listOf("加急", "复核"),
-            note = "误差控制<2%，已通过"
+            note = "误差控制<2%，已通过",
+            materialDetails = materialDetailsFor("ST-2401")
         ),
         ConfigurationRecord(
             id = "CR-202401-002",
@@ -66,7 +80,8 @@ object ConfigurationRecordSampleData {
             resultStatus = ConfigurationRecordStatus.RUNNING,
             updatedAt = "今天 12:40",
             tags = listOf("常规单"),
-            note = "正在进行中，预计下午完成"
+            note = "正在进行中，预计下午完成",
+            materialDetails = materialDetailsFor("CL-2024B")
         ),
         ConfigurationRecord(
             id = "CR-202401-003",
@@ -84,7 +99,8 @@ object ConfigurationRecordSampleData {
             resultStatus = ConfigurationRecordStatus.IN_REVIEW,
             updatedAt = "昨天 19:30",
             tags = listOf("新单", "试样"),
-            note = "等待主管审核确认"
+            note = "等待主管审核确认",
+            materialDetails = materialDetailsFor("LC-0907")
         ),
         ConfigurationRecord(
             id = "CR-202401-004",
@@ -102,7 +118,8 @@ object ConfigurationRecordSampleData {
             resultStatus = ConfigurationRecordStatus.ARCHIVED,
             updatedAt = "上周五",
             tags = listOf("归档"),
-            note = "已归档"
+            note = "已归档",
+            materialDetails = materialDetailsFor("GQ-0512")
         ),
         ConfigurationRecord(
             id = "CR-202401-005",
@@ -120,7 +137,37 @@ object ConfigurationRecordSampleData {
             resultStatus = ConfigurationRecordStatus.RUNNING,
             updatedAt = "今天 09:50",
             tags = listOf("加急", "大客户"),
-            note = "配料进行中，注意精度"
+            note = "配料进行中，注意精度",
+            materialDetails = materialDetailsFor("HX-7721")
         )
     )
+
+    private fun materialDetailsFor(codePrefix: String): List<ConfigurationMaterialRecord> {
+        return listOf(
+            ConfigurationMaterialRecord(
+                sequence = 1,
+                name = "基液 A",
+                code = "$codePrefix-A",
+                targetWeight = 5.0,
+                actualWeight = 4.95,
+                unit = "kg"
+            ),
+            ConfigurationMaterialRecord(
+                sequence = 2,
+                name = "核心香料",
+                code = "$codePrefix-B",
+                targetWeight = 3.0,
+                actualWeight = 3.02,
+                unit = "kg"
+            ),
+            ConfigurationMaterialRecord(
+                sequence = 3,
+                name = "辅料",
+                code = "$codePrefix-C",
+                targetWeight = 4.5,
+                actualWeight = 4.48,
+                unit = "kg"
+            )
+        )
+    }
 }

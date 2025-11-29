@@ -33,7 +33,9 @@ import com.example.smartdosing.data.DatabaseRecipeRepository
 import com.example.smartdosing.data.Material as DataMaterial
 import com.example.smartdosing.data.Recipe
 import com.example.smartdosing.data.repository.ConfigurationRepositoryProvider
+import com.example.smartdosing.ui.theme.LocalWindowSize
 import com.example.smartdosing.ui.theme.SmartDosingTheme
+import com.example.smartdosing.ui.theme.SmartDosingWindowWidthClass
 import java.text.DecimalFormat
 
 /**
@@ -359,6 +361,8 @@ private fun MaterialConfigurationContent(
     onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val windowSize = LocalWindowSize.current
+    val useCompactLayout = windowSize.widthClass == SmartDosingWindowWidthClass.Compact
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -405,7 +409,8 @@ private fun MaterialConfigurationContent(
                     },
                     onEdit = {
                         onMaterialEdit(index)
-                    }
+                    },
+                    isCompact = useCompactLayout
                 )
             }
         }
@@ -423,7 +428,8 @@ private fun MaterialConfigurationContent(
             perfumer = perfumer,
             notes = notes,
             onSaveConfiguration = onSaveConfiguration,
-            onNavigateBack = onNavigateBack
+            onNavigateBack = onNavigateBack,
+            isCompactDevice = useCompactLayout
         )
     }
 }
@@ -510,7 +516,8 @@ private fun MaterialConfigCard(
     state: MaterialConfigState,
     onWeightChanged: (String) -> Unit,
     onConfirmed: () -> Unit,
-    onEdit: () -> Unit
+    onEdit: () -> Unit,
+    isCompact: Boolean
 ) {
     val cardColor = when {
         state.isConfirmed -> MaterialTheme.colorScheme.secondaryContainer
@@ -530,141 +537,218 @@ private fun MaterialConfigCard(
         else -> MaterialTheme.colorScheme.error
     }
 
+    val targetLabel = buildAnnotatedString {
+        append("目标 ")
+        withStyle(
+            SpanStyle(
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold
+            )
+        ) {
+            append("$targetWeightText g")
+        }
+    }
+    val actualSummary = buildAnnotatedString {
+        append("实际 ")
+        withStyle(
+            SpanStyle(
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold
+            )
+        ) {
+            append("${DecimalFormat("#.##").format(actualValue ?: 0.0)} g")
+        }
+        deviation?.let {
+            append(" · Δ ")
+            withStyle(
+                SpanStyle(
+                    color = deviationColor,
+                    fontWeight = FontWeight.Bold
+                )
+            ) {
+                append("${DecimalFormat("#.##").format(it)} g")
+            }
+            deviationPercent?.let { percent ->
+                append(" (${DecimalFormat("#.##").format(percent)}%)")
+            }
+        }
+    }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = cardColor),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 10.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(32.dp)
-                    .background(
-                        color = if (state.isConfirmed) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.outline
-                        },
-                        shape = RoundedCornerShape(8.dp)
-                    ),
-                contentAlignment = Alignment.Center
+        val containerModifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 10.dp)
+        if (isCompact) {
+            Column(
+                modifier = containerModifier,
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                if (state.isConfirmed) {
-                    Icon(
-                        Icons.Default.Check,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onPrimary,
-                        modifier = Modifier.size(18.dp)
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    MaterialIndexBadge(index = index, isConfirmed = state.isConfirmed)
+                    Column(
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(
+                            text = state.material.name,
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = "编码: $displayCode",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+                Text(
+                    text = targetLabel,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                if (!state.isConfirmed) {
+                    OutlinedTextField(
+                        value = state.actualWeight,
+                        onValueChange = onWeightChanged,
+                        label = { Text("实际重量") },
+                        singleLine = true,
+                        suffix = { Text("g") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        textStyle = MaterialTheme.typography.titleMedium,
+                        isError = state.hasError,
+                        modifier = Modifier.fillMaxWidth()
                     )
+                    FilledTonalButton(
+                        onClick = onConfirmed,
+                        modifier = Modifier.fillMaxWidth(),
+                        contentPadding = PaddingValues(vertical = 10.dp)
+                    ) {
+                        Text("确认")
+                    }
                 } else {
                     Text(
-                        text = index.toString(),
-                        color = Color.White,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold
+                        text = actualSummary,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = deviationColor
+                    )
+                    TextButton(
+                        onClick = onEdit,
+                        modifier = Modifier.align(Alignment.End)
+                    ) {
+                        Text("调整")
+                    }
+                }
+            }
+        } else {
+            Row(
+                modifier = containerModifier,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                MaterialIndexBadge(index = index, isConfirmed = state.isConfirmed)
+
+                Column(
+                    modifier = Modifier.weight(1.5f)
+                ) {
+                    Text(
+                        text = state.material.name,
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = "编码: $displayCode",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
-            }
 
-            Column(
-                modifier = Modifier.weight(1.5f)
-            ) {
                 Text(
-                    text = state.material.name,
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = "编码: $displayCode",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-
-            Text(
-                text = buildAnnotatedString {
-                    append("目标 ")
-                    withStyle(
-                        SpanStyle(
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Bold
-                        )
-                    ) {
-                        append("$targetWeightText g")
-                    }
-                },
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.widthIn(min = 90.dp)
-            )
-
-            if (!state.isConfirmed) {
-                OutlinedTextField(
-                    value = state.actualWeight,
-                    onValueChange = onWeightChanged,
-                    label = { Text("实际") },
-                    singleLine = true,
-                    suffix = { Text("g") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    textStyle = MaterialTheme.typography.titleMedium,
-                    isError = state.hasError,
-                    modifier = Modifier.widthIn(min = 90.dp, max = 120.dp)
-                )
-
-                FilledTonalButton(
-                    onClick = onConfirmed,
-                    modifier = Modifier.defaultMinSize(minWidth = 72.dp, minHeight = 44.dp),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp)
-                ) {
-                    Text("确认")
-                }
-            } else {
-                Text(
-                    text = buildAnnotatedString {
-                        append("实际 ")
-                        withStyle(
-                            SpanStyle(
-                                color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.Bold
-                            )
-                        ) {
-                            append("${DecimalFormat("#.##").format(actualValue ?: 0.0)} g")
-                        }
-                        deviation?.let {
-                            append(" · Δ ")
-                            withStyle(
-                                SpanStyle(
-                                    color = deviationColor,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            ) {
-                                append("${DecimalFormat("#.##").format(it)} g")
-                            }
-                            deviationPercent?.let { percent ->
-                                append(" (${DecimalFormat("#.##").format(percent)}%)")
-                            }
-                        }
-                    },
+                    text = targetLabel,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = deviationColor,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1.2f)
+                    modifier = Modifier.widthIn(min = 90.dp)
                 )
 
-                TextButton(onClick = onEdit) {
-                    Text("调整")
+                if (!state.isConfirmed) {
+                    OutlinedTextField(
+                        value = state.actualWeight,
+                        onValueChange = onWeightChanged,
+                        label = { Text("实际") },
+                        singleLine = true,
+                        suffix = { Text("g") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        textStyle = MaterialTheme.typography.titleMedium,
+                        isError = state.hasError,
+                        modifier = Modifier.widthIn(min = 90.dp, max = 120.dp)
+                    )
+
+                    FilledTonalButton(
+                        onClick = onConfirmed,
+                        modifier = Modifier.defaultMinSize(minWidth = 72.dp, minHeight = 44.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp)
+                    ) {
+                        Text("确认")
+                    }
+                } else {
+                    Text(
+                        text = actualSummary,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = deviationColor,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1.2f)
+                    )
+
+                    TextButton(onClick = onEdit) {
+                        Text("调整")
+                    }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun MaterialIndexBadge(index: Int, isConfirmed: Boolean) {
+    Box(
+        modifier = Modifier
+            .size(32.dp)
+            .background(
+                color = if (isConfirmed) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.outline
+                },
+                shape = RoundedCornerShape(8.dp)
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        if (isConfirmed) {
+            Icon(
+                Icons.Default.Check,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onPrimary,
+                modifier = Modifier.size(18.dp)
+            )
+        } else {
+            Text(
+                text = index.toString(),
+                color = Color.White,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold
+            )
         }
     }
 }
@@ -683,63 +767,85 @@ private fun BottomActions(
     perfumer: String,
     notes: String,
     onSaveConfiguration: (MaterialConfigurationData) -> Unit,
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    isCompactDevice: Boolean
 ) {
     val allConfirmed = materialStates.isNotEmpty() && materialStates.all { it.isConfirmed }
+    val onSave: () -> Unit = {
+        recipe?.let { r ->
+            val configData = MaterialConfigurationData(
+                recipeId = r.id,
+                recipeCode = r.code,
+                recipeName = r.name,
+                taskId = taskId,
+                recordId = recordId,
+                customer = customer,
+                salesOwner = salesOwner,
+                perfumer = perfumer,
+                notes = notes,
+                materials = materialStates.mapIndexed { idx, state ->
+                    val actualWeight = state.actualWeight.toDoubleOrNull() ?: 0.0
+                    val deviation = actualWeight - state.material.weight
+                    val deviationPercentage = if (state.material.weight == 0.0) {
+                        0.0
+                    } else {
+                        (deviation / state.material.weight) * 100
+                    }
+                    val materialCode = state.material.code.takeIf { it.isNotBlank() } ?: "RD-${idx + 1}"
 
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        OutlinedButton(
-            onClick = onNavigateBack,
-            modifier = Modifier.weight(1f)
-        ) {
-            Text("返回")
-        }
-
-        Button(
-            onClick = {
-                recipe?.let { r ->
-                    val configData = MaterialConfigurationData(
-                        recipeId = r.id,
-                        recipeCode = r.code,
-                        recipeName = r.name,
-                        taskId = taskId,
-                        recordId = recordId,
-                        customer = customer,
-                        salesOwner = salesOwner,
-                        perfumer = perfumer,
-                        notes = notes,
-                        materials = materialStates.mapIndexed { idx, state ->
-                            val actualWeight = state.actualWeight.toDoubleOrNull() ?: 0.0
-                            val deviation = actualWeight - state.material.weight
-                            // 避免除数为 0 导致的 NaN，空重量时默认 0%
-                            val deviationPercentage = if (state.material.weight == 0.0) {
-                                0.0
-                            } else {
-                                (deviation / state.material.weight) * 100
-                            }
-                            val materialCode = state.material.code.takeIf { it.isNotBlank() } ?: "RD-${idx + 1}"
-
-                            MaterialConfigResult(
-                                materialName = state.material.name,
-                                targetWeight = state.material.weight,
-                                actualWeight = actualWeight,
-                                deviation = deviation,
-                                deviationPercentage = deviationPercentage,
-                                unit = "g",
-                                materialCode = materialCode
-                            )
-                        }
+                    MaterialConfigResult(
+                        materialName = state.material.name,
+                        targetWeight = state.material.weight,
+                        actualWeight = actualWeight,
+                        deviation = deviation,
+                        deviationPercentage = deviationPercentage,
+                        unit = "g",
+                        materialCode = materialCode
                     )
-                    onSaveConfiguration(configData)
                 }
-            },
-            enabled = allConfirmed,
-            modifier = Modifier.weight(2f)
+            )
+            onSaveConfiguration(configData)
+        }
+    }
+
+    if (isCompactDevice) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Text(if (allConfirmed) "保存配置" else "请完成所有材料配置")
+            OutlinedButton(
+                onClick = onNavigateBack,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("返回")
+            }
+            Button(
+                onClick = onSave,
+                enabled = allConfirmed,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(if (allConfirmed) "保存配置" else "请完成所有材料配置")
+            }
+        }
+    } else {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            OutlinedButton(
+                onClick = onNavigateBack,
+                modifier = Modifier.weight(1f)
+            ) {
+                Text("返回")
+            }
+
+            Button(
+                onClick = onSave,
+                enabled = allConfirmed,
+                modifier = Modifier.weight(2f)
+            ) {
+                Text(if (allConfirmed) "保存配置" else "请完成所有材料配置")
+            }
         }
     }
 }

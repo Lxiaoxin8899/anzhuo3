@@ -103,6 +103,154 @@ print(response.json())
 
 ---
 
+## 🔁 UID配方同步命令
+
+新增的 UID 配方同步接口允许在同一局域网内，通过指定接收端 UID 直接推送完整配方，无需手动上传文件。
+
+### 使用步骤
+1. 在 Android 应用的「设备管理」页或调用 `GET /api/device/info` 获取本机 UID。
+2. 确认发送端可以访问 `http://[接收端IP]:8080`。
+3. 发送以下 HTTP 命令完成同步：
+
+```bash
+curl -X POST http://[接收端IP]:8080/api/transfer/recipe-sync \
+  -H "Content-Type: application/json" \
+  -d '{
+        "transferId": "SYNC-20241128001",
+        "targetUID": "SD-ABCD1234",
+        "senderUID": "SD-SERVER01",
+        "senderName": "配方服务器",
+        "senderIP": "192.168.1.20",
+        "timestamp": 1732766400000,
+        "overwrite": true,
+        "recipe": {
+            "code": "LAN-DEMO-001",
+            "name": "局域网演示配方",
+            "category": "演示",
+            "subCategory": "LAN",
+            "customer": "内部验证",
+            "description": "通过UID同步下发的配方",
+            "totalWeight": 1000,
+            "materials": [
+                {"name": "原料A", "code": "MAT-A", "weight": 600, "unit": "g", "sequence": 1, "notes": "主料"},
+                {"name": "原料B", "code": "MAT-B", "weight": 400, "unit": "g", "sequence": 2}
+            ],
+            "tags": ["LAN", "SYNC"]
+        }
+      }'
+```
+
+### 字段说明
+- `transferId`：幂等用的唯一流水号，建议使用时间戳或UUID。
+- `targetUID`：接收端在设备页展示的 UID，必须完全一致，否则请求会被拒绝。
+- `senderUID` / `senderName`：标识发送端，会自动记录到“授权设备”列表中。
+- `overwrite`：若目标设备上存在同编码配方且需要覆盖，请设为 `true`；默认为 `false`。
+- `recipe`：完整配方数据，结构与 CSV/Excel 导入模板一致，`materials` 顺序即投料顺序。
+
+### 返回结果
+成功时返回：
+```json
+{
+  "success": true,
+  "message": "配方同步成功",
+  "data": {
+    "transferId": "SYNC-20241128001",
+    "recipeId": "SYNC-17327664",
+    "recipeCode": "LAN-DEMO-001",
+    "operation": "UPDATED",
+    "receiverUID": "SD-ABCD1234",
+    "receiverName": "研发投料平板",
+    "timestamp": 1732766405123
+  }
+}
+```
+
+### 常见提示
+- 提示“目标UID不匹配”：请确认 `targetUID` 输入正确，或重新复制设备页展示的 UID。
+- 返回 `409 Conflict`：表示配方已存在且未启用覆盖，请将 `overwrite` 设为 `true` 再次同步。
+- 同步成功后，可立即在 Web/Android 的“配方管理”中看到新配方。
+
+---
+
+## 🔄 局域网任务 JSON 传输（schemaVersion 1.0）
+
+`POST /api/transfer/task` 现已支持统一的 PC 端 JSON 提案结构，适用于自动化推送“配方 + 任务”：
+
+```json
+{
+  "schemaVersion": "1.0",
+  "transferId": "TF-1732712345678-ABCD",
+  "timestamp": 1732712345678,
+  "sender": {
+    "uid": "PC-AB12CD34",
+    "name": "调香工作站",
+    "ip": "192.168.2.21",
+    "appVersion": "1.5.0"
+  },
+  "task": {
+    "title": "批量任务 - 2025/11/28",
+    "quantity": 500,
+    "unit": "g",
+    "priority": "NORMAL",
+    "deadline": "2025-11-30T12:00:00+08:00",
+    "customer": "云雾科技"
+  },
+  "recipe": {
+    "id": "RE-20231128001",
+    "code": "FC-2023-001",
+    "name": "热带果茶",
+    "category": "水果烟油",
+    "customer": "云雾科技",
+    "perfumer": "Ava Chen",
+    "totalWeight": 500,
+    "materials": [
+      { "id": "MAT-001", "name": "尼古丁基液", "weight": 5, "unit": "g", "sequence": 1 },
+      { "id": "MAT-023", "name": "菠萝香精", "weight": 8, "unit": "g", "sequence": 2 }
+    ]
+  }
+}
+```
+
+### 接收端校验与处理
+- 仅支持 `schemaVersion = "1.0"`，其他版本会返回 `UNSUPPORTED_VERSION`。
+- `transferId` 为幂等键，重复请求返回 `DUPLICATE_TRANSFER`。
+- `task.quantity > 0` 且 `recipe.materials` 非空；否则 `FIELD_INVALID/FIELD_MISSING`。
+- 接收端会自动落库 `recipe`，并将 `schemaVersion/appVersion/senderIP` 保存到 `received_tasks` 表深度审计。
+- 若 `task.quantity` 与 `recipe.totalWeight` 差异超过 5%，响应将包含 `warningCodes = ["QUANTITY_MISMATCH"]`。
+
+### 响应示例
+
+```json
+{
+  "success": true,
+  "message": "任务接收成功",
+  "data": {
+    "success": true,
+    "message": "任务接收成功",
+    "transferId": "TF-1732712345678-ABCD",
+    "receivedTaskId": "RT-1A2B3C4D",
+    "receiverUID": "SD-ABCD1234",
+    "receiverName": "研发投料平板",
+    "timestamp": 1732712400000,
+    "schemaVersion": "1.0",
+    "errorCode": null,
+    "warningCodes": []
+  }
+}
+```
+
+常见 `errorCode`：
+
+| 错误码 | 说明 |
+|--------|------|
+| `UNSUPPORTED_VERSION` | schemaVersion 不受支持 |
+| `FIELD_INVALID` / `FIELD_MISSING` | 字段结构非法 |
+| `DUPLICATE_TRANSFER` | transferId 重复 |
+| `RECIPE_EXISTS` | 目标配方编码已存在且不允许覆盖 |
+| `UNKNOWN_ERROR` | 其他内部异常 |
+
+---
+
 ## 📋 CSV文件格式规范
 
 ### 基础格式
