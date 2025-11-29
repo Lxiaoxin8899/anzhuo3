@@ -92,12 +92,12 @@ class MainActivity : ComponentActivity() {
                 showToast("TTS语音功能已就绪 ($ttsType)")
             } else {
                 Log.w("TTS", "⚠️ TTS管理器工厂初始化失败")
-                showToast("TTS功能初始化失败，请检查设置")
+                // 启动阶段只记录日志，避免反复弹窗打扰用户
             }
-            
+
         } catch (e: Exception) {
             Log.e("TTS", "❌ TTS管理器工厂初始化异常", e)
-            showToast("TTS初始化异常: ${e.message}")
+            // 保持静默失败，后续可在设置页主动检测
         }
     }
     
@@ -117,25 +117,22 @@ class MainActivity : ComponentActivity() {
      * 备用TTS初始化
      */
     private fun initializeFallbackTTS() {
-        Log.d("TTS", "使用备用TTS初始化方案")
-        
+        Log.d("TTS", "????TTS?????")
+
         testTts = TextToSpeech(this) { status ->
             if (status != TextToSpeech.SUCCESS) {
-                Log.e("TTS", "❌ 备用TTS初始化失败: $status")
-                showToast("TTS功能不可用，请检查设备设置")
+                Log.e("TTS", "? ??TTS?????: $status")
                 return@TextToSpeech
             }
-            
-            Log.d("TTS", "✅ 备用TTS初始化成功")
-            
-            // 尝试设置中文语言
+
+            Log.d("TTS", "? ??TTS?????")
+
             val langResult = testTts?.setLanguage(Locale.CHINA)
             if (langResult != null && langResult >= TextToSpeech.LANG_AVAILABLE) {
-                testTts?.speak("投料系统已经就绪", TextToSpeech.QUEUE_FLUSH, null, "fallback_test")
-                showToast("TTS功能已启用（备用方案）")
+                testTts?.speak("????????", TextToSpeech.QUEUE_FLUSH, null, "fallback_test")
+                showToast("TTS???????????")
             } else {
-                Log.w("TTS", "备用TTS不支持中文")
-                showToast("TTS不支持中文语言")
+                Log.w("TTS", "??TTS?????")
             }
         }
     }
