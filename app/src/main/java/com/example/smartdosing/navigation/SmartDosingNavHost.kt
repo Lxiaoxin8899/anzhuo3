@@ -16,15 +16,17 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import com.example.smartdosing.data.ConfigurationMaterialRecord
 import com.example.smartdosing.data.ConfigurationRecord
 import com.example.smartdosing.data.ConfigurationRecordStatus
+import com.example.smartdosing.data.TaskStatus
 import com.example.smartdosing.data.repository.ConfigurationRepositoryProvider
+import com.example.smartdosing.ui.screens.device.DeviceInfoScreen
 import com.example.smartdosing.ui.screens.dosing.MaterialConfigurationData
 import com.example.smartdosing.ui.screens.dosing.MaterialConfigurationScreen
 import com.example.smartdosing.ui.screens.home.HomeScreen
 import com.example.smartdosing.ui.screens.records.ConfigurationRecordDetailScreen
 import com.example.smartdosing.ui.screens.records.ConfigurationRecordsScreen
-import com.example.smartdosing.ui.screens.records.RecordsScreen
 import com.example.smartdosing.ui.screens.recipes.RecipesScreen
 import com.example.smartdosing.ui.screens.settings.SettingsScreen
 import com.example.smartdosing.ui.screens.tasks.TaskCenterScreen
@@ -76,11 +78,11 @@ fun SmartDosingNavHost(
                 onNavigateToConfigurationRecords = {
                     navController.navigate(SmartDosingRoutes.CONFIGURATION_RECORDS)
                 },
-                onNavigateToRecords = {
-                    navController.navigate(SmartDosingRoutes.RECORDS)
-                },
                 onNavigateToSettings = {
                     navController.navigate(SmartDosingRoutes.SETTINGS)
+                },
+                onNavigateToDeviceInfo = {
+                    navController.navigate(SmartDosingRoutes.DEVICE_INFO)
                 },
                 onImportRecipe = {
                     navController.navigateToMaterialConfiguration("import_csv")
@@ -112,18 +114,6 @@ fun SmartDosingNavHost(
                 onNavigateToRecipeDetail = { /* 详情页暂由列表内部处理 */ },
                 onNavigateToMaterialConfiguration = { recipeId ->
                     navController.navigateToMaterialConfiguration(recipeId)
-                }
-            )
-        }
-
-        composable(SmartDosingRoutes.RECORDS) {
-            RecordsScreen(
-                onNavigateToRecordDetail = { /* 使用内部详情抽屉，无需额外路由 */ },
-                onNavigateToMaterialConfiguration = { recipeId, recordId ->
-                    navController.navigateToMaterialConfiguration(
-                        recipeId = recipeId,
-                        recordId = recordId
-                    )
                 }
             )
         }
@@ -219,6 +209,12 @@ fun SmartDosingNavHost(
         composable(SmartDosingRoutes.SETTINGS) {
             SettingsScreen()
         }
+
+        composable(SmartDosingRoutes.DEVICE_INFO) {
+            DeviceInfoScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
     }
 }
 
@@ -248,9 +244,14 @@ private suspend fun saveMaterialConfiguration(
     configData: MaterialConfigurationData,
     onSuccess: () -> Unit
 ) {
-    val repository = ConfigurationRepositoryProvider.recordRepository
+    val recordRepository = ConfigurationRepositoryProvider.recordRepository
+    val taskRepository = ConfigurationRepositoryProvider.taskRepository
     runCatching {
-        repository.createRecord(configData.toConfigurationRecord())
+        recordRepository.createRecord(configData.toConfigurationRecord()).also {
+            if (configData.taskId.isNotBlank()) {
+                taskRepository.updateTaskStatus(configData.taskId, TaskStatus.COMPLETED)
+            }
+        }
     }.onSuccess {
         withContext(Dispatchers.Main) {
             Toast.makeText(context, "研发配置已入库", Toast.LENGTH_SHORT).show()
