@@ -276,6 +276,18 @@ private fun MaterialConfigurationData.toConfigurationRecord(): ConfigurationReco
     val totalActual = materials.sumOf { if (it.actualWeight > 0) it.actualWeight else it.targetWeight }
     val unit = materials.firstOrNull()?.unit ?: "g"
     val timestamp = SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).format(Date(now))
+    // 将材料配置数据转换成有序的材料明细，便于详情页和后端还原最终结果
+    val materialDetails = materials.mapIndexed { index, item ->
+        ConfigurationMaterialRecord(
+            sequence = index + 1,
+            name = item.materialName,
+            code = item.materialCode.takeIf { it.isNotBlank() }
+                ?: "${recipeCode.ifBlank { "RND" }}-${index + 1}",
+            targetWeight = item.targetWeight,
+            actualWeight = if (item.actualWeight > 0) item.actualWeight else item.targetWeight,
+            unit = item.unit.ifBlank { unit }
+        )
+    }
 
     return ConfigurationRecord(
         id = defaultId,
@@ -293,6 +305,7 @@ private fun MaterialConfigurationData.toConfigurationRecord(): ConfigurationReco
         resultStatus = ConfigurationRecordStatus.COMPLETED,
         updatedAt = timestamp,
         tags = materials.take(3).map { it.materialName },
-        note = notes
+        note = notes,
+        materialDetails = materialDetails
     )
 }
