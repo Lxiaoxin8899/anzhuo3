@@ -49,7 +49,13 @@ data class ConfigurationTaskDto(
     val statusUpdatedAt: String,
     val targetDevices: List<String>,
     val note: String,
-    val tags: List<String>
+    val tags: List<String>,
+    // 接单相关字段
+    val acceptedBy: String? = null,
+    val acceptedAt: String? = null,
+    // 执行时间跟踪
+    val startedAt: String? = null,
+    val completedAt: String? = null
 )
 
 data class ConfigurationRecordDto(
@@ -105,6 +111,17 @@ interface ConfigurationTaskApi {
     suspend fun fetchTasks(status: TaskStatus? = null): List<ConfigurationTaskDto>
     suspend fun fetchTask(taskId: String): ConfigurationTaskDto?
     suspend fun updateTaskStatus(taskId: String, status: TaskStatus): ConfigurationTaskDto?
+    // 接单方法
+    suspend fun acceptTask(taskId: String, acceptedBy: String): ConfigurationTaskDto?
+    // 上位机状态汇报
+    suspend fun reportTaskProgress(
+        taskId: String,
+        status: TaskStatus,
+        acceptedBy: String? = null,
+        startedAt: String? = null,
+        completedAt: String? = null,
+        note: String? = null
+    ): Boolean
 }
 
 interface ConfigurationRecordApi {
@@ -133,6 +150,16 @@ private fun retrofit(baseUrl: String, client: OkHttpClient): Retrofit = Retrofit
 
 private data class TaskStatusUpdateDto(val status: TaskStatus)
 private data class RecordStatusUpdateDto(val status: ConfigurationRecordStatus, val note: String? = null)
+// 接单相关DTO
+private data class TaskAcceptDto(val acceptedBy: String)
+private data class TaskProgressReportDto(
+    val taskId: String,
+    val status: TaskStatus,
+    val acceptedBy: String? = null,
+    val startedAt: String? = null,
+    val completedAt: String? = null,
+    val note: String? = null
+)
 
 private interface ConfigurationTaskService {
     @GET("tasks")
@@ -146,6 +173,20 @@ private interface ConfigurationTaskService {
         @Path("id") taskId: String,
         @Body body: TaskStatusUpdateDto
     ): ApiResponse<ConfigurationTaskDto>
+
+    // 接单接口
+    @PATCH("tasks/{id}/accept")
+    suspend fun acceptTask(
+        @Path("id") taskId: String,
+        @Body body: TaskAcceptDto
+    ): ApiResponse<ConfigurationTaskDto>
+
+    // 上位机状态汇报接口
+    @POST("tasks/{id}/progress")
+    suspend fun reportProgress(
+        @Path("id") taskId: String,
+        @Body body: TaskProgressReportDto
+    ): ApiResponse<Boolean>
 }
 
 private interface ConfigurationRecordService {
@@ -195,6 +236,41 @@ class HttpConfigurationTaskApi(
             val response = service.updateTask(taskId, TaskStatusUpdateDto(status))
             if (response.success) response.data else null
         }.getOrNull()
+
+    override suspend fun acceptTask(taskId: String, acceptedBy: String): ConfigurationTaskDto? =
+        try {
+            val response = service.acceptTask(taskId, TaskAcceptDto(acceptedBy))
+            if (response.success) {
+                response.data
+            } else {
+                android.util.Log.e("ConfigurationRemoteApi", "acceptTask failed: ${response.message}")
+                null
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("ConfigurationRemoteApi", "acceptTask exception", e)
+            null
+        }
+
+    override suspend fun reportTaskProgress(
+        taskId: String,
+        status: TaskStatus,
+        acceptedBy: String?,
+        startedAt: String?,
+        completedAt: String?,
+        note: String?
+    ): Boolean = try {
+        val response = service.reportProgress(
+            taskId,
+            TaskProgressReportDto(taskId, status, acceptedBy, startedAt, completedAt, note)
+        )
+        if (!response.success) {
+            android.util.Log.e("ConfigurationRemoteApi", "reportTaskProgress failed: ${response.message}")
+        }
+        response.success && (response.data ?: false)
+    } catch (e: Exception) {
+        android.util.Log.e("ConfigurationRemoteApi", "reportTaskProgress exception", e)
+        false
+    }
 }
 
 class HttpConfigurationRecordApi(
@@ -254,9 +330,48 @@ class FakeConfigurationTaskApi : ConfigurationTaskApi {
         delay(120)
         val index = tasks.indexOfFirst { it.id == taskId }
         if (index < 0) return null
-        val updated = tasks[index].copy(status = status)
+        val now = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
+        val updated = tasks[index].copy(
+            status = status,
+            statusUpdatedAt = now
+        )
         tasks[index] = updated
         return updated
+    }
+
+    override suspend fun acceptTask(taskId: String, acceptedBy: String): ConfigurationTaskDto? {
+        delay(150)
+        val index = tasks.indexOfFirst { it.id == taskId }
+        if (index < 0) return null
+        val now = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
+        val updated = tasks[index].copy(
+            status = TaskStatus.IN_PROGRESS,
+            acceptedBy = acceptedBy,
+            acceptedAt = now,
+            statusUpdatedAt = now
+        )
+        tasks[index] = updated
+        // 模拟上报状态
+        reportTaskProgress(taskId, TaskStatus.IN_PROGRESS, acceptedBy, null, null, "任务已接单")
+        return updated
+    }
+
+    override suspend fun reportTaskProgress(
+        taskId: String,
+        status: TaskStatus,
+        acceptedBy: String?,
+        startedAt: String?,
+        completedAt: String?,
+        note: String?
+    ): Boolean {
+        delay(50)
+        // Fake API 模拟上报，记录日志
+        println("[上位机汇报] 任务ID: $taskId, 状态: $status")
+        acceptedBy?.let { println("  接单人: $it") }
+        startedAt?.let { println("  开始时间: $it") }
+        completedAt?.let { println("  完成时间: $it") }
+        note?.let { println("  备注: $it") }
+        return true
     }
 }
 
@@ -365,7 +480,11 @@ fun ConfigurationTaskDto.toEntity(): ConfigurationTask = ConfigurationTask(
     statusUpdatedAt = statusUpdatedAt,
     targetDevices = targetDevices,
     note = note,
-    tags = tags
+    tags = tags,
+    acceptedBy = acceptedBy,
+    acceptedAt = acceptedAt,
+    startedAt = startedAt,
+    completedAt = completedAt
 )
 
 fun ConfigurationTask.toDto(): ConfigurationTaskDto = ConfigurationTaskDto(
@@ -388,7 +507,11 @@ fun ConfigurationTask.toDto(): ConfigurationTaskDto = ConfigurationTaskDto(
     statusUpdatedAt = statusUpdatedAt,
     targetDevices = targetDevices,
     note = note,
-    tags = tags
+    tags = tags,
+    acceptedBy = acceptedBy,
+    acceptedAt = acceptedAt,
+    startedAt = startedAt,
+    completedAt = completedAt
 )
 
 fun ConfigurationRecordDto.toEntity(): ConfigurationRecord = ConfigurationRecord(

@@ -91,6 +91,17 @@ fun TaskCenterScreen(
     var loadError by remember { mutableStateOf<String?>(null) }
     var selectedStatus by remember { mutableStateOf<TaskStatus?>(null) }
     val scope = rememberCoroutineScope()
+    
+    // 接单确认对话框状态
+    var showAcceptDialog by remember { mutableStateOf(false) }
+    var taskToAccept by remember { mutableStateOf<ConfigurationTask?>(null) }
+    
+    // Snackbar状态
+    var snackbarMessage by remember { mutableStateOf<String?>(null) }
+    var showSnackbar by remember { mutableStateOf(false) }
+    
+    // 获取当前用户（这里暂时硬编码，实际应该从用户session获取）
+    val currentUser = "操作员" // TODO: 从实际的用户session或preferences获取
 
     fun refreshTasks() {
         scope.launch {
@@ -142,6 +153,15 @@ fun TaskCenterScreen(
                     containerColor = MaterialTheme.colorScheme.surface
                 )
             )
+        },
+        snackbarHost = {
+            if (showSnackbar) {
+                androidx.compose.material3.Snackbar(
+                    modifier = Modifier.padding(16.dp)
+                ) {
+                    Text(snackbarMessage ?: "")
+                }
+            }
         }
     ) { innerPadding ->
         Column(
@@ -170,11 +190,9 @@ fun TaskCenterScreen(
                                 task = task,
                                 index = index,
                                 onAccept = {
-                                    scope.launch {
-                                        repository.updateTaskStatus(task.id, TaskStatus.IN_PROGRESS)
-                                        refreshTasks()
-                                    }
-                                    onAcceptTask(task)
+                                    // 显示确认对话框
+                                    taskToAccept = task
+                                    showAcceptDialog = true
                                 },
                                 onStart = {
                                     scope.launch {
@@ -190,6 +208,64 @@ fun TaskCenterScreen(
                         }
                     }
                 }
+            }
+        }
+        
+        // 接单确认对话框
+        if (showAcceptDialog && taskToAccept != null) {
+            AcceptTaskConfirmDialog(
+                task = taskToAccept!!,
+                onConfirm = {
+                    scope.launch {
+                        // 1. 尝试调用接口接单
+                        var acceptedTask = repository.acceptTask(taskToAccept!!.id, currentUser)
+                        
+                        // 2. 如果接口失败（返回null），则进行本地逻辑接单（离线/伪接单）
+                        if (acceptedTask == null) {
+                            // 构造一个本地更新后的任务对象
+                            acceptedTask = taskToAccept!!.copy(
+                                status = TaskStatus.IN_PROGRESS,
+                                acceptedBy = currentUser,
+                                acceptedAt = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
+                            )
+                            // 提示用户（可选：提示是离线接单）
+                            snackbarMessage = "已接单 (本地模式)"
+                        } else {
+                            snackbarMessage = "已成功接单：${acceptedTask.recipeName}"
+                        }
+
+                        // 3. 更新UI状态
+                        showSnackbar = true
+                        
+                        // 手动更新当前列表中的该任务状态，实现“即时响应”
+                        tasks = tasks.map { 
+                            if (it.id == acceptedTask!!.id) acceptedTask!! else it 
+                        }
+                        
+                        // 触发回调
+                        onAcceptTask(acceptedTask!!)
+
+                        // 4. 关闭对话框
+                        showAcceptDialog = false
+                        taskToAccept = null
+                        
+                        // 5. 尝试刷新（如果是真联网成功，刷新会获取最新状态；如果失败，刷新可能会重置状态，所以最好仅在成功时刷新，或者不仅赖刷新）
+                        // 为防止刷新后状态回退（如果后端没存上），暂不强制立即刷新整个列表，而是信赖上面的本地修改。
+                        // refreshTasks() 
+                    }
+                },
+                onDismiss = {
+                    showAcceptDialog = false
+                    taskToAccept = null
+                }
+            )
+        }
+        
+        // Snackbar自动隐藏
+        LaunchedEffect(showSnackbar) {
+            if (showSnackbar) {
+                kotlinx.coroutines.delay(3000)
+                showSnackbar = false
             }
         }
     }
@@ -568,6 +644,8 @@ private fun TaskCard(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            val isAccepted = task.status != TaskStatus.DRAFT && task.status != TaskStatus.READY
+            
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -575,7 +653,7 @@ private fun TaskCard(
             ) {
                 PriorityTag(priority = task.priority)
                 Text(
-                    text = task.title.ifBlank { task.recipeName },
+                    text = if (isAccepted) task.title.ifBlank { task.recipeName } else "待接单任务",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.weight(1f),
@@ -595,17 +673,17 @@ private fun TaskCard(
             ) {
                 InfoRow(
                     title = "编码",
-                    value = task.recipeCode,
-                    secondary = "数量 ${task.quantity} ${task.unit}"
+                    value = if (isAccepted) task.recipeCode else "***",
+                    secondary = if (isAccepted) "数量 ${task.quantity} ${task.unit}" else "数量 ***"
                 )
                 InfoRow(
                     title = "调香师",
-                    value = task.perfumer.ifBlank { task.requestedBy.ifBlank { "未指定" } },
-                    secondary = "客户 ${task.customer.ifBlank { "未指定" }}"
+                    value = if (isAccepted) (task.perfumer.ifBlank { task.requestedBy.ifBlank { "未指定" } }) else "***",
+                    secondary = if (isAccepted) "客户 ${task.customer.ifBlank { "未指定" }}" else "客户 ***"
                 )
                 InfoRow(
                     title = "业务员",
-                    value = task.salesOwner.ifBlank { "未指定" },
+                    value = if (isAccepted) task.salesOwner.ifBlank { "未指定" } else "***",
                     secondary = "截止 ${task.deadline.ifBlank { "待安排" }}"
                 )
             }
@@ -823,4 +901,118 @@ private fun TaskCenterScreenPreview() {
     SmartDosingTheme {
         TaskCenterScreen()
     }
+}
+
+/**
+ * 接单确认对话框
+ */
+@Composable
+private fun AcceptTaskConfirmDialog(
+    task: ConfigurationTask,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                "确认接单",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    "您确定要接这个任务吗？",
+                    style = MaterialTheme.typography.bodyLarge
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                "任务名称",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                task.recipeName,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                "配方编码",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                task.recipeCode,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                "配置数量",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                "${task.quantity} ${task.unit}",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                "截止时间",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                task.deadline.ifBlank { "待安排" },
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = if (task.deadline.contains("今天")) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            FilledTonalButton(
+                onClick = onConfirm
+            ) {
+                Text("确认接单")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消")
+            }
+        }
+    )
 }
