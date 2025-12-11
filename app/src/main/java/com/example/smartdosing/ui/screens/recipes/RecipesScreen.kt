@@ -46,6 +46,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
@@ -61,7 +62,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -86,6 +89,7 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 import java.util.UUID
+import java.util.Date
 
 /**
  * 配方管理界面 - 新版投料看板
@@ -118,6 +122,10 @@ fun RecipesScreen(
     var isFilterExpanded by remember { mutableStateOf(!isCompactScreen) }
     var isFilterSheetOpen by remember { mutableStateOf(false) }
     var loadError by remember { mutableStateOf<String?>(null) }
+    
+    // 删除配方相关状态
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    var recipeToDelete by remember { mutableStateOf<Recipe?>(null) }
 
     val customFolders = remember { mutableStateListOf<RecipeFolder>() }
     fun addRecipeToFolder(recipeId: String, folderId: String) {
@@ -130,6 +138,31 @@ fun RecipesScreen(
         }
     }
 
+    // 删除配方的回调函数
+    val coroutineScope = rememberCoroutineScope()
+    val onDeleteRecipe: (Recipe) -> Unit = { recipe ->
+        recipeToDelete = recipe
+        showDeleteDialog = true
+    }
+    
+    // 确认删除配方
+    val confirmDelete: () -> Unit = {
+        recipeToDelete?.let { recipe ->
+            coroutineScope.launch {
+                runCatching {
+                    repository.deleteRecipe(recipe.id)
+                    // 刷新数据
+                    val updatedRecipes = repository.getAllRecipes()
+                    recipes = updatedRecipes
+                }.onFailure { error ->
+                    loadError = "删除失败: ${error.localizedMessage}"
+                }
+            }
+        }
+        showDeleteDialog = false
+        recipeToDelete = null
+    }
+    
     // 预加载数据，后续可替换成 Flow 收集
     LaunchedEffect(Unit) {
         runCatching {
@@ -358,6 +391,7 @@ fun RecipesScreen(
                             onAddToFolder = { recipeId, folderId ->
                                 addRecipeToFolder(recipeId, folderId)
                             },
+                            onDeleteRecipe = onDeleteRecipe,
                             compactCards = true
                         )
                     } else {
@@ -368,7 +402,8 @@ fun RecipesScreen(
                             folders = folderSnapshot,
                             onAddToFolder = { recipeId, folderId ->
                                 addRecipeToFolder(recipeId, folderId)
-                            }
+                            },
+                            onDeleteRecipe = onDeleteRecipe
                         )
                     }
                 }
@@ -426,6 +461,18 @@ fun RecipesScreen(
                     showCollapseHint = false
                 )
             }
+        }
+        
+        // 删除确认对话框
+        if (showDeleteDialog && recipeToDelete != null) {
+            DeleteRecipeDialog(
+                recipe = recipeToDelete!!,
+                onConfirm = confirmDelete,
+                onDismiss = {
+                    showDeleteDialog = false
+                    recipeToDelete = null
+                }
+            )
         }
     } else {
         Row(
@@ -555,7 +602,8 @@ fun RecipesScreen(
                                 folders = folderSnapshot,
                                 onAddToFolder = { recipeId, folderId ->
                                     addRecipeToFolder(recipeId, folderId)
-                                }
+                                },
+                                onDeleteRecipe = onDeleteRecipe
                             )
                         } else {
                             RecipeTableView(
@@ -565,7 +613,8 @@ fun RecipesScreen(
                                 folders = folderSnapshot,
                                 onAddToFolder = { recipeId, folderId ->
                                     addRecipeToFolder(recipeId, folderId)
-                                }
+                                },
+                                onDeleteRecipe = onDeleteRecipe
                             )
                         }
                     }
@@ -1034,6 +1083,7 @@ fun RecipeCardList(
     onMaterialConfiguration: (String) -> Unit = {},
     folders: List<RecipeFolder>,
     onAddToFolder: (String, String) -> Unit,
+    onDeleteRecipe: (Recipe) -> Unit = {},
     compactCards: Boolean = false
 ) {
     LazyColumn(
@@ -1049,6 +1099,7 @@ fun RecipeCardList(
                 onMaterialConfiguration = onMaterialConfiguration,
                 folders = folders,
                 onAddToFolder = onAddToFolder,
+                onDeleteRecipe = onDeleteRecipe,
                 compact = compactCards
             )
         }
@@ -1066,6 +1117,7 @@ private fun AnimatedRecipeCard(
     onMaterialConfiguration: (String) -> Unit,
     folders: List<RecipeFolder>,
     onAddToFolder: (String, String) -> Unit,
+    onDeleteRecipe: (Recipe) -> Unit,
     compact: Boolean
 ) {
     var visible by remember { mutableStateOf(false) }
@@ -1089,6 +1141,7 @@ private fun AnimatedRecipeCard(
             onMaterialConfiguration = onMaterialConfiguration,
             folders = folders,
             onAddToFolder = onAddToFolder,
+            onDeleteRecipe = onDeleteRecipe,
             compact = compact
         )
     }
@@ -1103,7 +1156,8 @@ fun RecipeTableView(
     onRecipeClick: (String) -> Unit,
     onMaterialConfiguration: (String) -> Unit = {},
     folders: List<RecipeFolder>,
-    onAddToFolder: (String, String) -> Unit
+    onAddToFolder: (String, String) -> Unit,
+    onDeleteRecipe: (Recipe) -> Unit = {}
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
@@ -1148,7 +1202,8 @@ fun RecipeTableView(
                             onRecipeClick = onRecipeClick,
                             onMaterialConfiguration = onMaterialConfiguration,
                             folders = folders,
-                            onAddToFolder = onAddToFolder
+                            onAddToFolder = onAddToFolder,
+                            onDeleteRecipe = onDeleteRecipe
                         )
                         HorizontalDivider(
                             color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
@@ -1166,7 +1221,8 @@ fun RecipeTableRow(
     onRecipeClick: (String) -> Unit,
     onMaterialConfiguration: (String) -> Unit = {},
     folders: List<RecipeFolder>,
-    onAddToFolder: (String, String) -> Unit
+    onAddToFolder: (String, String) -> Unit,
+    onDeleteRecipe: (Recipe) -> Unit = {}
 ) {
     Row(
         modifier = Modifier
@@ -1212,6 +1268,18 @@ fun RecipeTableRow(
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            IconButton(
+                onClick = { onDeleteRecipe(recipe) },
+                colors = IconButtonDefaults.iconButtonColors(
+                    contentColor = MaterialTheme.colorScheme.error
+                )
+            ) {
+                Icon(
+                    Icons.Default.Delete,
+                    contentDescription = "删除配方",
+                    modifier = Modifier.size(20.dp)
+                )
+            }
             FolderMenuButton(
                 folders = folders,
                 onFolderSelected = { folderId -> onAddToFolder(recipe.id, folderId) }
@@ -1242,6 +1310,7 @@ fun DosingRecipeCard(
     onMaterialConfiguration: (String) -> Unit = {},
     folders: List<RecipeFolder>,
     onAddToFolder: (String, String) -> Unit,
+    onDeleteRecipe: (Recipe) -> Unit = {},
     modifier: Modifier = Modifier,
     compact: Boolean = false
 ) {
@@ -1275,6 +1344,18 @@ fun DosingRecipeCard(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    IconButton(
+                        onClick = { onDeleteRecipe(recipe) },
+                        colors = IconButtonDefaults.iconButtonColors(
+                            contentColor = MaterialTheme.colorScheme.error
+                        )
+                    ) {
+                        Icon(
+                            Icons.Default.Delete,
+                            contentDescription = "删除配方",
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
                     FolderMenuButton(
                         folders = folders,
                         onFolderSelected = { folderId -> onAddToFolder(recipe.id, folderId) }
@@ -1549,11 +1630,101 @@ fun applyQuickCollectionFilter(
 fun isWithinDays(dateString: String?, days: Int): Boolean {
     if (dateString.isNullOrBlank()) return false
     val formatter = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
-    return runCatching {
-        val targetDate = formatter.parse(dateString) ?: return false
-        val calendar = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -days) }
-        targetDate.after(calendar.time)
-    }.getOrDefault(false)
+    return try {
+        val date = formatter.parse(dateString) ?: return false
+        val diff = Date().time - date.time
+        val daysDiff = diff / (1000 * 60 * 60 * 24)
+        daysDiff <= days
+    } catch (e: Exception) {
+        false
+    }
+}
+
+/**
+ * 删除配方确认对话框
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DeleteRecipeDialog(
+    recipe: Recipe,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = {
+            Icon(
+                imageVector = Icons.Default.Warning,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.error,
+                modifier = Modifier.size(48.dp)
+            )
+        },
+        title = {
+            Text(
+                text = "确认删除配方",
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = "您确定要删除以下配方吗?此操作无法撤销。",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = "配方名称: ${recipe.name}",
+                            fontWeight = FontWeight.Medium,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        Text(
+                            text = "配方编码: ${recipe.code}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        if (recipe.customer.isNotEmpty()) {
+                            Text(
+                                text = "客户: ${recipe.customer}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onConfirm,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.error
+                )
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Delete,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("删除")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消")
+            }
+        }
+    )
 }
 
 private val RecipeStatus.label: String

@@ -23,7 +23,13 @@ data class ConfigurationTask(
     val statusUpdatedAt: String = "",
     val targetDevices: List<String> = emptyList(),
     val note: String = "",
-    val tags: List<String> = emptyList()
+    val tags: List<String> = emptyList(),
+    // 接单相关字段
+    val acceptedBy: String? = null,  // 接单人
+    val acceptedAt: String? = null,  // 接单时间
+    // 执行时间跟踪
+    val startedAt: String? = null,   // 开始配置时间
+    val completedAt: String? = null  // 完成时间
 )
 
 /**
@@ -52,6 +58,10 @@ enum class TaskStatus {
  * 简易示例数据，方便界面预览
  */
 object TaskSampleData {
+    fun dailyTasks(): List<ConfigurationTask> = emptyList()  // 已清空演示数据，使用真实后端数据
+    
+    // 以下是演示数据的备份，需要时可以恢复
+    /*
     fun dailyTasks(): List<ConfigurationTask> = listOf(
         ConfigurationTask(
             id = "TASK-001",
@@ -73,65 +83,9 @@ object TaskSampleData {
             note = "需验证新香精配比",
             tags = listOf("验证", "快速")
         ),
-        ConfigurationTask(
-            id = "TASK-002",
-            title = "冷萃柠檬迭代",
-            recipeId = "RCP-002",
-            recipeName = "冷萃柠檬迭代",
-            recipeCode = "CL-2024B",
-            quantity = 25.0,
-            unit = "kg",
-            priority = TaskPriority.HIGH,
-            requestedBy = "张蕾",
-            perfumer = "张蕾",
-            customer = "客户 B",
-            salesOwner = "李晗",
-            status = TaskStatus.IN_PROGRESS,
-            deadline = "今天 18:00",
-            createdAt = "今天 08:10",
-            publishedAt = "今天 08:40",
-            targetDevices = listOf("本机投料设备"),
-            note = "需要记录每个批次偏差"
-        ),
-        ConfigurationTask(
-            id = "TASK-003",
-            title = "低糖可可雾化版",
-            recipeId = "RCP-003",
-            recipeName = "低糖可可雾化版",
-            recipeCode = "LC-0907",
-            quantity = 8.0,
-            unit = "kg",
-            priority = TaskPriority.NORMAL,
-            requestedBy = "沈工",
-            perfumer = "沈工",
-            customer = "内部研发",
-            salesOwner = "内部项目",
-            status = TaskStatus.DRAFT,
-            deadline = "明天 10:00",
-            createdAt = "今天 10:00",
-            note = "聚焦口感一致性"
-        ),
-        ConfigurationTask(
-            id = "TASK-004",
-            title = "桂花青提试制",
-            recipeId = "RCP-004",
-            recipeName = "桂花青提试制",
-            recipeCode = "GQ-0512",
-            quantity = 15.0,
-            unit = "kg",
-            priority = TaskPriority.LOW,
-            requestedBy = "陈路",
-            perfumer = "陈路",
-            customer = "体验店",
-            salesOwner = "苏月",
-            status = TaskStatus.COMPLETED,
-            deadline = "昨天",
-            createdAt = "昨天 14:00",
-            publishedAt = "昨天 14:20",
-            targetDevices = listOf("本机投料设备"),
-            note = "已完成验证，待归档"
-        )
+        // ... 其他演示数据
     )
+    */
 }
 
 /**

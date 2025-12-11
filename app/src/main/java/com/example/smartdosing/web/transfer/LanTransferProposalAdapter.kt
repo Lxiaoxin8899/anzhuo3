@@ -169,7 +169,8 @@ private data class LanMaterialPayload(
     val sequence: Int? = null
 ) {
     fun toMaterialPayload(index: Int): MaterialPayload {
-        val resolvedCode = (code ?: id).orEmpty()
+        val resolvedCode = code.orEmpty()
+        android.util.Log.d("LanTransfer", "Material [$name] code映射: 原始='$code' -> 解析='$resolvedCode'")
         require(weight > 0) { "材料 $name 的 weight 必须大于 0" }
         val resolvedUnit = unit?.takeIf { it.isNotBlank() } ?: "g"
         return MaterialPayload(

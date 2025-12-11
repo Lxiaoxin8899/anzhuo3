@@ -19,6 +19,7 @@ class WebService(private val context: Context) {
     companion object {
         private const val TAG = "WebService"
         private const val DEFAULT_PORT = 8080
+        private const val LOCALHOST_FALLBACK = "127.0.0.1" // 回环地址，无法获取局域网IP时用于本机访问
 
         @Volatile
         private var INSTANCE: WebService? = null
@@ -44,12 +45,6 @@ class WebService(private val context: Context) {
                 }
             }
 
-            // 检查网络连接
-            val ipAddress = getLocalIPAddress()
-            if (ipAddress == null) {
-                return WebServiceResult.NetworkError("无法获取设备IP地址，请检查网络连接")
-            }
-
             // 启动服务器
             val success = webServerManager.startServer(port)
             if (!success) {
@@ -59,10 +54,15 @@ class WebService(private val context: Context) {
             // 创建协程作用域用于后台任务
             serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
-            val serverUrl = "http://$ipAddress:$port"
+            val ipAddress = getLocalIPAddress()
+            if (ipAddress == null) {
+                Log.w(TAG, "无法获取局域网IP，采用回环地址，仅支持本机访问")
+            }
+            val serverIp = ipAddress ?: LOCALHOST_FALLBACK
+            val serverUrl = "http://$serverIp:$port"
             Log.i(TAG, "Web服务启动成功: $serverUrl")
 
-            return WebServiceResult.Success(serverUrl, ipAddress, port)
+            return WebServiceResult.Success(serverUrl, serverIp, port)
 
         } catch (e: Exception) {
             Log.e(TAG, "启动Web服务失败", e)
@@ -97,12 +97,11 @@ class WebService(private val context: Context) {
      * 获取服务器URL
      */
     fun getServerUrl(port: Int = DEFAULT_PORT): String? {
-        val ipAddress = getLocalIPAddress()
-        return if (ipAddress != null) {
-            "http://$ipAddress:$port"
-        } else {
-            null
+        if (!isServiceRunning()) {
+            return null
         }
+        val ipAddress = getLocalIPAddress() ?: LOCALHOST_FALLBACK
+        return "http://$ipAddress:$port"
     }
 
     /**
@@ -149,12 +148,17 @@ class WebService(private val context: Context) {
      * 获取设备信息
      */
     fun getDeviceInfo(): DeviceInfo {
-        val ipAddress = getLocalIPAddress()
         val isRunning = isServiceRunning()
-        val serverUrl = if (isRunning) getServerUrl() else null
+        val ipAddress = getLocalIPAddress()
+        val displayIp = ipAddress ?: if (isRunning) LOCALHOST_FALLBACK else null
+        val serverUrl = if (isRunning && displayIp != null) {
+            "http://$displayIp:${DEFAULT_PORT}"
+        } else {
+            null
+        }
 
         return DeviceInfo(
-            ipAddress = ipAddress,
+            ipAddress = displayIp,
             isServerRunning = isRunning,
             serverUrl = serverUrl,
             port = DEFAULT_PORT

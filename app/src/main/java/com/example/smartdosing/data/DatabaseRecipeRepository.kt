@@ -222,6 +222,7 @@ class DatabaseRecipeRepository(private val context: Context) {
 
         // 构建更新后的配方，带上导入模板中的材料编码
         val materials = request.materials.mapIndexed { index, materialImport ->
+            android.util.Log.d("DBRepository", "创建Material: name=${materialImport.name}, code='${materialImport.code}'")
             Material(
                 id = "material_${System.currentTimeMillis()}_$index",
                 name = materialImport.name,

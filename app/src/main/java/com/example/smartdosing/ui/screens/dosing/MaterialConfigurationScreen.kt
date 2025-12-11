@@ -2,6 +2,12 @@ package com.example.smartdosing.ui.screens.dosing
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -83,6 +89,7 @@ fun MaterialConfigurationScreen(
         perfumer = targetRecipe.perfumer
         notes = targetRecipe.description
         materialStates = targetRecipe.materials.map { material ->
+            android.util.Log.d("MatConfigScreen", "MaterialState: name=${material.name}, code='${material.code}'")
             MaterialConfigState(
                 material = material,
                 actualWeight = "",
@@ -393,9 +400,11 @@ private fun MaterialConfigurationContent(
         Spacer(modifier = Modifier.height(12.dp))
 
         // 材料列表
+        // 材料列表 - 使用响应式网格布局提高密度
+        // 材料列表 - 高密度列表模式
         LazyColumn(
             modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            contentPadding = PaddingValues(bottom = 12.dp)
         ) {
             itemsIndexed(materialStates) { index, materialState ->
                 MaterialConfigCard(
@@ -410,7 +419,7 @@ private fun MaterialConfigurationContent(
                     onEdit = {
                         onMaterialEdit(index)
                     },
-                    isCompact = useCompactLayout
+                    isCompact = true
                 )
             }
         }
@@ -508,7 +517,8 @@ private fun RecipeHeader(
 }
 
 /**
- * 单个材料配置卡片
+ * 单个材料配置项 - 列表行模式 (List Row)
+ * 强调水平空间利用，一行一条，高密度
  */
 @Composable
 private fun MaterialConfigCard(
@@ -519,204 +529,164 @@ private fun MaterialConfigCard(
     onEdit: () -> Unit,
     isCompact: Boolean
 ) {
-    val cardColor = when {
-        state.isConfirmed -> MaterialTheme.colorScheme.secondaryContainer
-        state.hasError -> MaterialTheme.colorScheme.errorContainer
+    val isConfirmed = state.isConfirmed
+    
+    // 背景色：依然使用颜色区分状态，但增加斑马纹区分相邻行
+    val backgroundColor = when {
+        isConfirmed -> Color(0xFFE8F5E9) // Light Green (Darker for better contrast: 0xFFF1F8E9 -> 0xFFE8F5E9)
+        state.hasError -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f)
+        index % 2 == 0 -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f) // 提高对比度：0.25f -> 0.7f
         else -> MaterialTheme.colorScheme.surface
     }
-    val displayCode = state.material.code.takeIf { it.isNotBlank() } ?: "未设置"
-    val targetWeightText = DecimalFormat("#.##").format(state.material.weight)
-    val actualValue = state.actualWeight.toDoubleOrNull()
-    val deviation = actualValue?.let { it - state.material.weight }
-    val deviationPercent = if (deviation != null && state.material.weight != 0.0) {
-        (deviation / state.material.weight) * 100
-    } else null
-    val deviationColor = when {
-        deviationPercent == null -> MaterialTheme.colorScheme.onSurfaceVariant
-        kotlin.math.abs(deviationPercent) <= 5.0 -> MaterialTheme.colorScheme.primary
-        else -> MaterialTheme.colorScheme.error
+
+    // 序号颜色池
+    val indexColors = listOf(
+        Color(0xFF42A5F5), // Blue
+        Color(0xFFFFA726), // Orange
+        Color(0xFFAB47BC), // Purple
+        Color(0xFF26A69A), // Teal
+        Color(0xFFEC407A), // Pink
+        Color(0xFF5C6BC0)  // Indigo
+    )
+    val indexBadgeColor = if (isConfirmed) {
+        Color(0xFF66BB6A) // Green for confirmed
+    } else {
+        indexColors[(index - 1) % indexColors.size]
     }
 
-    val targetLabel = buildAnnotatedString {
-        append("目标 ")
-        withStyle(
-            SpanStyle(
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Bold
-            )
-        ) {
-            append("$targetWeightText g")
-        }
-    }
-    val actualSummary = buildAnnotatedString {
-        append("实际 ")
-        withStyle(
-            SpanStyle(
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Bold
-            )
-        ) {
-            append("${DecimalFormat("#.##").format(actualValue ?: 0.0)} g")
-        }
-        deviation?.let {
-            append(" · Δ ")
-            withStyle(
-                SpanStyle(
-                    color = deviationColor,
-                    fontWeight = FontWeight.Bold
-                )
-            ) {
-                append("${DecimalFormat("#.##").format(it)} g")
-            }
-            deviationPercent?.let { percent ->
-                append(" (${DecimalFormat("#.##").format(percent)}%)")
-            }
-        }
-    }
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = cardColor),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        val containerModifier = Modifier
+    // 分割线容器而不是卡片，节省Margin空间
+    Column(
+        modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 10.dp)
-        if (isCompact) {
-            Column(
-                modifier = containerModifier,
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+            .background(backgroundColor)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp), // 紧凑的内边距
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // 1. Index Badge (Left)
+            Box(
+                modifier = Modifier
+                    .size(24.dp)
+                    .background(
+                        color = indexBadgeColor,
+                        shape = RoundedCornerShape(4.dp)
+                    ),
+                contentAlignment = Alignment.Center
             ) {
+                if (isConfirmed) {
+                    Icon(
+                        imageVector = Icons.Default.Check,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(16.dp)
+                    )
+                } else {
+                    Text(
+                        text = index.toString(),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White // Always white text on colored badge
+                    )
+                }
+            }
+
+            // 2. Info Area (Middle, absorbs weight)
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = state.material.name,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                // Second Row: Code (Prominent) | Target Weight
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // Material Code - Monospace & Prominent (Debug: Always Show)
+                    Box(
+                        modifier = Modifier
+                            .background(
+                                MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
+                                RoundedCornerShape(4.dp)
+                            )
+                            .padding(horizontal = 4.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = if (state.material.code.isNotBlank()) state.material.code else "[空]",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                    }
+                    
+                    Text(
+                        text = "目标 ${DecimalFormat("#.##").format(state.material.weight)}g",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            // 3. Action Area (Right)
+            if (!isConfirmed) {
+                // Input Mode
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedTextField(
+                        value = state.actualWeight,
+                        onValueChange = onWeightChanged,
+                        placeholder = { Text("0.0") },
+                        singleLine = true,
+                        textStyle = MaterialTheme.typography.bodyMedium.copy(textAlign = TextAlign.End),
+                        modifier = Modifier
+                            .width(80.dp) // Fixed width for alignment
+                            .height(48.dp),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        isError = state.hasError,
+                        shape = RoundedCornerShape(8.dp)
+                    )
+                    
+                    FilledTonalButton(
+                        onClick = onConfirmed,
+                        modifier = Modifier.height(36.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp),
+                        shape = RoundedCornerShape(6.dp)
+                    ) {
+                        Text("确认")
+                    }
+                }
+            } else {
+                // Confirmed Mode - Read Only
+                Row(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    MaterialIndexBadge(index = index, isConfirmed = state.isConfirmed)
-                    Column(
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text(
-                            text = state.material.name,
-                            style = MaterialTheme.typography.bodyLarge,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                    Text(
+                        text = "${DecimalFormat("#.##").format(state.actualWeight.toDoubleOrNull() ?: 0.0)} g",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF2E7D32)
+                    )
+                    IconButton(onClick = onEdit) {
+                        Icon(
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = "Edit",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(18.dp)
                         )
-                        Text(
-                            text = "编码: $displayCode",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-                Text(
-                    text = targetLabel,
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                if (!state.isConfirmed) {
-                    OutlinedTextField(
-                        value = state.actualWeight,
-                        onValueChange = onWeightChanged,
-                        label = { Text("实际重量") },
-                        singleLine = true,
-                        suffix = { Text("g") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        textStyle = MaterialTheme.typography.titleMedium,
-                        isError = state.hasError,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    FilledTonalButton(
-                        onClick = onConfirmed,
-                        modifier = Modifier.fillMaxWidth(),
-                        contentPadding = PaddingValues(vertical = 10.dp)
-                    ) {
-                        Text("确认")
-                    }
-                } else {
-                    Text(
-                        text = actualSummary,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = deviationColor
-                    )
-                    TextButton(
-                        onClick = onEdit,
-                        modifier = Modifier.align(Alignment.End)
-                    ) {
-                        Text("调整")
-                    }
-                }
-            }
-        } else {
-            Row(
-                modifier = containerModifier,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                MaterialIndexBadge(index = index, isConfirmed = state.isConfirmed)
-
-                Column(
-                    modifier = Modifier.weight(1.5f)
-                ) {
-                    Text(
-                        text = state.material.name,
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = "编码: $displayCode",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-
-                Text(
-                    text = targetLabel,
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.widthIn(min = 90.dp)
-                )
-
-                if (!state.isConfirmed) {
-                    OutlinedTextField(
-                        value = state.actualWeight,
-                        onValueChange = onWeightChanged,
-                        label = { Text("实际") },
-                        singleLine = true,
-                        suffix = { Text("g") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        textStyle = MaterialTheme.typography.titleMedium,
-                        isError = state.hasError,
-                        modifier = Modifier.widthIn(min = 90.dp, max = 120.dp)
-                    )
-
-                    FilledTonalButton(
-                        onClick = onConfirmed,
-                        modifier = Modifier.defaultMinSize(minWidth = 72.dp, minHeight = 44.dp),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp)
-                    ) {
-                        Text("确认")
-                    }
-                } else {
-                    Text(
-                        text = actualSummary,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = deviationColor,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1.2f)
-                    )
-
-                    TextButton(onClick = onEdit) {
-                        Text("调整")
                     }
                 }
             }
         }
+        Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
     }
 }
 

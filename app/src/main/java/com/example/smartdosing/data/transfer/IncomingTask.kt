@@ -212,6 +212,7 @@ fun RecipePayload.toImportRequest(): RecipeImportRequest {
  * 扩展函数：将 MaterialPayload 转换为 MaterialImport
  */
 fun MaterialPayload.toImportRequest(): MaterialImport {
+    android.util.Log.d("MaterialPayload", "toImportRequest: name=$name, code='$code'")
     return MaterialImport(
         name = this.name,
         code = this.code,
@@ -221,3 +222,4 @@ fun MaterialPayload.toImportRequest(): MaterialImport {
         notes = this.notes
     )
 }
+

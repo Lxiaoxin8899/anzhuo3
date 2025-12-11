@@ -1,16 +1,57 @@
 package com.example.smartdosing.ui.screens.device
 
-import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.outlined.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Router
+import androidx.compose.material.icons.filled.Smartphone
+import androidx.compose.material.icons.filled.Wifi
+import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.Circle
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.DevicesOther
+import androidx.compose.material.icons.outlined.Fingerprint
+import androidx.compose.material.icons.outlined.Inbox
+import androidx.compose.material.icons.outlined.Lightbulb
+import androidx.compose.material.icons.outlined.PhoneAndroid
+import androidx.compose.material.icons.outlined.Send
+import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material3.Badge
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.ScrollableTabRow
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -27,16 +68,15 @@ import com.example.smartdosing.data.device.DeviceIdentity
 import com.example.smartdosing.data.device.DeviceUIDManager
 import com.example.smartdosing.data.device.ReceiverStatus
 import com.example.smartdosing.data.transfer.TaskReceiver
-import com.example.smartdosing.database.SmartDosingDatabase
 import com.example.smartdosing.database.entities.AuthorizedSenderEntity
 import com.example.smartdosing.database.entities.ReceivedTaskEntity
+import com.example.smartdosing.ui.theme.LocalWindowSize
+import com.example.smartdosing.ui.theme.SmartDosingWindowWidthClass
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
-import java.util.*
+import java.util.Date
+import java.util.Locale
 
-/**
- * 设备信息界面 - 显示本机 UID 和接收端状态
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DeviceInfoScreen(
@@ -45,28 +85,22 @@ fun DeviceInfoScreen(
 ) {
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
-    val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    val windowSize = LocalWindowSize.current
+    val isCompact = windowSize.widthClass == SmartDosingWindowWidthClass.Compact
 
-    // 设备信息
     val deviceIdentity = remember { DeviceUIDManager.getDeviceIdentity(context) }
-
-    // 数据库和任务接收器
-    val database = remember { SmartDosingDatabase.getDatabase(context) }
     val taskReceiver = remember { TaskReceiver.getInstance(context) }
 
-    // 授权发送端列表
     val authorizedSenders by taskReceiver.getAuthorizedSendersFlow().collectAsState(initial = emptyList())
-
-    // 待处理任务
     val pendingTasks by taskReceiver.getPendingTasksFlow().collectAsState(initial = emptyList())
 
-    // 当前选中的 Tab
     var selectedTabIndex by remember { mutableIntStateOf(0) }
     val tabs = listOf("设备信息", "授权设备", "接收任务")
 
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("设备管理") },
@@ -87,53 +121,52 @@ fun DeviceInfoScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            // Tab 栏
-            TabRow(
-                selectedTabIndex = selectedTabIndex,
-                containerColor = MaterialTheme.colorScheme.surface
-            ) {
-                tabs.forEachIndexed { index, title ->
-                    Tab(
-                        selected = selectedTabIndex == index,
-                        onClick = { selectedTabIndex = index },
-                        text = {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(title)
-                                if (index == 2 && pendingTasks.isNotEmpty()) {
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Badge { Text("${pendingTasks.size}") }
-                                }
-                            }
-                        }
-                    )
+            Box(modifier = Modifier.padding(horizontal = if (isCompact) 8.dp else 0.dp)) {
+                if (isCompact) {
+                    ScrollableTabRow(
+                        selectedTabIndex = selectedTabIndex,
+                        edgePadding = 0.dp,
+                        containerColor = MaterialTheme.colorScheme.surface
+                    ) {
+                        DeviceTabs(
+                            tabs = tabs,
+                            pendingCount = pendingTasks.size,
+                            selectedIndex = selectedTabIndex,
+                            onSelect = { selectedTabIndex = it }
+                        )
+                    }
+                } else {
+                    TabRow(selectedTabIndex = selectedTabIndex) {
+                        DeviceTabs(
+                            tabs = tabs,
+                            pendingCount = pendingTasks.size,
+                            selectedIndex = selectedTabIndex,
+                            onSelect = { selectedTabIndex = it }
+                        )
+                    }
                 }
             }
 
-            // Tab 内容
             when (selectedTabIndex) {
                 0 -> DeviceInfoTab(
                     deviceIdentity = deviceIdentity,
+                    isCompact = isCompact,
                     onCopyUID = {
                         clipboardManager.setText(AnnotatedString(deviceIdentity.uid))
-                        scope.launch {
-                            snackbarHostState.showSnackbar("UID 已复制到剪贴板")
-                        }
+                        scope.launch { snackbarHostState.showSnackbar("UID 已复制") }
                     },
                     onCopyIP = {
-                        deviceIdentity.ipAddress?.let {
-                            clipboardManager.setText(AnnotatedString("http://$it:${deviceIdentity.port}"))
-                            scope.launch {
-                                snackbarHostState.showSnackbar("地址已复制到剪贴板")
-                            }
+                        deviceIdentity.ipAddress?.let { ip ->
+                            clipboardManager.setText(AnnotatedString("http://$ip:${deviceIdentity.port}"))
+                            scope.launch { snackbarHostState.showSnackbar("地址已复制") }
                         }
                     }
                 )
                 1 -> AuthorizedSendersTab(
                     senders = authorizedSenders,
+                    isCompact = isCompact,
                     onToggleSender = { sender ->
-                        scope.launch {
-                            taskReceiver.setSenderActive(sender.uid, !sender.isActive)
-                        }
+                        scope.launch { taskReceiver.setSenderActive(sender.uid, !sender.isActive) }
                     },
                     onRemoveSender = { sender ->
                         scope.launch {
@@ -144,6 +177,7 @@ fun DeviceInfoScreen(
                 )
                 2 -> ReceivedTasksTab(
                     tasks = pendingTasks,
+                    isCompact = isCompact,
                     onAcceptTask = { task ->
                         scope.launch {
                             if (taskReceiver.acceptTask(task.id)) {
@@ -164,105 +198,114 @@ fun DeviceInfoScreen(
     }
 }
 
-/**
- * 设备信息 Tab
- */
+@Composable
+private fun DeviceTabs(
+    tabs: List<String>,
+    pendingCount: Int,
+    selectedIndex: Int,
+    onSelect: (Int) -> Unit
+) {
+    tabs.forEachIndexed { index, title ->
+        Tab(
+            selected = selectedIndex == index,
+            onClick = { onSelect(index) },
+            text = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(title, style = MaterialTheme.typography.bodyMedium)
+                    if (index == 2 && pendingCount > 0) {
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Badge { Text("$pendingCount") }
+                    }
+                }
+            }
+        )
+    }
+}
+
 @Composable
 private fun DeviceInfoTab(
     deviceIdentity: DeviceIdentity,
+    isCompact: Boolean,
     onCopyUID: () -> Unit,
     onCopyIP: () -> Unit
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
+        contentPadding = PaddingValues(
+            horizontal = if (isCompact) 12.dp else 16.dp,
+            vertical = 16.dp
+        ),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // UID 卡片
         item {
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer
-                )
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(20.dp),
+                        .padding(if (isCompact) 12.dp else 20.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Icon(
                         Icons.Outlined.Fingerprint,
                         contentDescription = null,
-                        modifier = Modifier.size(48.dp),
+                        modifier = Modifier.size(if (isCompact) 36.dp else 48.dp),
                         tint = MaterialTheme.colorScheme.primary
                     )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text(
-                        text = "本机 UID",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
                     Spacer(modifier = Modifier.height(8.dp))
+                    Text("本机 UID", color = MaterialTheme.colorScheme.onPrimaryContainer)
+                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = deviceIdentity.uid,
-                        style = MaterialTheme.typography.headlineMedium.copy(
+                        style = MaterialTheme.typography.headlineSmall.copy(
                             fontFamily = FontFamily.Monospace,
                             fontWeight = FontWeight.Bold
-                        ),
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Button(
-                        onClick = onCopyUID,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary
                         )
-                    ) {
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Button(onClick = onCopyUID) {
                         Icon(Icons.Default.ContentCopy, contentDescription = null)
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
                         Text("复制 UID")
                     }
                 }
             }
         }
 
-        // 设备状态卡片
         item {
-            Card(modifier = Modifier.fillMaxWidth()) {
+            Card {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(16.dp)
+                        .padding(if (isCompact) 12.dp else 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Text(
-                        text = "设备状态",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-
+                    Text("设备状态", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     DeviceInfoRow(
-                        icon = Icons.Outlined.Smartphone,
+                        icon = Icons.Default.Smartphone,
                         label = "设备名称",
-                        value = deviceIdentity.deviceName
+                        value = deviceIdentity.deviceName,
+                        compact = isCompact
                     )
                     DeviceInfoRow(
-                        icon = Icons.Outlined.Wifi,
+                        icon = Icons.Default.Wifi,
                         label = "IP 地址",
                         value = deviceIdentity.ipAddress ?: "未连接网络",
                         valueColor = if (deviceIdentity.ipAddress != null)
-                            MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                            MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                        compact = isCompact
                     )
                     DeviceInfoRow(
-                        icon = Icons.Outlined.Router,
+                        icon = Icons.Default.Router,
                         label = "服务端口",
-                        value = "${deviceIdentity.port}"
+                        value = "${deviceIdentity.port}",
+                        compact = isCompact
                     )
                     DeviceInfoRow(
                         icon = Icons.Outlined.Circle,
-                        label = "接收状态",
+                        label = "连接状态",
                         value = when (deviceIdentity.status) {
                             ReceiverStatus.IDLE -> "空闲"
                             ReceiverStatus.BUSY -> "忙碌"
@@ -272,39 +315,34 @@ private fun DeviceInfoTab(
                             ReceiverStatus.IDLE -> Color(0xFF4CAF50)
                             ReceiverStatus.BUSY -> Color(0xFFFF9800)
                             ReceiverStatus.OFFLINE -> MaterialTheme.colorScheme.error
-                        }
+                        },
+                        compact = isCompact
                     )
                     DeviceInfoRow(
-                        icon = Icons.Outlined.Info,
+                        icon = Icons.Default.Info,
                         label = "应用版本",
-                        value = deviceIdentity.appVersion
+                        value = deviceIdentity.appVersion,
+                        compact = isCompact
                     )
                 }
             }
         }
 
-        // 接收地址卡片
         item {
             deviceIdentity.ipAddress?.let { ip ->
-                Card(modifier = Modifier.fillMaxWidth()) {
+                Card {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(16.dp)
+                            .padding(if (isCompact) 12.dp else 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
+                        Text("接收地址", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         Text(
-                            text = "接收地址",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "发送端可通过以下地址连接本机：",
+                            text = "发送端可直接访问该地址进行任务下发",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        Spacer(modifier = Modifier.height(12.dp))
-
                         Surface(
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(8.dp),
@@ -313,20 +351,16 @@ private fun DeviceInfoTab(
                             Text(
                                 text = "http://$ip:${deviceIdentity.port}",
                                 modifier = Modifier.padding(12.dp),
-                                style = MaterialTheme.typography.bodyLarge.copy(
-                                    fontFamily = FontFamily.Monospace
-                                ),
-                                textAlign = TextAlign.Center
+                                textAlign = TextAlign.Center,
+                                fontFamily = FontFamily.Monospace
                             )
                         }
-
-                        Spacer(modifier = Modifier.height(12.dp))
                         OutlinedButton(
                             onClick = onCopyIP,
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Icon(Icons.Default.ContentCopy, contentDescription = null)
-                            Spacer(modifier = Modifier.width(8.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
                             Text("复制地址")
                         }
                     }
@@ -334,18 +368,15 @@ private fun DeviceInfoTab(
             }
         }
 
-        // 使用说明
         item {
             Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.tertiaryContainer
-                )
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(16.dp)
+                        .padding(if (isCompact) 12.dp else 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
@@ -354,20 +385,14 @@ private fun DeviceInfoTab(
                             tint = MaterialTheme.colorScheme.tertiary
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "使用说明",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
+                        Text("使用说明", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     }
-                    Spacer(modifier = Modifier.height(12.dp))
                     Text(
-                        text = "1. 确保发送端和本机在同一局域网内\n" +
-                               "2. 在发送端输入本机 UID 或扫描二维码进行绑定\n" +
-                               "3. 绑定成功后，发送端即可向本机推送任务\n" +
-                               "4. 收到任务后可在「接收任务」中查看和处理",
-                        style = MaterialTheme.typography.bodyMedium,
-                        lineHeight = 24.sp
+                        text = "1. 确保发送端与本机在同一网络\n" +
+                                "2. 发送端输入 UID 或扫描二维码完成绑定\n" +
+                                "3. 绑定成功后即可推送任务\n" +
+                                "4. 收到任务后可在“接收任务”中处理",
+                        lineHeight = 20.sp
                     )
                 }
             }
@@ -375,56 +400,49 @@ private fun DeviceInfoTab(
     }
 }
 
-/**
- * 设备信息行
- */
 @Composable
 private fun DeviceInfoRow(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     label: String,
     value: String,
-    valueColor: Color = MaterialTheme.colorScheme.onSurface
+    valueColor: Color = MaterialTheme.colorScheme.onSurface,
+    compact: Boolean
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(
-            icon,
-            contentDescription = null,
-            modifier = Modifier.size(20.dp),
-            tint = MaterialTheme.colorScheme.primary
-        )
-        Spacer(modifier = Modifier.width(12.dp))
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.weight(1f)
-        )
-        Text(
-            text = value,
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.Medium,
-            color = valueColor
-        )
+    if (compact) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(label, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(value, color = valueColor, fontWeight = FontWeight.Medium)
+        }
+    } else {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+            Spacer(modifier = Modifier.width(12.dp))
+            Text(label, modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(value, color = valueColor, fontWeight = FontWeight.Medium)
+        }
     }
 }
 
-/**
- * 授权设备 Tab
- */
 @Composable
 private fun AuthorizedSendersTab(
     senders: List<AuthorizedSenderEntity>,
+    isCompact: Boolean,
     onToggleSender: (AuthorizedSenderEntity) -> Unit,
     onRemoveSender: (AuthorizedSenderEntity) -> Unit
 ) {
     if (senders.isEmpty()) {
         Box(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = if (isCompact) 24.dp else 0.dp),
             contentAlignment = Alignment.Center
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -435,28 +453,23 @@ private fun AuthorizedSendersTab(
                     tint = MaterialTheme.colorScheme.outline
                 )
                 Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    text = "暂无授权设备",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.outline
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = "当其他设备发送任务时会自动添加",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.outline
-                )
+                Text("暂无授权设备", color = MaterialTheme.colorScheme.outline)
+                Text("当其他设备第一次发送任务时会自动添加", color = MaterialTheme.colorScheme.outline)
             }
         }
     } else {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            contentPadding = PaddingValues(
+                horizontal = if (isCompact) 12.dp else 16.dp,
+                vertical = 16.dp
+            ),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             items(senders) { sender ->
                 AuthorizedSenderCard(
                     sender = sender,
+                    isCompact = isCompact,
                     onToggle = { onToggleSender(sender) },
                     onRemove = { onRemoveSender(sender) }
                 )
@@ -465,17 +478,13 @@ private fun AuthorizedSendersTab(
     }
 }
 
-/**
- * 授权发送端卡片
- */
 @Composable
 private fun AuthorizedSenderCard(
     sender: AuthorizedSenderEntity,
+    isCompact: Boolean,
     onToggle: () -> Unit,
     onRemove: () -> Unit
 ) {
-    val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()) }
-
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
@@ -484,113 +493,93 @@ private fun AuthorizedSenderCard(
             else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
         )
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .padding(if (isCompact) 12.dp else 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // 图标
-            Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(
-                        if (sender.isActive) MaterialTheme.colorScheme.primaryContainer
-                        else MaterialTheme.colorScheme.surfaceVariant
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    Icons.Outlined.PhoneAndroid,
-                    contentDescription = null,
-                    tint = if (sender.isActive) MaterialTheme.colorScheme.primary
-                           else MaterialTheme.colorScheme.outline
-                )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(if (isCompact) 40.dp else 48.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(
+                            if (sender.isActive) MaterialTheme.colorScheme.primaryContainer
+                            else MaterialTheme.colorScheme.surfaceVariant
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Outlined.PhoneAndroid,
+                        contentDescription = null,
+                        tint = if (sender.isActive) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.outline
+                    )
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(sender.name, style = MaterialTheme.typography.titleMedium)
+                    Text("UID: ${sender.uid}", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("已发送 ${sender.taskCount} 个任务", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                if (!isCompact) {
+                    Switch(checked = sender.isActive, onCheckedChange = { onToggle() })
+                    IconButton(onClick = onRemove) {
+                        Icon(Icons.Outlined.Delete, contentDescription = "移除", tint = MaterialTheme.colorScheme.error)
+                    }
+                }
             }
-
-            Spacer(modifier = Modifier.width(12.dp))
-
-            // 信息
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = sender.name,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Medium
-                )
-                Text(
-                    text = "UID: ${sender.uid}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    text = "已发送 ${sender.taskCount} 个任务",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            // 操作
-            Switch(
-                checked = sender.isActive,
-                onCheckedChange = { onToggle() }
-            )
-
-            IconButton(onClick = onRemove) {
-                Icon(
-                    Icons.Outlined.Delete,
-                    contentDescription = "移除",
-                    tint = MaterialTheme.colorScheme.error
-                )
+            if (isCompact) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Switch(checked = sender.isActive, onCheckedChange = { onToggle() })
+                    IconButton(onClick = onRemove) {
+                        Icon(Icons.Outlined.Delete, contentDescription = "移除", tint = MaterialTheme.colorScheme.error)
+                    }
+                }
             }
         }
     }
 }
 
-/**
- * 接收任务 Tab
- */
 @Composable
 private fun ReceivedTasksTab(
     tasks: List<ReceivedTaskEntity>,
+    isCompact: Boolean,
     onAcceptTask: (ReceivedTaskEntity) -> Unit,
     onRejectTask: (ReceivedTaskEntity) -> Unit
 ) {
     if (tasks.isEmpty()) {
         Box(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = if (isCompact) 24.dp else 0.dp),
             contentAlignment = Alignment.Center
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(
-                    Icons.Outlined.Inbox,
-                    contentDescription = null,
-                    modifier = Modifier.size(64.dp),
-                    tint = MaterialTheme.colorScheme.outline
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    text = "暂无待处理任务",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.outline
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = "等待其他设备发送任务",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.outline
-                )
+                Icon(Icons.Outlined.Inbox, contentDescription = null, tint = MaterialTheme.colorScheme.outline)
+                Spacer(modifier = Modifier.height(12.dp))
+                Text("暂无待处理任务", color = MaterialTheme.colorScheme.outline)
+                Text("等待其他设备发送任务即可显示", color = MaterialTheme.colorScheme.outline)
             }
         }
     } else {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(16.dp),
+            contentPadding = PaddingValues(
+                horizontal = if (isCompact) 12.dp else 16.dp,
+                vertical = 16.dp
+            ),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             items(tasks) { task ->
                 ReceivedTaskCard(
                     task = task,
+                    isCompact = isCompact,
                     onAccept = { onAcceptTask(task) },
                     onReject = { onRejectTask(task) }
                 )
@@ -599,12 +588,10 @@ private fun ReceivedTasksTab(
     }
 }
 
-/**
- * 接收任务卡片
- */
 @Composable
 private fun ReceivedTaskCard(
     task: ReceivedTaskEntity,
+    isCompact: Boolean,
     onAccept: () -> Unit,
     onReject: () -> Unit
 ) {
@@ -618,27 +605,16 @@ private fun ReceivedTaskCard(
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        )
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // 标题和优先级
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = task.title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.weight(1f)
-                )
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(task.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Surface(
                     shape = RoundedCornerShape(4.dp),
                     color = priorityColor.copy(alpha = 0.1f)
@@ -657,81 +633,68 @@ private fun ReceivedTaskCard(
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Text("${task.recipeCode} - ${task.recipeName}")
+            Text("数量: ${task.quantity} ${task.unit}")
 
-            // 配方信息
-            Text(
-                text = "${task.recipeCode} - ${task.recipeName}",
-                style = MaterialTheme.typography.bodyMedium
-            )
-            Text(
-                text = "数量: ${task.quantity} ${task.unit}",
-                style = MaterialTheme.typography.bodyMedium
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // 来源信息
-            Row {
-                Icon(
-                    Icons.Outlined.Send,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp),
-                    tint = MaterialTheme.colorScheme.outline
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                    text = "来自: ${task.senderName}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(modifier = Modifier.width(16.dp))
-                Icon(
-                    Icons.Outlined.Schedule,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp),
-                    tint = MaterialTheme.colorScheme.outline
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                    text = dateFormat.format(Date(task.receivedAt)),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            // 备注
-            task.note?.takeIf { it.isNotBlank() }?.let { note ->
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = note,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // 操作按钮
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End
-            ) {
-                OutlinedButton(
-                    onClick = onReject,
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error
-                    )
-                ) {
-                    Icon(Icons.Outlined.Close, contentDescription = null, modifier = Modifier.size(18.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Outlined.Send, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("拒绝")
+                    Text("来自: ${task.senderName}", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                Spacer(modifier = Modifier.width(8.dp))
-                Button(onClick = onAccept) {
-                    Icon(Icons.Outlined.Check, contentDescription = null, modifier = Modifier.size(18.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Outlined.Schedule, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("接收")
+                    Text(dateFormat.format(Date(task.receivedAt)), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+
+            task.note?.takeIf { it.isNotBlank() }?.let {
+                Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+
+            if (isCompact) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = onReject,
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Outlined.Close, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("拒绝")
+                    }
+                    Button(
+                        onClick = onAccept,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Outlined.Check, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("接收")
+                    }
+                }
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    OutlinedButton(
+                        onClick = onReject,
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                    ) {
+                        Icon(Icons.Outlined.Close, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("拒绝")
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(onClick = onAccept) {
+                        Icon(Icons.Outlined.Check, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("接收")
+                    }
                 }
             }
         }
