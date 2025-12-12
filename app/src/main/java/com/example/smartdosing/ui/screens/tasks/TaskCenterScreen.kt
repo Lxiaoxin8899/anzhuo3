@@ -128,7 +128,11 @@ fun TaskCenterScreen(
     }
 
     val displayedTasks = remember(selectedStatus, tasks) {
-        selectedStatus?.let { status -> tasks.filter { it.status == status } } ?: tasks
+        selectedStatus?.let { status -> 
+            tasks.filter { it.status == status } 
+        } ?: tasks.filter { 
+            it.status != TaskStatus.COMPLETED && it.status != TaskStatus.CANCELLED 
+        }
     }
 
     Scaffold(
@@ -196,8 +200,14 @@ fun TaskCenterScreen(
                                 },
                                 onStart = {
                                     scope.launch {
-                                        repository.updateTaskStatus(task.id, TaskStatus.IN_PROGRESS)
-                                        refreshTasks()
+                                        // 标记为已完成
+                                        val newStatus = TaskStatus.COMPLETED
+                                        repository.updateTaskStatus(task.id, newStatus)
+                                        
+                                        // 手动更新本地列表，使其立即生效
+                                        tasks = tasks.map { 
+                                            if (it.id == task.id) it.copy(status = newStatus) else it 
+                                        }
                                     }
                                     onStartTask(task)
                                 },
