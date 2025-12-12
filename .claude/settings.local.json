@@ -21,7 +21,14 @@
       "Bash(git -C \"d:\\DM-cangku\\anzhuo3\" log --oneline -5)",
       "Bash(git -C \"d:\\DM-cangku\\anzhuo3\" status)",
       "Bash(git -C \"d:\\DM-cangku\\anzhuo3\" add -A)",
-      "Bash(git -C \"d:\\DM-cangku\\anzhuo3\" commit -m \"$(cat <<''EOF''\nfix: 任务完成后自动隐藏，优化状态流转逻辑\n\n- 任务开始执行后状态变更为COMPLETED\n- 默认列表自动隐藏已完成和已取消任务\n- 更新订单接单逻辑审查文档\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n)\")"
+      "Bash(git -C \"d:\\DM-cangku\\anzhuo3\" commit -m \"$(cat <<''EOF''\nfix: 任务完成后自动隐藏，优化状态流转逻辑\n\n- 任务开始执行后状态变更为COMPLETED\n- 默认列表自动隐藏已完成和已取消任务\n- 更新订单接单逻辑审查文档\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(xcopy:*)",
+      "Bash(d:DM-cangkuanzhuo3copy_sdk.bat)",
+      "Bash(powershell -Command:*)",
+      "Bash(d:DM-cangkuanzhuo3gradlew.bat -p d:DM-cangkuanzhuo3 compileDebugKotlin)",
+      "Bash(cd:*)",
+      "Bash(git -C \"d:\\DM-cangku\\anzhuo3\" diff --stat)",
+      "Bash(git -C \"d:\\DM-cangku\\anzhuo3\" diff --no-color)"
     ],
     "deny": [],
     "ask": []

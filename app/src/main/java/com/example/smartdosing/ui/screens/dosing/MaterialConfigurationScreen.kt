@@ -1,6 +1,7 @@
 package com.example.smartdosing.ui.screens.dosing
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -39,9 +40,16 @@ import com.example.smartdosing.data.DatabaseRecipeRepository
 import com.example.smartdosing.data.Material as DataMaterial
 import com.example.smartdosing.data.Recipe
 import com.example.smartdosing.data.repository.ConfigurationRepositoryProvider
+import com.example.smartdosing.SmartDosingApplication
+import com.example.smartdosing.bluetooth.BluetoothScaleManager
+import com.example.smartdosing.bluetooth.BluetoothScalePreferencesManager
+import com.example.smartdosing.bluetooth.model.ConnectionState
+import com.example.smartdosing.bluetooth.model.WeightData
+import com.example.smartdosing.ui.components.DosingBluetoothStatusBar
 import com.example.smartdosing.ui.theme.LocalWindowSize
 import com.example.smartdosing.ui.theme.SmartDosingTheme
 import com.example.smartdosing.ui.theme.SmartDosingWindowWidthClass
+import kotlinx.coroutines.delay
 import java.text.DecimalFormat
 
 /**
@@ -62,6 +70,21 @@ fun MaterialConfigurationScreen(
     val repository = remember { DatabaseRecipeRepository.getInstance(context) }
     val taskRepository = remember { ConfigurationRepositoryProvider.taskRepository }
     val recordRepository = remember { ConfigurationRepositoryProvider.recordRepository }
+
+    // 蓝牙电子秤相关
+    val application = context.applicationContext as SmartDosingApplication
+    val scaleManager = application.bluetoothScaleManager
+    val bluetoothPreferencesManager = application.bluetoothPreferencesManager
+    val bluetoothPreferences by bluetoothPreferencesManager.preferencesFlow.collectAsState(
+        initial = BluetoothScalePreferencesManager.BluetoothScalePreferencesState()
+    )
+    val connectionState by scaleManager.connectionState.collectAsState()
+    val currentWeight by scaleManager.currentWeight.collectAsState()
+    val isBluetoothConnected = connectionState == ConnectionState.CONNECTED
+
+    // 活动行状态（当前正在接收蓝牙重量的行）
+    var activeRowIndex by remember { mutableStateOf<Int?>(null) }
+
     var recipe by remember { mutableStateOf<Recipe?>(null) }
     var materialStates by remember { mutableStateOf<List<MaterialConfigState>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
@@ -167,6 +190,80 @@ fun MaterialConfigurationScreen(
         }
     }
 
+    // 当蓝牙连接且有活动行时，实时更新活动行的重量
+    LaunchedEffect(currentWeight, activeRowIndex, isBluetoothConnected) {
+        if (isBluetoothConnected && activeRowIndex != null && currentWeight != null) {
+            val index = activeRowIndex!!
+            if (index < materialStates.size && !materialStates[index].isConfirmed) {
+                // 更新活动行的重量为蓝牙读取的重量
+                materialStates = materialStates.toMutableList().apply {
+                    this[index] = this[index].copy(
+                        actualWeight = currentWeight!!.value.toString(),
+                        hasError = false
+                    )
+                }
+            }
+        }
+    }
+
+    // 自动确认逻辑：稳定后等待指定时间自动确认
+    var stableStartTime by remember { mutableStateOf<Long?>(null) }
+    val autoConfirmEnabled = bluetoothPreferences.autoConfirmOnStable
+    val autoConfirmDelayMs = bluetoothPreferences.autoConfirmDelaySeconds * 1000L
+    val autoTareOnConfirm = bluetoothPreferences.autoTareOnConfirm
+
+    LaunchedEffect(currentWeight?.isStable, activeRowIndex, autoConfirmEnabled) {
+        if (!autoConfirmEnabled || activeRowIndex == null || !isBluetoothConnected) {
+            stableStartTime = null
+            return@LaunchedEffect
+        }
+
+        val index = activeRowIndex!!
+        if (index >= materialStates.size || materialStates[index].isConfirmed) {
+            stableStartTime = null
+            return@LaunchedEffect
+        }
+
+        if (currentWeight?.isStable == true && currentWeight!!.value > 0) {
+            // 重量稳定且大于0，开始计时
+            if (stableStartTime == null) {
+                stableStartTime = System.currentTimeMillis()
+            }
+
+            // 等待指定时间后自动确认
+            delay(autoConfirmDelayMs)
+
+            // 再次检查条件（可能在等待期间状态已改变）
+            if (activeRowIndex == index &&
+                currentWeight?.isStable == true &&
+                !materialStates[index].isConfirmed
+            ) {
+                // 自动确认
+                materialStates = materialStates.toMutableList().apply {
+                    val state = this[index]
+                    val weight = state.actualWeight.toDoubleOrNull()
+                    if (weight != null && weight > 0) {
+                        this[index] = state.copy(isConfirmed = true, hasError = false)
+                    }
+                }
+
+                // 自动去皮（如果启用）
+                if (autoTareOnConfirm) {
+                    scaleManager.tare()
+                }
+
+                // 自动跳到下一个未确认的行
+                val nextUnconfirmedIndex = materialStates.indexOfFirst { !it.isConfirmed }
+                activeRowIndex = if (nextUnconfirmedIndex >= 0) nextUnconfirmedIndex else null
+
+                stableStartTime = null
+            }
+        } else {
+            // 重量不稳定或为0，重置计时
+            stableStartTime = null
+        }
+    }
+
     when {
         isLoading -> {
             MaterialConfigurationLoadingState(modifier = modifier)
@@ -190,6 +287,15 @@ fun MaterialConfigurationScreen(
                 notes = notes,
                 taskId = currentTaskId,
                 recordId = currentRecordId,
+                // 蓝牙相关参数
+                scaleManager = scaleManager,
+                deviceAlias = bluetoothPreferences.deviceAlias,
+                activeRowIndex = activeRowIndex,
+                onActiveRowChange = { index -> activeRowIndex = index },
+                autoConfirmEnabled = autoConfirmEnabled,
+                autoConfirmDelaySeconds = bluetoothPreferences.autoConfirmDelaySeconds,
+                stableStartTime = stableStartTime,
+                // 回调
                 onCustomerChange = { customer = it },
                 onSalesOwnerChange = { salesOwner = it },
                 onPerfumerChange = { perfumer = it },
@@ -209,11 +315,20 @@ fun MaterialConfigurationScreen(
                             this[index] = state.copy(hasError = true)
                         }
                     }
+                    // 手动确认后也执行自动去皮和跳转
+                    if (autoTareOnConfirm && isBluetoothConnected) {
+                        scaleManager.tare()
+                    }
+                    // 自动跳到下一个未确认的行
+                    val nextUnconfirmedIndex = materialStates.indexOfFirst { !it.isConfirmed }
+                    activeRowIndex = if (nextUnconfirmedIndex >= 0) nextUnconfirmedIndex else null
                 },
                 onMaterialEdit = { index ->
                     materialStates = materialStates.toMutableList().apply {
                         this[index] = this[index].copy(isConfirmed = false, hasError = false)
                     }
+                    // 编辑时设为活动行
+                    activeRowIndex = index
                 },
                 onSaveConfiguration = { configData ->
                     onSaveConfiguration(
@@ -357,6 +472,15 @@ private fun MaterialConfigurationContent(
     notes: String,
     taskId: String,
     recordId: String,
+    // 蓝牙相关参数（可选，用于 Preview）
+    scaleManager: BluetoothScaleManager? = null,
+    deviceAlias: String? = null,
+    activeRowIndex: Int? = null,
+    onActiveRowChange: (Int?) -> Unit = {},
+    autoConfirmEnabled: Boolean = false,
+    autoConfirmDelaySeconds: Int = 10,
+    stableStartTime: Long? = null,
+    // 回调
     onCustomerChange: (String) -> Unit,
     onSalesOwnerChange: (String) -> Unit,
     onPerfumerChange: (String) -> Unit,
@@ -384,7 +508,44 @@ private fun MaterialConfigurationContent(
             )
         }
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // 蓝牙电子秤状态栏（仅在有 scaleManager 时显示）
+        if (scaleManager != null) {
+            DosingBluetoothStatusBar(
+                scaleManager = scaleManager,
+                deviceAlias = deviceAlias,
+                onConnectClick = {
+                    // 触发自动连接（如果有绑定设备）
+                    // 这里可以导航到蓝牙设置页面或显示连接对话框
+                }
+            )
+
+            // 自动确认倒计时提示
+            val connectionState by scaleManager.connectionState.collectAsState()
+            val currentWeight by scaleManager.currentWeight.collectAsState()
+            if (autoConfirmEnabled &&
+                activeRowIndex != null &&
+                connectionState == ConnectionState.CONNECTED &&
+                currentWeight?.isStable == true &&
+                stableStartTime != null
+            ) {
+                val elapsedSeconds = ((System.currentTimeMillis() - stableStartTime) / 1000).toInt()
+                val remainingSeconds = (autoConfirmDelaySeconds - elapsedSeconds).coerceAtLeast(0)
+                if (remainingSeconds > 0) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "稳定中，${remainingSeconds}秒后自动确认...",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(0xFF4CAF50),
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
 
         StakeholderSection(
             customer = customer,
@@ -399,9 +560,14 @@ private fun MaterialConfigurationContent(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // 材料列表
-        // 材料列表 - 使用响应式网格布局提高密度
         // 材料列表 - 高密度列表模式
+        // 蓝牙连接状态（用于材料列表）
+        val isBluetoothConnected = if (scaleManager != null) {
+            val connState by scaleManager.connectionState.collectAsState()
+            connState == ConnectionState.CONNECTED
+        } else {
+            false
+        }
         LazyColumn(
             modifier = Modifier.weight(1f),
             contentPadding = PaddingValues(bottom = 12.dp)
@@ -410,6 +576,14 @@ private fun MaterialConfigurationContent(
                 MaterialConfigCard(
                     index = index + 1,
                     state = materialState,
+                    isActive = activeRowIndex == index,
+                    isBluetoothConnected = isBluetoothConnected,
+                    onRowClick = {
+                        // 点击未确认的行时设为活动行
+                        if (!materialState.isConfirmed) {
+                            onActiveRowChange(index)
+                        }
+                    },
                     onWeightChanged = { weight ->
                         onMaterialWeightChanged(index, weight)
                     },
@@ -519,24 +693,36 @@ private fun RecipeHeader(
 /**
  * 单个材料配置项 - 列表行模式 (List Row)
  * 强调水平空间利用，一行一条，高密度
+ * 支持蓝牙活动行高亮
  */
 @Composable
 private fun MaterialConfigCard(
     index: Int,
     state: MaterialConfigState,
+    isActive: Boolean = false,
+    isBluetoothConnected: Boolean = false,
+    onRowClick: () -> Unit = {},
     onWeightChanged: (String) -> Unit,
     onConfirmed: () -> Unit,
     onEdit: () -> Unit,
     isCompact: Boolean
 ) {
     val isConfirmed = state.isConfirmed
-    
-    // 背景色：依然使用颜色区分状态，但增加斑马纹区分相邻行
+
+    // 背景色：活动行使用蓝色高亮，已确认使用绿色
     val backgroundColor = when {
-        isConfirmed -> Color(0xFFE8F5E9) // Light Green (Darker for better contrast: 0xFFF1F8E9 -> 0xFFE8F5E9)
+        isConfirmed -> Color(0xFFE8F5E9) // Light Green
+        isActive && isBluetoothConnected -> Color(0xFFE3F2FD) // Light Blue for active row
         state.hasError -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f)
-        index % 2 == 0 -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f) // 提高对比度：0.25f -> 0.7f
+        index % 2 == 0 -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
         else -> MaterialTheme.colorScheme.surface
+    }
+
+    // 活动行边框
+    val borderColor = if (isActive && isBluetoothConnected && !isConfirmed) {
+        Color(0xFF1976D2) // Blue border for active row
+    } else {
+        Color.Transparent
     }
 
     // 序号颜色池
@@ -555,10 +741,19 @@ private fun MaterialConfigCard(
     }
 
     // 分割线容器而不是卡片，节省Margin空间
+    // 活动行添加边框和点击事件
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .then(
+                if (borderColor != Color.Transparent) {
+                    Modifier.border(2.dp, borderColor, RoundedCornerShape(4.dp))
+                } else {
+                    Modifier
+                }
+            )
             .background(backgroundColor)
+            .clickable(enabled = !isConfirmed) { onRowClick() }
     ) {
         Row(
             modifier = Modifier

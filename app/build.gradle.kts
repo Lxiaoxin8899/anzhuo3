@@ -60,6 +60,9 @@ android {
 }
 
 dependencies {
+    // CH9140蓝牙库
+    implementation(files("libs/CH9140Library.jar"))
+
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.compose)

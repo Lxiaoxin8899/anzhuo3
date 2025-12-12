@@ -17,6 +17,21 @@
         </intent>
     </queries>
 
+    <!-- 蓝牙权限 (Android 11及以下) -->
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
+
+    <!-- 蓝牙权限 (Android 12+) -->
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+
+    <!-- 位置权限 (蓝牙扫描需要) -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
+    <!-- 蓝牙功能声明 -->
+    <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
+
     <!-- 网络权限 -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
@@ -40,6 +55,7 @@
     <uses-permission android:name="android.permission.ACCESS_AUDIO_STATE" />
 
     <application
+        android:name=".SmartDosingApplication"
         android:allowBackup="true"
         android:hasFragileUserData="true"
         android:dataExtractionRules="@xml/data_extraction_rules"

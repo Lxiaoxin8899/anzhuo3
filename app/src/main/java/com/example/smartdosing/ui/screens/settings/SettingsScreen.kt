@@ -38,7 +38,8 @@ import kotlinx.coroutines.launch
  */
 @Composable
 fun SettingsScreen(
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onNavigateToBluetoothSettings: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val preferencesManager = remember { DosingPreferencesManager(context) }
@@ -52,6 +53,18 @@ fun SettingsScreen(
     }
 
     val settingsSections = listOf(
+        SettingsSection(
+            title = "蓝牙电子秤",
+            icon = Icons.Outlined.Bluetooth,
+            items = listOf(
+                SettingsItem.Action(
+                    title = "蓝牙秤设置",
+                    subtitle = "管理蓝牙电子秤连接和参数",
+                    icon = Icons.Outlined.Scale,
+                    onClick = onNavigateToBluetoothSettings
+                )
+            )
+        ),
         SettingsSection(
             title = "投料语音设置",
             icon = Icons.AutoMirrored.Filled.VolumeUp,

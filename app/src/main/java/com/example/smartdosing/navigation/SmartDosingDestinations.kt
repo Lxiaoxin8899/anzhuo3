@@ -74,6 +74,7 @@ object SmartDosingRoutes {
     const val CONFIGURATION_RECORD_DETAIL = "configuration_record_detail/{recordId}"
     const val SETTINGS = "settings"
     const val DEVICE_INFO = "device_info"
+    const val BLUETOOTH_SCALE_SETTINGS = "bluetooth_scale_settings"
 
     fun recipeDetail(recipeId: String) = "recipe_detail/$recipeId"
     fun recipeEdit(recipeId: String) = "recipe_edit/$recipeId"
