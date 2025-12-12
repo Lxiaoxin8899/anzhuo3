@@ -1067,11 +1067,7 @@ private fun RecipeMaterial.toOperationMaterial(): Material {
  */
 private fun formatWeightDisplay(weight: Float, unit: String): String {
     val normalizedUnit = unit.uppercase(Locale.getDefault())
-    return if (weight == weight.toInt().toFloat()) {
-        "${weight.toInt()} $normalizedUnit"
-    } else {
-        String.format(Locale.getDefault(), "%.2f %s", weight, normalizedUnit)
-    }
+    return String.format(Locale.getDefault(), "%.3f %s", weight, normalizedUnit)
 }
 
 /**

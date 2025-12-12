@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
 import androidx.compose.foundation.lazy.LazyColumn
@@ -14,6 +15,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Edit
@@ -75,12 +77,21 @@ fun MaterialConfigurationScreen(
     val application = context.applicationContext as SmartDosingApplication
     val scaleManager = application.bluetoothScaleManager
     val bluetoothPreferencesManager = application.bluetoothPreferencesManager
+    val demoManager = application.demoModeManager
     val bluetoothPreferences by bluetoothPreferencesManager.preferencesFlow.collectAsState(
         initial = BluetoothScalePreferencesManager.BluetoothScalePreferencesState()
     )
+
+    // 演示模式状态
+    val isDemoMode = bluetoothPreferences.demoModeEnabled
+    val demoActive by demoManager.isActive.collectAsState()
+    val demoWeight by demoManager.currentWeight.collectAsState()
+
+    // 根据模式选择数据源
     val connectionState by scaleManager.connectionState.collectAsState()
-    val currentWeight by scaleManager.currentWeight.collectAsState()
-    val isBluetoothConnected = connectionState == ConnectionState.CONNECTED
+    val bluetoothWeight by scaleManager.currentWeight.collectAsState()
+    val currentWeight = if (isDemoMode && demoActive) demoWeight else bluetoothWeight
+    val isBluetoothConnected = if (isDemoMode) demoActive else connectionState == ConnectionState.CONNECTED
 
     // 活动行状态（当前正在接收蓝牙重量的行）
     var activeRowIndex by remember { mutableStateOf<Int?>(null) }
@@ -206,13 +217,23 @@ fun MaterialConfigurationScreen(
         }
     }
 
-    // 自动确认逻辑：稳定后等待指定时间自动确认
+    // 自动确认逻辑：稳定后等待指定时间自动确认（需在误差范围内）
     var stableStartTime by remember { mutableStateOf<Long?>(null) }
     val autoConfirmEnabled = bluetoothPreferences.autoConfirmOnStable
     val autoConfirmDelayMs = bluetoothPreferences.autoConfirmDelaySeconds * 1000L
     val autoTareOnConfirm = bluetoothPreferences.autoTareOnConfirm
+    val autoConfirmTolerancePermille = bluetoothPreferences.autoConfirmTolerancePermille
 
-    LaunchedEffect(currentWeight?.isStable, activeRowIndex, autoConfirmEnabled) {
+    // 检查当前重量是否在目标重量的误差范围内（使用千分比‰）
+    fun isWeightWithinTolerance(actualWeight: Double, targetWeight: Double, tolerancePermille: Int): Boolean {
+        if (targetWeight <= 0) return actualWeight > 0 // 目标为0时，只要有重量就算合格
+        val tolerance = targetWeight * tolerancePermille / 1000.0 // 千分比转换
+        val lowerBound = targetWeight - tolerance
+        val upperBound = targetWeight + tolerance
+        return actualWeight in lowerBound..upperBound
+    }
+
+    LaunchedEffect(currentWeight?.isStable, currentWeight?.value, activeRowIndex, autoConfirmEnabled) {
         if (!autoConfirmEnabled || activeRowIndex == null || !isBluetoothConnected) {
             stableStartTime = null
             return@LaunchedEffect
@@ -224,8 +245,12 @@ fun MaterialConfigurationScreen(
             return@LaunchedEffect
         }
 
-        if (currentWeight?.isStable == true && currentWeight!!.value > 0) {
-            // 重量稳定且大于0，开始计时
+        val targetWeight = materialStates[index].material.weight
+        val actualWeight = currentWeight?.value ?: 0.0
+        val isWithinTolerance = isWeightWithinTolerance(actualWeight, targetWeight, autoConfirmTolerancePermille)
+
+        if (currentWeight?.isStable == true && actualWeight > 0 && isWithinTolerance) {
+            // 重量稳定、大于0、且在误差范围内，开始计时
             if (stableStartTime == null) {
                 stableStartTime = System.currentTimeMillis()
             }
@@ -234,8 +259,12 @@ fun MaterialConfigurationScreen(
             delay(autoConfirmDelayMs)
 
             // 再次检查条件（可能在等待期间状态已改变）
+            val currentActualWeight = currentWeight?.value ?: 0.0
+            val stillWithinTolerance = isWeightWithinTolerance(currentActualWeight, targetWeight, autoConfirmTolerancePermille)
+
             if (activeRowIndex == index &&
                 currentWeight?.isStable == true &&
+                stillWithinTolerance &&
                 !materialStates[index].isConfirmed
             ) {
                 // 自动确认
@@ -249,7 +278,11 @@ fun MaterialConfigurationScreen(
 
                 // 自动去皮（如果启用）
                 if (autoTareOnConfirm) {
-                    scaleManager.tare()
+                    if (isDemoMode) {
+                        demoManager.simulateTare()
+                    } else {
+                        scaleManager.tare()
+                    }
                 }
 
                 // 自动跳到下一个未确认的行
@@ -259,7 +292,7 @@ fun MaterialConfigurationScreen(
                 stableStartTime = null
             }
         } else {
-            // 重量不稳定或为0，重置计时
+            // 重量不稳定、为0、或不在误差范围内，重置计时
             stableStartTime = null
         }
     }
@@ -291,9 +324,18 @@ fun MaterialConfigurationScreen(
                 scaleManager = scaleManager,
                 deviceAlias = bluetoothPreferences.deviceAlias,
                 activeRowIndex = activeRowIndex,
-                onActiveRowChange = { index -> activeRowIndex = index },
+                onActiveRowChange = { index ->
+                    activeRowIndex = index
+                    // 演示模式下，切换活动行时自动模拟投料
+                    if (isDemoMode && demoActive && index != null && index < materialStates.size) {
+                        val targetWeight = materialStates[index].material.weight
+                        demoManager.simulateWeighing(targetWeight)
+                    }
+                },
+                isDemoMode = isDemoMode,
                 autoConfirmEnabled = autoConfirmEnabled,
                 autoConfirmDelaySeconds = bluetoothPreferences.autoConfirmDelaySeconds,
+                autoConfirmTolerancePermille = autoConfirmTolerancePermille,
                 stableStartTime = stableStartTime,
                 // 回调
                 onCustomerChange = { customer = it },
@@ -317,7 +359,11 @@ fun MaterialConfigurationScreen(
                     }
                     // 手动确认后也执行自动去皮和跳转
                     if (autoTareOnConfirm && isBluetoothConnected) {
-                        scaleManager.tare()
+                        if (isDemoMode) {
+                            demoManager.simulateTare()
+                        } else {
+                            scaleManager.tare()
+                        }
                     }
                     // 自动跳到下一个未确认的行
                     val nextUnconfirmedIndex = materialStates.indexOfFirst { !it.isConfirmed }
@@ -477,8 +523,10 @@ private fun MaterialConfigurationContent(
     deviceAlias: String? = null,
     activeRowIndex: Int? = null,
     onActiveRowChange: (Int?) -> Unit = {},
+    isDemoMode: Boolean = false,
     autoConfirmEnabled: Boolean = false,
     autoConfirmDelaySeconds: Int = 10,
+    autoConfirmTolerancePermille: Int = 10, // 默认10‰（千分之十，即1%）
     stableStartTime: Long? = null,
     // 回调
     onCustomerChange: (String) -> Unit,
@@ -510,8 +558,60 @@ private fun MaterialConfigurationContent(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // 蓝牙电子秤状态栏（仅在有 scaleManager 时显示）
-        if (scaleManager != null) {
+        // 演示模式或蓝牙电子秤状态栏
+        if (isDemoMode) {
+            // 演示模式状态栏
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = Color(0xFFE3F2FD),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Science,
+                            contentDescription = null,
+                            tint = Color(0xFF1976D2),
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Column {
+                            Text(
+                                text = "演示模式",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF1565C0)
+                            )
+                            Text(
+                                text = "点击物料行开始模拟投料",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xFF1976D2)
+                            )
+                        }
+                    }
+                    Surface(
+                        color = Color(0xFF4CAF50),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text(
+                            text = "DEMO",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
+                }
+            }
+        } else if (scaleManager != null) {
             DosingBluetoothStatusBar(
                 scaleManager = scaleManager,
                 deviceAlias = deviceAlias,
@@ -527,17 +627,34 @@ private fun MaterialConfigurationContent(
             if (autoConfirmEnabled &&
                 activeRowIndex != null &&
                 connectionState == ConnectionState.CONNECTED &&
-                currentWeight?.isStable == true &&
-                stableStartTime != null
+                currentWeight?.isStable == true
             ) {
-                val elapsedSeconds = ((System.currentTimeMillis() - stableStartTime) / 1000).toInt()
-                val remainingSeconds = (autoConfirmDelaySeconds - elapsedSeconds).coerceAtLeast(0)
-                if (remainingSeconds > 0) {
-                    Spacer(modifier = Modifier.height(4.dp))
+                val targetWeight = materialStates.getOrNull(activeRowIndex)?.material?.weight ?: 0.0
+                val actualWeight = currentWeight?.value ?: 0.0
+                val tolerance = targetWeight * autoConfirmTolerancePermille / 1000.0 // 千分比转换
+                val isWithinTolerance = if (targetWeight <= 0) actualWeight > 0 else actualWeight in (targetWeight - tolerance)..(targetWeight + tolerance)
+
+                Spacer(modifier = Modifier.height(4.dp))
+                if (isWithinTolerance && stableStartTime != null) {
+                    val elapsedSeconds = ((System.currentTimeMillis() - stableStartTime) / 1000).toInt()
+                    val remainingSeconds = (autoConfirmDelaySeconds - elapsedSeconds).coerceAtLeast(0)
+                    if (remainingSeconds > 0) {
+                        Text(
+                            text = "误差范围内，${remainingSeconds}秒后自动确认...",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color(0xFF4CAF50),
+                            modifier = Modifier.fillMaxWidth(),
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                } else if (!isWithinTolerance && actualWeight > 0) {
+                    // 显示当前偏差（千分比）
+                    val deviation = actualWeight - targetWeight
+                    val deviationPermille = if (targetWeight > 0) (deviation / targetWeight * 1000) else 0.0
                     Text(
-                        text = "稳定中，${remainingSeconds}秒后自动确认...",
+                        text = "偏差 ${if (deviation >= 0) "+" else ""}${String.format("%.1f", deviationPermille)}‰，需在±${autoConfirmTolerancePermille}‰内",
                         style = MaterialTheme.typography.bodySmall,
-                        color = Color(0xFF4CAF50),
+                        color = Color(0xFFFF9800),
                         modifier = Modifier.fillMaxWidth(),
                         textAlign = TextAlign.Center
                     )
@@ -573,6 +690,18 @@ private fun MaterialConfigurationContent(
             contentPadding = PaddingValues(bottom = 12.dp)
         ) {
             itemsIndexed(materialStates) { index, materialState ->
+                // 计算当前行的倒计时状态
+                val isThisRowCountingDown = autoConfirmEnabled &&
+                        activeRowIndex == index &&
+                        stableStartTime != null &&
+                        !materialState.isConfirmed
+
+                val countdownProgress = if (isThisRowCountingDown && stableStartTime != null) {
+                    val elapsed = (System.currentTimeMillis() - stableStartTime).toFloat()
+                    val total = autoConfirmDelaySeconds * 1000f
+                    (elapsed / total).coerceIn(0f, 1f)
+                } else 0f
+
                 MaterialConfigCard(
                     index = index + 1,
                     state = materialState,
@@ -593,7 +722,9 @@ private fun MaterialConfigurationContent(
                     onEdit = {
                         onMaterialEdit(index)
                     },
-                    isCompact = true
+                    isCompact = true,
+                    isAutoConfirmCountingDown = isThisRowCountingDown,
+                    autoConfirmProgress = countdownProgress
                 )
             }
         }
@@ -691,9 +822,8 @@ private fun RecipeHeader(
 }
 
 /**
- * 单个材料配置项 - 列表行模式 (List Row)
- * 强调水平空间利用，一行一条，高密度
- * 支持蓝牙活动行高亮
+ * 单个材料配置项 - 支持展开/收缩模式
+ * 活动行展开显示大号重量和按钮，非活动行紧凑显示
  */
 @Composable
 private fun MaterialConfigCard(
@@ -705,183 +835,292 @@ private fun MaterialConfigCard(
     onWeightChanged: (String) -> Unit,
     onConfirmed: () -> Unit,
     onEdit: () -> Unit,
-    isCompact: Boolean
+    isCompact: Boolean,
+    // 自动确认倒计时相关
+    isAutoConfirmCountingDown: Boolean = false,
+    autoConfirmProgress: Float = 0f // 0-1 进度
 ) {
     val isConfirmed = state.isConfirmed
+    // 是否展开：活动行且蓝牙连接且未确认时展开
+    val isExpanded = isActive && isBluetoothConnected && !isConfirmed
 
-    // 背景色：活动行使用蓝色高亮，已确认使用绿色
-    val backgroundColor = when {
-        isConfirmed -> Color(0xFFE8F5E9) // Light Green
-        isActive && isBluetoothConnected -> Color(0xFFE3F2FD) // Light Blue for active row
-        state.hasError -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f)
-        index % 2 == 0 -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
-        else -> MaterialTheme.colorScheme.surface
-    }
+    // 背景色
+    val backgroundColor by animateColorAsState(
+        targetValue = when {
+            isConfirmed -> Color(0xFFE8F5E9) // Light Green
+            isExpanded -> Color(0xFFE3F2FD) // Light Blue for expanded
+            state.hasError -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f)
+            index % 2 == 0 -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+            else -> MaterialTheme.colorScheme.surface
+        },
+        label = "backgroundColor"
+    )
 
-    // 活动行边框
-    val borderColor = if (isActive && isBluetoothConnected && !isConfirmed) {
-        Color(0xFF1976D2) // Blue border for active row
-    } else {
-        Color.Transparent
-    }
+    // 边框色
+    val borderColor = if (isExpanded) Color(0xFF1976D2) else Color.Transparent
 
     // 序号颜色池
     val indexColors = listOf(
-        Color(0xFF42A5F5), // Blue
-        Color(0xFFFFA726), // Orange
-        Color(0xFFAB47BC), // Purple
-        Color(0xFF26A69A), // Teal
-        Color(0xFFEC407A), // Pink
-        Color(0xFF5C6BC0)  // Indigo
+        Color(0xFF42A5F5), Color(0xFFFFA726), Color(0xFFAB47BC),
+        Color(0xFF26A69A), Color(0xFFEC407A), Color(0xFF5C6BC0)
     )
-    val indexBadgeColor = if (isConfirmed) {
-        Color(0xFF66BB6A) // Green for confirmed
-    } else {
-        indexColors[(index - 1) % indexColors.size]
-    }
+    val indexBadgeColor = if (isConfirmed) Color(0xFF66BB6A) else indexColors[(index - 1) % indexColors.size]
 
-    // 分割线容器而不是卡片，节省Margin空间
-    // 活动行添加边框和点击事件
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .then(
-                if (borderColor != Color.Transparent) {
-                    Modifier.border(2.dp, borderColor, RoundedCornerShape(4.dp))
-                } else {
-                    Modifier
-                }
-            )
-            .background(backgroundColor)
-            .clickable(enabled = !isConfirmed) { onRowClick() }
-    ) {
-        Row(
+    // 使用 Card 包裹展开的行，普通行用简单容器
+    if (isExpanded) {
+        // 展开模式 - 大卡片
+        Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp), // 紧凑的内边距
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                .padding(horizontal = 4.dp, vertical = 4.dp)
+                .animateContentSize(),
+            colors = CardDefaults.cardColors(containerColor = backgroundColor),
+            border = BorderStroke(2.dp, borderColor),
+            shape = RoundedCornerShape(12.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
         ) {
-            // 1. Index Badge (Left)
-            Box(
+            Column(
                 modifier = Modifier
-                    .size(24.dp)
-                    .background(
-                        color = indexBadgeColor,
-                        shape = RoundedCornerShape(4.dp)
-                    ),
-                contentAlignment = Alignment.Center
+                    .fillMaxWidth()
+                    .padding(16.dp)
             ) {
-                if (isConfirmed) {
-                    Icon(
-                        imageVector = Icons.Default.Check,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(16.dp)
-                    )
-                } else {
-                    Text(
-                        text = index.toString(),
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White // Always white text on colored badge
-                    )
-                }
-            }
-
-            // 2. Info Area (Middle, absorbs weight)
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = state.material.name,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                // Second Row: Code (Prominent) | Target Weight
+                // 顶部：序号 + 物料名称
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    // Material Code - Monospace & Prominent (Debug: Always Show)
+                    // 大号序号徽章
                     Box(
                         modifier = Modifier
-                            .background(
-                                MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
-                                RoundedCornerShape(4.dp)
-                            )
-                            .padding(horizontal = 4.dp, vertical = 2.dp)
+                            .size(36.dp)
+                            .background(indexBadgeColor, RoundedCornerShape(8.dp)),
+                        contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = if (state.material.code.isNotBlank()) state.material.code else "[空]",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                            text = index.toString(),
+                            style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                            color = Color.White
                         )
                     }
-                    
-                    Text(
-                        text = "目标 ${DecimalFormat("#.##").format(state.material.weight)}g",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-
-            // 3. Action Area (Right)
-            if (!isConfirmed) {
-                // Input Mode
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    OutlinedTextField(
-                        value = state.actualWeight,
-                        onValueChange = onWeightChanged,
-                        placeholder = { Text("0.0") },
-                        singleLine = true,
-                        textStyle = MaterialTheme.typography.bodyMedium.copy(textAlign = TextAlign.End),
-                        modifier = Modifier
-                            .width(80.dp) // Fixed width for alignment
-                            .height(48.dp),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        isError = state.hasError,
-                        shape = RoundedCornerShape(8.dp)
-                    )
-                    
-                    FilledTonalButton(
-                        onClick = onConfirmed,
-                        modifier = Modifier.height(36.dp),
-                        contentPadding = PaddingValues(horizontal = 12.dp),
-                        shape = RoundedCornerShape(6.dp)
-                    ) {
-                        Text("确认")
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = state.material.name,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF1565C0)
+                        )
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // 物料代码
+                            Surface(
+                                color = MaterialTheme.colorScheme.secondaryContainer,
+                                shape = RoundedCornerShape(4.dp)
+                            ) {
+                                Text(
+                                    text = state.material.code.ifBlank { "N/A" },
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                            Text(
+                                text = "目标: ${DecimalFormat("0.000").format(state.material.weight)} g",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
                 }
-            } else {
-                // Confirmed Mode - Read Only
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // 中间：大号重量显示
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = Color(0xFFBBDEFB),
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(2.dp, Color(0xFF1976D2))
                 ) {
-                    Text(
-                        text = "${DecimalFormat("#.##").format(state.actualWeight.toDoubleOrNull() ?: 0.0)} g",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF2E7D32)
-                    )
-                    IconButton(onClick = onEdit) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
                         Icon(
-                            imageVector = Icons.Default.Edit,
-                            contentDescription = "Edit",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(18.dp)
+                            imageVector = Icons.Default.Bluetooth,
+                            contentDescription = null,
+                            tint = Color(0xFF1976D2),
+                            modifier = Modifier.size(28.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = state.actualWeight.ifBlank { "0.000" },
+                            style = MaterialTheme.typography.displaySmall,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF0D47A1)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "g",
+                            style = MaterialTheme.typography.titleLarge,
+                            color = Color(0xFF1976D2)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // 底部：确认按钮 + 倒计时指示器
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    // 倒计时进度指示器（仅在倒计时时显示）
+                    if (isAutoConfirmCountingDown) {
+                        Box(
+                            modifier = Modifier.size(56.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(
+                                progress = { autoConfirmProgress },
+                                modifier = Modifier.size(48.dp),
+                                color = Color(0xFF4CAF50),
+                                trackColor = Color(0xFFE8F5E9),
+                                strokeWidth = 4.dp
+                            )
+                            Icon(
+                                imageVector = Icons.Default.CheckCircle,
+                                contentDescription = null,
+                                tint = Color(0xFF4CAF50),
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                    }
+
+                    // 确认按钮
+                    Button(
+                        onClick = onConfirmed,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(56.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (isAutoConfirmCountingDown) Color(0xFF66BB6A) else Color(0xFF4CAF50)
+                        )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CheckCircle,
+                            contentDescription = null,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = if (isAutoConfirmCountingDown) "自动确认中" else "确认投料",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
                         )
                     }
                 }
             }
         }
-        Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+    } else {
+        // 紧凑模式 - 单行
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(backgroundColor)
+                .clickable(enabled = !isConfirmed) { onRowClick() }
+                .animateContentSize()
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // 序号徽章
+                Box(
+                    modifier = Modifier
+                        .size(22.dp)
+                        .background(indexBadgeColor, RoundedCornerShape(4.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (isConfirmed) {
+                        Icon(Icons.Default.Check, null, tint = Color.White, modifier = Modifier.size(14.dp))
+                    } else {
+                        Text(index.toString(), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = Color.White)
+                    }
+                }
+
+                // 物料信息
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = state.material.name,
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(
+                            text = state.material.code.ifBlank { "-" },
+                            style = MaterialTheme.typography.labelSmall,
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = "→ ${DecimalFormat("0.000").format(state.material.weight)}g",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                // 右侧操作区
+                if (isConfirmed) {
+                    // 已确认：显示实际重量和编辑按钮
+                    Text(
+                        text = "${DecimalFormat("0.000").format(state.actualWeight.toDoubleOrNull() ?: 0.0)}g",
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF2E7D32)
+                    )
+                    IconButton(onClick = onEdit, modifier = Modifier.size(28.dp)) {
+                        Icon(Icons.Default.Edit, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
+                    }
+                } else {
+                    // 未确认：显示输入框和确认按钮
+                    OutlinedTextField(
+                        value = state.actualWeight,
+                        onValueChange = onWeightChanged,
+                        placeholder = { Text("0.0", style = MaterialTheme.typography.bodySmall) },
+                        singleLine = true,
+                        textStyle = MaterialTheme.typography.bodySmall.copy(textAlign = TextAlign.End),
+                        modifier = Modifier.width(70.dp).height(36.dp),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        isError = state.hasError,
+                        shape = RoundedCornerShape(6.dp)
+                    )
+                    FilledTonalButton(
+                        onClick = onConfirmed,
+                        modifier = Modifier.height(32.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp),
+                        shape = RoundedCornerShape(6.dp)
+                    ) {
+                        Text("确认", style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+            }
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+        }
     }
 }
 

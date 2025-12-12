@@ -23,6 +23,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.smartdosing.bluetooth.BluetoothPermissionHelper
@@ -65,6 +67,7 @@ fun BluetoothScaleSettingsScreen(
     var showBaudRateDialog by remember { mutableStateOf(false) }
     var showProtocolDialog by remember { mutableStateOf(false) }
     var showAutoConfirmDelayDialog by remember { mutableStateOf(false) }
+    var showAutoConfirmToleranceDialog by remember { mutableStateOf(false) }
     var headerVisible by remember { mutableStateOf(false) }
 
     // 权限请求
@@ -250,6 +253,158 @@ fun BluetoothScaleSettingsScreen(
             },
             confirmButton = {
                 TextButton(onClick = { showAutoConfirmDelayDialog = false }) {
+                    Text("取消")
+                }
+            }
+        )
+    }
+
+    // 自动确认误差范围选择对话框（千分比‰）- 支持自定义输入
+    if (showAutoConfirmToleranceDialog) {
+        var customInputValue by remember { mutableStateOf("") }
+        var showCustomInput by remember { mutableStateOf(false) }
+        var inputError by remember { mutableStateOf<String?>(null) }
+
+        AlertDialog(
+            onDismissRequest = { showAutoConfirmToleranceDialog = false },
+            title = { Text("设置误差范围") },
+            text = {
+                Column {
+                    Text(
+                        text = "只有当实际重量在目标重量的误差范围内时，才会开始自动确认计时。使用千分比(‰)以满足精密投料需求。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 12.dp)
+                    )
+
+                    // 常用预设选项
+                    Text(
+                        text = "常用预设",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+
+                    // 使用 FlowRow 风格的布局显示预设选项
+                    val presets = listOf(1, 2, 5, 10, 20, 50)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        presets.take(3).forEach { permille ->
+                            FilterChip(
+                                selected = preferencesState.autoConfirmTolerancePermille == permille && !showCustomInput,
+                                onClick = {
+                                    showCustomInput = false
+                                    scope.launch {
+                                        preferencesManager.setAutoConfirmTolerancePermille(permille)
+                                    }
+                                    showAutoConfirmToleranceDialog = false
+                                },
+                                label = { Text("±${permille}‰") },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        presets.drop(3).forEach { permille ->
+                            FilterChip(
+                                selected = preferencesState.autoConfirmTolerancePermille == permille && !showCustomInput,
+                                onClick = {
+                                    showCustomInput = false
+                                    scope.launch {
+                                        preferencesManager.setAutoConfirmTolerancePermille(permille)
+                                    }
+                                    showAutoConfirmToleranceDialog = false
+                                },
+                                label = { Text("±${permille}‰") },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+                    HorizontalDivider()
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // 自定义输入区域
+                    Text(
+                        text = "自定义输入",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = customInputValue,
+                            onValueChange = { newValue ->
+                                // 只允许输入数字
+                                if (newValue.isEmpty() || newValue.all { it.isDigit() }) {
+                                    customInputValue = newValue
+                                    inputError = null
+                                    showCustomInput = newValue.isNotEmpty()
+                                }
+                            },
+                            label = { Text("误差值") },
+                            placeholder = { Text("如: 3") },
+                            suffix = { Text("‰") },
+                            singleLine = true,
+                            isError = inputError != null,
+                            supportingText = inputError?.let { { Text(it) } },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.weight(1f)
+                        )
+
+                        Button(
+                            onClick = {
+                                val value = customInputValue.toIntOrNull()
+                                when {
+                                    value == null -> inputError = "请输入有效数字"
+                                    value < 1 -> inputError = "最小值为1‰"
+                                    value > 500 -> inputError = "最大值为500‰"
+                                    else -> {
+                                        scope.launch {
+                                            preferencesManager.setAutoConfirmTolerancePermille(value)
+                                        }
+                                        showAutoConfirmToleranceDialog = false
+                                    }
+                                }
+                            },
+                            enabled = customInputValue.isNotEmpty()
+                        ) {
+                            Text("确定")
+                        }
+                    }
+
+                    // 当前值提示
+                    Spacer(modifier = Modifier.height(12.dp))
+                    val currentPermille = preferencesState.autoConfirmTolerancePermille
+                    val currentPercent = currentPermille / 10.0
+                    Surface(
+                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "当前设置: ±${currentPermille}‰ (相当于 ±${String.format("%.1f", currentPercent)}%)",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.padding(12.dp)
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showAutoConfirmToleranceDialog = false }) {
                     Text("取消")
                 }
             }
@@ -550,8 +705,18 @@ fun BluetoothScaleSettingsScreen(
                         }
                     )
 
-                    // 仅在启用自动确认时显示等待时间设置
+                    // 仅在启用自动确认时显示等待时间和误差范围设置
                     if (preferencesState.autoConfirmOnStable) {
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+                        // 自动确认误差范围（千分比）
+                        SettingsRow(
+                            icon = Icons.Outlined.Tune,
+                            title = "误差范围",
+                            subtitle = "±${preferencesState.autoConfirmTolerancePermille}‰（重量需在此范围内才开始计时）",
+                            onClick = { showAutoConfirmToleranceDialog = true }
+                        )
+
                         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
                         // 自动确认等待时间
@@ -575,6 +740,143 @@ fun BluetoothScaleSettingsScreen(
                             scope.launch { preferencesManager.setAutoTareOnConfirm(enabled) }
                         }
                     )
+                }
+            }
+
+            // 演示模式分区
+            item {
+                val demoManager = application.demoModeManager
+                val demoActive by demoManager.isActive.collectAsState()
+                val demoWeight by demoManager.currentWeight.collectAsState()
+
+                SettingsCard(
+                    title = "演示模式",
+                    icon = Icons.Outlined.PlayCircle
+                ) {
+                    // 演示模式说明
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                color = if (preferencesState.demoModeEnabled) Color(0xFFE3F2FD) else Color(0xFFF5F5F5),
+                                shape = RoundedCornerShape(8.dp)
+                            )
+                            .padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = if (preferencesState.demoModeEnabled) Icons.Outlined.Info else Icons.Outlined.Info,
+                            contentDescription = null,
+                            tint = if (preferencesState.demoModeEnabled) Color(0xFF1976D2) else Color(0xFF757575),
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = if (preferencesState.demoModeEnabled) "演示模式已启用" else "演示模式",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium,
+                                color = if (preferencesState.demoModeEnabled) Color(0xFF1565C0) else Color(0xFF424242)
+                            )
+                            Text(
+                                text = "无需真实蓝牙秤，模拟投料过程用于演示和培训",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (preferencesState.demoModeEnabled) Color(0xFF1976D2) else Color(0xFF757575)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // 演示模式开关
+                    SettingsToggleRow(
+                        icon = Icons.Outlined.PlayCircle,
+                        title = "启用演示模式",
+                        subtitle = if (preferencesState.demoModeEnabled) "投料界面将使用模拟数据" else "关闭后使用真实蓝牙秤",
+                        checked = preferencesState.demoModeEnabled,
+                        onCheckedChange = { enabled ->
+                            scope.launch {
+                                preferencesManager.setDemoModeEnabled(enabled)
+                                if (enabled) {
+                                    demoManager.startDemo()
+                                    Toast.makeText(context, "演示模式已启用", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    demoManager.stopDemo()
+                                    Toast.makeText(context, "演示模式已关闭", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        }
+                    )
+
+                    // 演示场景选择（仅在启用时显示）
+                    if (preferencesState.demoModeEnabled) {
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+                        val scenarios = com.example.smartdosing.bluetooth.DemoScenarioConfig.PRESETS
+                        val currentScenario = scenarios.getOrNull(preferencesState.demoScenarioIndex) ?: scenarios[0]
+
+                        SettingsRow(
+                            icon = Icons.Outlined.Tune,
+                            title = "演示场景",
+                            subtitle = "${currentScenario.name} - ${currentScenario.description}",
+                            onClick = {
+                                // 循环切换场景
+                                val nextIndex = (preferencesState.demoScenarioIndex + 1) % scenarios.size
+                                scope.launch {
+                                    preferencesManager.setDemoScenarioIndex(nextIndex)
+                                    val nextScenario = scenarios[nextIndex]
+                                    demoManager.scenario = nextScenario.scenario
+                                    demoManager.speedMs = nextScenario.speedMs
+                                    Toast.makeText(context, "已切换到: ${nextScenario.name}", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        )
+
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+                        // 演示状态显示
+                        if (demoActive) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(
+                                        color = Color(0xFFE8F5E9),
+                                        shape = RoundedCornerShape(8.dp)
+                                    )
+                                    .padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Column {
+                                    Text(
+                                        text = "当前模拟重量",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = Color(0xFF2E7D32)
+                                    )
+                                    Text(
+                                        text = demoWeight?.getFullDisplay() ?: "0.000 g",
+                                        style = MaterialTheme.typography.titleLarge,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFF1B5E20)
+                                    )
+                                }
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    OutlinedButton(
+                                        onClick = { demoManager.simulateTare() }
+                                    ) {
+                                        Text("去皮")
+                                    }
+                                    OutlinedButton(
+                                        onClick = {
+                                            demoManager.simulateWeighing(50.0 + Math.random() * 50)
+                                        }
+                                    ) {
+                                        Text("模拟投料")
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
 

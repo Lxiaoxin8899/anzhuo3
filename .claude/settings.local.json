@@ -28,7 +28,8 @@
       "Bash(d:DM-cangkuanzhuo3gradlew.bat -p d:DM-cangkuanzhuo3 compileDebugKotlin)",
       "Bash(cd:*)",
       "Bash(git -C \"d:\\DM-cangku\\anzhuo3\" diff --stat)",
-      "Bash(git -C \"d:\\DM-cangku\\anzhuo3\" diff --no-color)"
+      "Bash(git -C \"d:\\DM-cangku\\anzhuo3\" diff --no-color)",
+      "Bash(git -C \"d:\\DM-cangku\\anzhuo3\" commit -m \"$(cat <<''EOF''\nfeat: 添加蓝牙电子秤功能支持\n\n- 集成CH9140蓝牙库，支持蓝牙串口通信\n- 新增蓝牙电子秤管理器和设置页面\n- 配料界面支持蓝牙秤实时读数和活动行高亮\n- 支持稳定后自动确认和自动去皮功能\n- 添加蓝牙相关权限声明\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n)\")"
     ],
     "deny": [],
     "ask": []

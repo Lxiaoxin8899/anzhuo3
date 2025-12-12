@@ -1409,7 +1409,7 @@ private fun formatPercent(value: Double): String {
 }
 
 private fun formatWeight(value: Double): String {
-    return String.format(Locale.getDefault(), "%.2f", value)
+    return String.format(Locale.getDefault(), "%.3f", value)
 }
 
 private fun calculateDuration(startTime: String, endTime: String): String {

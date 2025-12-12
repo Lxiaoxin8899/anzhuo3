@@ -8,7 +8,7 @@ data class WeightData(
     val timestamp: Long = System.currentTimeMillis()
 ) {
     fun getDisplayValue(): String {
-        return String.format("%.2f", value)
+        return String.format("%.3f", value)
     }
 
     fun getFullDisplay(): String {

@@ -32,6 +32,9 @@ class BluetoothScalePreferencesManager(private val context: Context) {
         private val KEY_STOP_BITS = intPreferencesKey("stop_bits")
         private val KEY_PARITY = intPreferencesKey("parity")
         private val KEY_PROTOCOL = stringPreferencesKey("protocol")
+        private val KEY_DEMO_MODE_ENABLED = booleanPreferencesKey("demo_mode_enabled")
+        private val KEY_DEMO_SCENARIO_INDEX = intPreferencesKey("demo_scenario_index")
+        private val KEY_AUTO_CONFIRM_TOLERANCE_PERMILLE = intPreferencesKey("auto_confirm_tolerance_permille")
 
         // 默认值
         const val DEFAULT_BAUD_RATE = 9600
@@ -41,12 +44,17 @@ class BluetoothScalePreferencesManager(private val context: Context) {
         const val DEFAULT_PROTOCOL = "ohaus"
         const val DEFAULT_AUTO_CONFIRM_DELAY_SECONDS = 10 // 默认稳定后等待10秒自动确认
         const val DEFAULT_AUTO_TARE_ON_CONFIRM = true // 默认确认后自动去皮
+        const val DEFAULT_AUTO_CONFIRM_TOLERANCE_PERMILLE = 10 // 默认误差范围10‰（千分之十，即1%）
 
         // 可选波特率
         val BAUD_RATE_OPTIONS = listOf(2400, 4800, 9600, 19200, 38400, 57600, 115200)
 
         // 可选自动确认等待时间（秒）
         val AUTO_CONFIRM_DELAY_OPTIONS = listOf(3, 5, 8, 10, 15, 20, 30)
+
+        // 可选误差范围（千分比‰）- 精密投料需要更精确的控制
+        // 1‰=0.1%, 5‰=0.5%, 10‰=1%, 20‰=2%, 50‰=5%
+        val AUTO_CONFIRM_TOLERANCE_OPTIONS = listOf(1, 2, 3, 5, 8, 10, 15, 20, 30, 50)
     }
 
     /**
@@ -65,7 +73,10 @@ class BluetoothScalePreferencesManager(private val context: Context) {
         val dataBits: Int = DEFAULT_DATA_BITS,
         val stopBits: Int = DEFAULT_STOP_BITS,
         val parity: Int = DEFAULT_PARITY,
-        val protocol: String = DEFAULT_PROTOCOL
+        val protocol: String = DEFAULT_PROTOCOL,
+        val demoModeEnabled: Boolean = false, // 演示模式开关
+        val demoScenarioIndex: Int = 0, // 演示场景索引
+        val autoConfirmTolerancePermille: Int = DEFAULT_AUTO_CONFIRM_TOLERANCE_PERMILLE // 自动确认误差范围（千分比‰）
     ) {
         /**
          * 是否有已绑定的设备
@@ -113,7 +124,10 @@ class BluetoothScalePreferencesManager(private val context: Context) {
                 dataBits = preferences[KEY_DATA_BITS] ?: DEFAULT_DATA_BITS,
                 stopBits = preferences[KEY_STOP_BITS] ?: DEFAULT_STOP_BITS,
                 parity = preferences[KEY_PARITY] ?: DEFAULT_PARITY,
-                protocol = preferences[KEY_PROTOCOL] ?: DEFAULT_PROTOCOL
+                protocol = preferences[KEY_PROTOCOL] ?: DEFAULT_PROTOCOL,
+                demoModeEnabled = preferences[KEY_DEMO_MODE_ENABLED] ?: false,
+                demoScenarioIndex = preferences[KEY_DEMO_SCENARIO_INDEX] ?: 0,
+                autoConfirmTolerancePermille = preferences[KEY_AUTO_CONFIRM_TOLERANCE_PERMILLE] ?: DEFAULT_AUTO_CONFIRM_TOLERANCE_PERMILLE
             )
         }
 
@@ -242,6 +256,33 @@ class BluetoothScalePreferencesManager(private val context: Context) {
     suspend fun setProtocol(protocol: String) {
         context.bluetoothScaleDataStore.edit { preferences ->
             preferences[KEY_PROTOCOL] = protocol
+        }
+    }
+
+    /**
+     * 设置演示模式
+     */
+    suspend fun setDemoModeEnabled(enabled: Boolean) {
+        context.bluetoothScaleDataStore.edit { preferences ->
+            preferences[KEY_DEMO_MODE_ENABLED] = enabled
+        }
+    }
+
+    /**
+     * 设置演示场景索引
+     */
+    suspend fun setDemoScenarioIndex(index: Int) {
+        context.bluetoothScaleDataStore.edit { preferences ->
+            preferences[KEY_DEMO_SCENARIO_INDEX] = index
+        }
+    }
+
+    /**
+     * 设置自动确认误差范围（千分比‰）
+     */
+    suspend fun setAutoConfirmTolerancePermille(permille: Int) {
+        context.bluetoothScaleDataStore.edit { preferences ->
+            preferences[KEY_AUTO_CONFIRM_TOLERANCE_PERMILLE] = permille
         }
     }
 

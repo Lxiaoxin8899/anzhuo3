@@ -6,6 +6,7 @@ import cn.wch.ch9140lib.CH9140BluetoothManager
 import com.example.smartdosing.bluetooth.BluetoothPermissionHelper
 import com.example.smartdosing.bluetooth.BluetoothScaleManager
 import com.example.smartdosing.bluetooth.BluetoothScalePreferencesManager
+import com.example.smartdosing.bluetooth.DemoModeManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -41,6 +42,11 @@ class SmartDosingApplication : Application() {
     // 蓝牙偏好管理器
     val bluetoothPreferencesManager: BluetoothScalePreferencesManager by lazy {
         BluetoothScalePreferencesManager(this)
+    }
+
+    // 演示模式管理器
+    val demoModeManager: DemoModeManager by lazy {
+        DemoModeManager()
     }
 
     override fun onCreate() {

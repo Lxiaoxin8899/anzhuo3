@@ -440,11 +440,7 @@ private fun ChecklistActionBar(
  */
 private fun formatWeight(weight: Double, unit: String): String {
     val normalizedUnit = unit.uppercase(Locale.getDefault())
-    return if (weight % 1.0 == 0.0) {
-        "${weight.toInt()} $normalizedUnit"
-    } else {
-        String.format(Locale.getDefault(), "%.2f %s", weight, normalizedUnit)
-    }
+    return String.format(Locale.getDefault(), "%.3f %s", weight, normalizedUnit)
 }
 
 /**
