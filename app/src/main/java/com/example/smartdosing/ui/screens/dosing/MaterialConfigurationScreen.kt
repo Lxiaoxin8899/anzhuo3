@@ -233,15 +233,21 @@ fun MaterialConfigurationScreen(
         return actualWeight in lowerBound..upperBound
     }
 
-    LaunchedEffect(currentWeight?.isStable, currentWeight?.value, activeRowIndex, autoConfirmEnabled) {
-        if (!autoConfirmEnabled || activeRowIndex == null || !isBluetoothConnected) {
+    // 跟踪自动确认的待确认状态，避免 LaunchedEffect 因数据变化而重启
+    var pendingAutoConfirmIndex by remember { mutableStateOf<Int?>(null) }
+
+    // 检测稳定状态变化，更新计时起点（只依赖关键状态，避免重量数值变化导致重启）
+    LaunchedEffect(currentWeight?.isStable, activeRowIndex, autoConfirmEnabled, isBluetoothConnected) {
+        val index = activeRowIndex
+        if (!autoConfirmEnabled || index == null || !isBluetoothConnected) {
             stableStartTime = null
+            pendingAutoConfirmIndex = null
             return@LaunchedEffect
         }
 
-        val index = activeRowIndex!!
         if (index >= materialStates.size || materialStates[index].isConfirmed) {
             stableStartTime = null
+            pendingAutoConfirmIndex = null
             return@LaunchedEffect
         }
 
@@ -253,47 +259,138 @@ fun MaterialConfigurationScreen(
             // 重量稳定、大于0、且在误差范围内，开始计时
             if (stableStartTime == null) {
                 stableStartTime = System.currentTimeMillis()
-            }
-
-            // 等待指定时间后自动确认
-            delay(autoConfirmDelayMs)
-
-            // 再次检查条件（可能在等待期间状态已改变）
-            val currentActualWeight = currentWeight?.value ?: 0.0
-            val stillWithinTolerance = isWeightWithinTolerance(currentActualWeight, targetWeight, autoConfirmTolerancePermille)
-
-            if (activeRowIndex == index &&
-                currentWeight?.isStable == true &&
-                stillWithinTolerance &&
-                !materialStates[index].isConfirmed
-            ) {
-                // 自动确认
-                materialStates = materialStates.toMutableList().apply {
-                    val state = this[index]
-                    val weight = state.actualWeight.toDoubleOrNull()
-                    if (weight != null && weight > 0) {
-                        this[index] = state.copy(isConfirmed = true, hasError = false)
-                    }
-                }
-
-                // 自动去皮（如果启用）
-                if (autoTareOnConfirm) {
-                    if (isDemoMode) {
-                        demoManager.simulateTare()
-                    } else {
-                        scaleManager.tare()
-                    }
-                }
-
-                // 自动跳到下一个未确认的行
-                val nextUnconfirmedIndex = materialStates.indexOfFirst { !it.isConfirmed }
-                activeRowIndex = if (nextUnconfirmedIndex >= 0) nextUnconfirmedIndex else null
-
-                stableStartTime = null
+                pendingAutoConfirmIndex = index
+                android.util.Log.d("AutoConfirm", "开始倒计时，行=$index, 目标=${targetWeight}g, 实际=${actualWeight}g")
             }
         } else {
             // 重量不稳定、为0、或不在误差范围内，重置计时
+            if (stableStartTime != null) {
+                android.util.Log.d("AutoConfirm", "倒计时中断: stable=${currentWeight?.isStable}, weight=$actualWeight, inTolerance=$isWithinTolerance")
+            }
             stableStartTime = null
+            pendingAutoConfirmIndex = null
+        }
+    }
+
+    // 独立的倒计时定时器，每秒检查一次是否应该自动确认
+    LaunchedEffect(pendingAutoConfirmIndex, stableStartTime) {
+        val startTime = stableStartTime
+        val targetIndex = pendingAutoConfirmIndex
+
+        if (startTime == null || targetIndex == null || !autoConfirmEnabled) {
+            return@LaunchedEffect
+        }
+
+        // 循环检测，每500ms检查一次条件
+        while (true) {
+            delay(500)
+
+            // 检查是否已经过了足够的时间
+            val elapsed = System.currentTimeMillis() - startTime
+            if (elapsed < autoConfirmDelayMs) {
+                // 还没到时间，继续等待
+                // 但要检查条件是否仍然满足
+                val currentIndex = activeRowIndex
+                if (currentIndex != targetIndex) {
+                    android.util.Log.d("AutoConfirm", "活动行已变更，取消倒计时")
+                    stableStartTime = null
+                    pendingAutoConfirmIndex = null
+                    return@LaunchedEffect
+                }
+
+                if (targetIndex >= materialStates.size || materialStates[targetIndex].isConfirmed) {
+                    android.util.Log.d("AutoConfirm", "行已确认或索引无效，取消倒计时")
+                    stableStartTime = null
+                    pendingAutoConfirmIndex = null
+                    return@LaunchedEffect
+                }
+
+                val targetWeight = materialStates[targetIndex].material.weight
+                val actualWeight = currentWeight?.value ?: 0.0
+                val isStable = currentWeight?.isStable == true
+                val isWithinTolerance = isWeightWithinTolerance(actualWeight, targetWeight, autoConfirmTolerancePermille)
+
+                if (!isStable || actualWeight <= 0 || !isWithinTolerance) {
+                    android.util.Log.d("AutoConfirm", "条件不再满足，取消倒计时: stable=$isStable, weight=$actualWeight, inTolerance=$isWithinTolerance")
+                    stableStartTime = null
+                    pendingAutoConfirmIndex = null
+                    return@LaunchedEffect
+                }
+
+                continue
+            }
+
+            // 时间到了，执行最终检查
+            val currentIndex = activeRowIndex
+            if (currentIndex != targetIndex) {
+                android.util.Log.d("AutoConfirm", "最终检查：活动行已变更")
+                stableStartTime = null
+                pendingAutoConfirmIndex = null
+                return@LaunchedEffect
+            }
+
+            if (targetIndex >= materialStates.size || materialStates[targetIndex].isConfirmed) {
+                android.util.Log.d("AutoConfirm", "最终检查：行已确认或索引无效")
+                stableStartTime = null
+                pendingAutoConfirmIndex = null
+                return@LaunchedEffect
+            }
+
+            val targetWeight = materialStates[targetIndex].material.weight
+            val actualWeight = currentWeight?.value ?: 0.0
+            val isStable = currentWeight?.isStable == true
+            val isWithinTolerance = isWeightWithinTolerance(actualWeight, targetWeight, autoConfirmTolerancePermille)
+
+            if (!isStable || actualWeight <= 0 || !isWithinTolerance) {
+                android.util.Log.d("AutoConfirm", "最终检查：条件不满足")
+                stableStartTime = null
+                pendingAutoConfirmIndex = null
+                return@LaunchedEffect
+            }
+
+            // 所有条件满足，执行自动确认
+            android.util.Log.d("AutoConfirm", "执行自动确认，行=$targetIndex")
+
+            // 使用当前蓝牙读取的重量值（而不是 actualWeight 字符串），确保数据一致性
+            val confirmedWeight = actualWeight
+
+            materialStates = materialStates.toMutableList().apply {
+                val state = this[targetIndex]
+                // 使用蓝牙读取的实际重量，避免字符串解析问题
+                if (confirmedWeight > 0) {
+                    this[targetIndex] = state.copy(
+                        actualWeight = confirmedWeight.toString(),
+                        isConfirmed = true,
+                        hasError = false
+                    )
+                }
+            }
+
+            // 自动去皮（如果启用）
+            if (autoTareOnConfirm) {
+                if (isDemoMode) {
+                    demoManager.simulateTare()
+                } else {
+                    scaleManager.tare()
+                }
+            }
+
+            // 自动跳到下一个未确认的行
+            val nextUnconfirmedIndex = materialStates.indexOfFirst { !it.isConfirmed }
+            activeRowIndex = if (nextUnconfirmedIndex >= 0) nextUnconfirmedIndex else null
+
+            // 演示模式下，自动开始下一行的模拟投料
+            if (isDemoMode && nextUnconfirmedIndex >= 0 && nextUnconfirmedIndex < materialStates.size) {
+                val nextTargetWeight = materialStates[nextUnconfirmedIndex].material.weight
+                demoManager.simulateWeighing(nextTargetWeight)
+                android.util.Log.d("AutoConfirm", "演示模式：开始模拟下一行投料，目标=${nextTargetWeight}g")
+            }
+
+            android.util.Log.d("AutoConfirm", "自动确认完成，下一行=$nextUnconfirmedIndex")
+
+            stableStartTime = null
+            pendingAutoConfirmIndex = null
+            return@LaunchedEffect
         }
     }
 
