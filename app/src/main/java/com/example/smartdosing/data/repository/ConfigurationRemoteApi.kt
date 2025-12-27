@@ -453,9 +453,9 @@ class FakeConfigurationRecordApi : ConfigurationRecordApi {
 
 private fun sampleMaterials(prefix: String): List<ConfigurationMaterialRecord> {
     return listOf(
-        ConfigurationMaterialRecord(1, "$prefix-基液", "$prefix-A", 5.0, 4.96, "kg"),
-        ConfigurationMaterialRecord(2, "$prefix-香精", "$prefix-B", 3.2, 3.18, "kg"),
-        ConfigurationMaterialRecord(3, "$prefix-辅料", "$prefix-C", 2.4, 2.41, "kg")
+        ConfigurationMaterialRecord(1, "$prefix-基液", "$prefix-A", 5.0, 4.96, "kg", -0.04, false),
+        ConfigurationMaterialRecord(2, "$prefix-香精", "$prefix-B", 3.2, 3.18, "kg", -0.02, false),
+        ConfigurationMaterialRecord(3, "$prefix-辅料", "$prefix-C", 2.4, 2.41, "kg", 0.01, false)
     )
 }
 

@@ -32,6 +32,7 @@ import com.example.smartdosing.ui.screens.settings.SettingsScreen
 import com.example.smartdosing.ui.screens.settings.BluetoothScaleSettingsScreen
 import com.example.smartdosing.ui.screens.tasks.TaskCenterScreen
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
@@ -257,8 +258,21 @@ private suspend fun saveMaterialConfiguration(
 ) {
     val recordRepository = ConfigurationRepositoryProvider.recordRepository
     val taskRepository = ConfigurationRepositoryProvider.taskRepository
+    
+    // 获取应用实例和偏好管理器
+    val application = context.applicationContext as? com.example.smartdosing.SmartDosingApplication
+    val preferencesManager = application?.bluetoothPreferencesManager
+    
+    // 获取公差设置（默认为10‰，即1%）
+    val tolerancePermille = if (preferencesManager != null) {
+        val prefs = preferencesManager.preferencesFlow.first()
+        prefs.autoConfirmTolerancePermille
+    } else {
+        10
+    }
+
     runCatching {
-        recordRepository.createRecord(configData.toConfigurationRecord()).also {
+        recordRepository.createRecord(configData.toConfigurationRecord(tolerancePermille)).also {
             if (configData.taskId.isNotBlank()) {
                 taskRepository.updateTaskStatus(configData.taskId, TaskStatus.COMPLETED)
             }
@@ -278,8 +292,9 @@ private suspend fun saveMaterialConfiguration(
 
 /**
  * 将材料配置数据映射为配置记录实体，写入任务闭环。
+ * @param tolerancePermille 允许的误差范围（千分比）
  */
-private fun MaterialConfigurationData.toConfigurationRecord(): ConfigurationRecord {
+private fun MaterialConfigurationData.toConfigurationRecord(tolerancePermille: Int = 10): ConfigurationRecord {
     val now = System.currentTimeMillis()
     val defaultId = if (recordId.isNotBlank()) recordId else "CR-${UUID.randomUUID()}"
     val defaultTaskId = if (taskId.isNotBlank()) taskId else "TASK-${UUID.randomUUID()}"
@@ -289,14 +304,26 @@ private fun MaterialConfigurationData.toConfigurationRecord(): ConfigurationReco
     val timestamp = SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).format(Date(now))
     // 将材料配置数据转换成有序的材料明细，便于详情页和后端还原最终结果
     val materialDetails = materials.mapIndexed { index, item ->
+        val actual = if (item.actualWeight > 0) item.actualWeight else item.targetWeight
+        val deviation = actual - item.targetWeight
+        // 判定是否超标：误差超过目标值的 X‰ (默认10‰即1%)
+        // tolerancePermille / 1000.0 转为小数
+        val isOutOfTolerance = if (item.targetWeight > 0) {
+            kotlin.math.abs(deviation) > (item.targetWeight * (tolerancePermille / 1000.0))
+        } else {
+            false
+        }
+
         ConfigurationMaterialRecord(
             sequence = index + 1,
             name = item.materialName,
             code = item.materialCode.takeIf { it.isNotBlank() }
                 ?: "${recipeCode.ifBlank { "RND" }}-${index + 1}",
             targetWeight = item.targetWeight,
-            actualWeight = if (item.actualWeight > 0) item.actualWeight else item.targetWeight,
-            unit = item.unit.ifBlank { unit }
+            actualWeight = actual,
+            unit = item.unit.ifBlank { unit },
+            deviation = deviation,
+            isOutOfTolerance = isOutOfTolerance
         )
     }
 

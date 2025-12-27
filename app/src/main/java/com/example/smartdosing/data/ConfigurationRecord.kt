@@ -33,7 +33,9 @@ data class ConfigurationMaterialRecord(
     val code: String,
     val targetWeight: Double,
     val actualWeight: Double,
-    val unit: String
+    val unit: String,
+    val deviation: Double,
+    val isOutOfTolerance: Boolean
 )
 
 enum class ConfigurationRecordStatus {
@@ -150,7 +152,9 @@ object ConfigurationRecordSampleData {
                 code = "$codePrefix-A",
                 targetWeight = 5.0,
                 actualWeight = 4.95,
-                unit = "kg"
+                unit = "kg",
+                deviation = -0.05,
+                isOutOfTolerance = false
             ),
             ConfigurationMaterialRecord(
                 sequence = 2,
@@ -158,7 +162,9 @@ object ConfigurationRecordSampleData {
                 code = "$codePrefix-B",
                 targetWeight = 3.0,
                 actualWeight = 3.02,
-                unit = "kg"
+                unit = "kg",
+                deviation = 0.02,
+                isOutOfTolerance = false
             ),
             ConfigurationMaterialRecord(
                 sequence = 3,
@@ -166,7 +172,9 @@ object ConfigurationRecordSampleData {
                 code = "$codePrefix-C",
                 targetWeight = 4.5,
                 actualWeight = 4.48,
-                unit = "kg"
+                unit = "kg",
+                deviation = -0.02,
+                isOutOfTolerance = false
             )
         )
     }

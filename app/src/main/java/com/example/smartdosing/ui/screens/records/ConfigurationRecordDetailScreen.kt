@@ -40,6 +40,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -49,11 +52,15 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.smartdosing.data.ConfigurationMaterialRecord
+import java.text.DecimalFormat
+import androidx.compose.material.icons.filled.ArrowForward
 import com.example.smartdosing.data.ConfigurationRecord
 import com.example.smartdosing.data.ConfigurationRecordSampleData
 import com.example.smartdosing.data.ConfigurationRecordStatus
@@ -195,33 +202,147 @@ fun ConfigurationRecordDetailScreen(
 private fun DetailCard(record: ConfigurationRecord) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f))
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Text(text = record.recipeName, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            Text(text = "任务 ${record.taskId} · 状态 ${record.resultStatus}", style = MaterialTheme.typography.bodyMedium)
-            Spacer(modifier = Modifier.height(8.dp))
-            InfoRow(label = "配方编码", value = record.recipeCode)
-            InfoRow(label = "调香师", value = record.operator)
-            InfoRow(label = "客户", value = record.customer)
-            InfoRow(label = "业务员", value = record.salesOwner)
-            InfoRow(label = "目标产量", value = "${record.quantity} ${record.unit}")
-            InfoRow(label = "实际产量", value = "${record.actualQuantity} ${record.unit}")
-            InfoRow(label = "更新时间", value = record.updatedAt)
+            // 第一行：标题与状态
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = record.recipeName,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "${record.recipeCode} · ${record.category}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                
+                // 状态标签
+                Surface(
+                    color = when(record.resultStatus) {
+                        ConfigurationRecordStatus.COMPLETED -> Color(0xFFE8F5E9)
+                        ConfigurationRecordStatus.IN_REVIEW -> Color(0xFFFFF3E0)
+                        ConfigurationRecordStatus.RUNNING -> Color(0xFFE3F2FD)
+                        else -> Color.Gray.copy(alpha = 0.1f)
+                    },
+                    shape = RoundedCornerShape(4.dp)
+                ) {
+                    Text(
+                        text = when(record.resultStatus) {
+                            ConfigurationRecordStatus.COMPLETED -> "已完成"
+                            ConfigurationRecordStatus.IN_REVIEW -> "待评估"
+                            ConfigurationRecordStatus.RUNNING -> "进行中"
+                            ConfigurationRecordStatus.ARCHIVED -> "已归档"
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        color = when(record.resultStatus) {
+                            ConfigurationRecordStatus.COMPLETED -> Color(0xFF2E7D32)
+                            ConfigurationRecordStatus.IN_REVIEW -> Color(0xFFE65100)
+                            ConfigurationRecordStatus.RUNNING -> Color(0xFF1565C0)
+                            else -> Color.Gray
+                        }
+                    )
+                }
+            }
+            
+            Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+            // 第二行：关键人员与时间（紧凑排版）
+            Row(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.weight(1f)) {
+                    CompactInfoItem("客户", record.customer)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    CompactInfoItem("任务ID", record.taskId)
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                    CompactInfoItem("业务员", record.salesOwner)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    CompactInfoItem("更新时间", record.updatedAt)
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                    CompactInfoItem("调香师", record.operator)
+                }
+            }
+
+            // 第三行：产量统计
+            Surface(
+                color = MaterialTheme.colorScheme.surface,
+                shape = RoundedCornerShape(8.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(text = "目标产量", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(
+                            text = "${DecimalFormat("#.##").format(record.quantity)} ${record.unit}",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                    Icon(
+                        Icons.Default.ArrowForward,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(text = "实际产量", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        val totalDeviation = record.actualQuantity - record.quantity
+                        val isDeviated = kotlin.math.abs(totalDeviation) > (record.quantity * 0.01)
+                        Text(
+                            text = "${DecimalFormat("#.##").format(record.actualQuantity)} ${record.unit}",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isDeviated) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            }
+
             if (record.note.isNotBlank()) {
-                Text(
-                    text = "备注：${record.note}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Surface(
+                    color = Color(0xFFFFF8E1),
+                    shape = RoundedCornerShape(4.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = "备注：${record.note}",
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(8.dp),
+                        color = Color(0xFFF57C00)
+                    )
+                }
             }
         }
+    }
+}
+
+@Composable
+private fun CompactInfoItem(label: String, value: String) {
+    Column {
+        Text(text = label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f), fontSize = 10.sp)
+        Text(text = value, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
     }
 }
 
@@ -261,7 +382,7 @@ private fun ActionCard(
                     Spacer(modifier = Modifier.width(6.dp))
                     Text("重新配置")
                 }
-                Button(
+                OutlinedButton(
                     onClick = onFixError,
                     modifier = Modifier.weight(1f)
                 ) {
@@ -283,11 +404,12 @@ private fun ActionCard(
 
 @Composable
 private fun MaterialDetailCard(materials: List<ConfigurationMaterialRecord>) {
-    var expanded by remember { mutableStateOf(false) }
+    var expanded by remember { mutableStateOf(true) } // 默认展开
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(
             modifier = Modifier
@@ -328,18 +450,33 @@ private fun MaterialDetailCard(materials: List<ConfigurationMaterialRecord>) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(max = 240.dp)
+                .heightIn(max = 300.dp) // 增加最大高度
                 .verticalScroll(scrollState),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.spacedBy(0.dp)
         ) {
+            // 表头
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+                    .padding(vertical = 8.dp, horizontal = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(text = "#", modifier = Modifier.width(32.dp), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
+                Text(text = "材料", modifier = Modifier.weight(1.5f), style = MaterialTheme.typography.labelSmall)
+                Text(text = "目标", modifier = Modifier.weight(1f), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.End)
+                Text(text = "实际", modifier = Modifier.weight(1f), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.End)
+                Text(text = "偏差", modifier = Modifier.weight(1f), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.End)
+            }
+            
             materials.sortedBy { it.sequence }.forEachIndexed { index, detail ->
-                if (index > 0) {
-                    Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
-                }
                 MaterialDetailRow(detail)
-                    }
+                if (index < materials.size - 1) {
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f))
                 }
             }
+        }
+    }
         }
     }
 }
@@ -347,54 +484,70 @@ private fun MaterialDetailCard(materials: List<ConfigurationMaterialRecord>) {
 @Composable
 private fun MaterialDetailRow(detail: ConfigurationMaterialRecord) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(if (detail.isOutOfTolerance) Color(0xFFFFEBEE) else Color.Transparent) // 超标行浅红背景
+            .padding(vertical = 8.dp, horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(
-            modifier = Modifier
-                .size(32.dp)
-                .background(
-                    MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                    RoundedCornerShape(8.dp)
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = detail.sequence.toString(),
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
-            )
-        }
+        // 序号
+        Text(
+            text = detail.sequence.toString(),
+            modifier = Modifier.width(32.dp),
+            style = MaterialTheme.typography.bodySmall,
+            textAlign = TextAlign.Center,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
 
-        Column(modifier = Modifier.weight(1f)) {
+        // 材料名称与编码
+        Column(modifier = Modifier.weight(1.5f)) {
             Text(
                 text = detail.name,
-                fontSize = 14.sp,
+                style = MaterialTheme.typography.bodySmall,
                 fontWeight = FontWeight.Medium,
                 color = MaterialTheme.colorScheme.onSurface
             )
-            Text(
-                text = detail.code,
-                fontSize = 11.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            if (detail.code.isNotBlank()) {
+                Text(
+                    text = detail.code,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 10.sp
+                )
+            }
         }
 
-        Column(horizontalAlignment = Alignment.End) {
-            Text(
-                text = "${detail.actualWeight}${detail.unit}",
-                fontSize = 13.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                text = "目标 ${detail.targetWeight}${detail.unit}",
-                fontSize = 11.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
+        val df = DecimalFormat("#.###")
+        
+        // 目标值
+        Text(
+            text = df.format(detail.targetWeight),
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.bodySmall,
+            textAlign = TextAlign.End,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        // 实际值 (超标红色粗体)
+        Text(
+            text = df.format(detail.actualWeight),
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.bodySmall,
+            textAlign = TextAlign.End,
+            fontWeight = if (detail.isOutOfTolerance) FontWeight.Bold else FontWeight.Normal,
+            color = if (detail.isOutOfTolerance) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
+        )
+        
+        // 偏差值 (超标红色粗体)
+        val sign = if (detail.deviation > 0) "+" else ""
+        Text(
+            text = "${sign}${df.format(detail.deviation)}",
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.bodySmall,
+            textAlign = TextAlign.End,
+            fontWeight = if (detail.isOutOfTolerance) FontWeight.Bold else FontWeight.Normal,
+            color = if (detail.isOutOfTolerance) MaterialTheme.colorScheme.error else Color(0xFF2E7D32) // 正常显示绿色/黑色
+        )
     }
 }
 
@@ -402,7 +555,7 @@ private fun MaterialDetailRow(detail: ConfigurationMaterialRecord) {
 private fun EmptyMaterialHint() {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
     ) {
         Column(
@@ -425,22 +578,21 @@ private fun EmptyMaterialHint() {
     }
 }
 
-@Composable
-private fun InfoRow(label: String, value: String) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Text(text = label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(text = value, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-    }
-}
-
 @Preview(showBackground = true)
 @Composable
 private fun ConfigurationRecordDetailScreenPreview() {
     SmartDosingTheme {
         val record = ConfigurationRecordSampleData.records().first()
-        ConfigurationRecordDetailScreen(recordId = record.id)
+        // 模拟一个超标数据用于预览
+        val modifiedMaterial = record.materialDetails[0].copy(
+            isOutOfTolerance = true,
+            deviation = -0.5,
+            actualWeight = 4.5
+        )
+        val modifiedRecord = record.copy(materialDetails = listOf(modifiedMaterial) + record.materialDetails.drop(1))
+        
+        ConfigurationRecordDetailScreen(
+            recordId = record.id
+        )
     }
 }
