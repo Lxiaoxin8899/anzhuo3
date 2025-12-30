@@ -22,6 +22,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.smartdosing.ui.theme.SmartDosingTokens
 
 // ==================== 加载状态组件 ====================
 
@@ -38,21 +39,21 @@ fun LoadingState(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .padding(32.dp),
+            .padding(SmartDosingTokens.spacing.xxl),
         contentAlignment = Alignment.Center
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(SmartDosingTokens.spacing.lg)
         ) {
             CircularProgressIndicator(
-                modifier = Modifier.size(48.dp),
-                strokeWidth = 4.dp,
+                modifier = Modifier.size(40.dp),
+                strokeWidth = 3.dp,
                 color = MaterialTheme.colorScheme.primary
             )
             Text(
                 text = message,
-                style = MaterialTheme.typography.bodyLarge,
+                style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
             )
@@ -90,22 +91,21 @@ fun ShimmerLoadingItem(
         end = androidx.compose.ui.geometry.Offset(translateAnimation.value, 0f)
     )
 
-    Card(
+    LabCard(
         modifier = modifier
             .fillMaxWidth()
-            .height(80.dp),
-        shape = RoundedCornerShape(12.dp)
+            .height(72.dp),
+        borderColor = Color.Transparent
     ) {
         Row(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(12.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                .fillMaxSize(),
+            horizontalArrangement = Arrangement.spacedBy(SmartDosingTokens.spacing.md),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
                 modifier = Modifier
-                    .size(48.dp)
+                    .size(40.dp)
                     .clip(CircleShape)
                     .background(brush)
             )
@@ -116,14 +116,14 @@ fun ShimmerLoadingItem(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth(0.7f)
-                        .height(16.dp)
+                        .height(14.dp)
                         .clip(RoundedCornerShape(4.dp))
                         .background(brush)
                 )
                 Box(
                     modifier = Modifier
                         .fillMaxWidth(0.5f)
-                        .height(12.dp)
+                        .height(10.dp)
                         .clip(RoundedCornerShape(4.dp))
                         .background(brush)
                 )
@@ -141,8 +141,8 @@ fun ShimmerLoadingList(
     modifier: Modifier = Modifier
 ) {
     Column(
-        modifier = modifier.padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        modifier = modifier.padding(SmartDosingTokens.spacing.lg),
+        verticalArrangement = Arrangement.spacedBy(SmartDosingTokens.spacing.md)
     ) {
         repeat(itemCount) {
             ShimmerLoadingItem()
@@ -172,27 +172,27 @@ fun EmptyState(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(32.dp),
+            .padding(SmartDosingTokens.spacing.xxl),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
         Icon(
             imageVector = icon,
             contentDescription = null,
-            modifier = Modifier.size(80.dp),
-            tint = MaterialTheme.colorScheme.outline
+            modifier = Modifier.size(64.dp),
+            tint = MaterialTheme.colorScheme.outlineVariant
         )
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(SmartDosingTokens.spacing.lg))
 
         Text(
             text = title,
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Medium,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface
         )
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(SmartDosingTokens.spacing.xs))
 
         Text(
             text = description,
@@ -202,11 +202,8 @@ fun EmptyState(
         )
 
         if (actionLabel != null && onAction != null) {
-            Spacer(modifier = Modifier.height(24.dp))
-
-            FilledTonalButton(onClick = onAction) {
-                Text(actionLabel)
-            }
+            Spacer(modifier = Modifier.height(SmartDosingTokens.spacing.xl))
+            LabButton(onClick = onAction, text = actionLabel)
         }
     }
 }
@@ -246,27 +243,27 @@ fun ErrorState(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(32.dp),
+            .padding(SmartDosingTokens.spacing.xxl),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
         Icon(
             imageVector = Icons.Outlined.ErrorOutline,
             contentDescription = null,
-            modifier = Modifier.size(72.dp),
+            modifier = Modifier.size(64.dp),
             tint = MaterialTheme.colorScheme.error
         )
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(SmartDosingTokens.spacing.lg))
 
         Text(
             text = "出错了",
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Medium,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.error
         )
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(SmartDosingTokens.spacing.xs))
 
         Text(
             text = message,
@@ -276,22 +273,14 @@ fun ErrorState(
         )
 
         if (onRetry != null) {
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(SmartDosingTokens.spacing.xl))
 
-            Button(
+            LabButton(
                 onClick = onRetry,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.error
-                )
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Refresh,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("重试")
-            }
+                text = "重试",
+                icon = Icons.Default.Refresh,
+                containerColor = MaterialTheme.colorScheme.error
+            )
         }
     }
 }
@@ -310,15 +299,13 @@ fun StatCard(
     subtitle: String? = null,
     modifier: Modifier = Modifier
 ) {
-    Card(
+    LabCard(
         modifier = modifier,
-        colors = CardDefaults.cardColors(
-            containerColor = color.copy(alpha = 0.1f)
-        ),
-        shape = RoundedCornerShape(16.dp)
+        backgroundColor = color.copy(alpha = 0.05f),
+        borderColor = color.copy(alpha = 0.1f)
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier.padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Row(
@@ -329,18 +316,18 @@ fun StatCard(
                     imageVector = icon,
                     contentDescription = null,
                     tint = color,
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(18.dp)
                 )
                 Text(
                     text = title,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = color
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
             Text(
                 text = value,
-                style = MaterialTheme.typography.headlineMedium,
+                style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface
             )
@@ -369,11 +356,12 @@ fun MiniStatChip(
 ) {
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(50),
-        color = color.copy(alpha = 0.1f)
+        shape = RoundedCornerShape(SmartDosingTokens.radius.xl),
+        color = color.copy(alpha = 0.08f),
+        border = androidx.compose.foundation.BorderStroke(1.dp, color.copy(alpha = 0.1f))
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
@@ -381,7 +369,7 @@ fun MiniStatChip(
                 imageVector = icon,
                 contentDescription = null,
                 tint = color,
-                modifier = Modifier.size(16.dp)
+                modifier = Modifier.size(14.dp)
             )
             Text(
                 text = value,
@@ -410,32 +398,8 @@ fun StatusBadge(
     icon: ImageVector? = null,
     modifier: Modifier = Modifier
 ) {
-    Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(8.dp),
-        color = color.copy(alpha = 0.15f)
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            icon?.let {
-                Icon(
-                    imageVector = it,
-                    contentDescription = null,
-                    tint = color,
-                    modifier = Modifier.size(14.dp)
-                )
-            }
-            Text(
-                text = text,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.Medium,
-                color = color
-            )
-        }
-    }
+    // Redirect to LabStatusBadge logic but generic
+    LabStatusBadge(text = text, color = color, modifier = modifier)
 }
 
 /**
@@ -492,30 +456,29 @@ fun ConfirmDialog(
         title = {
             Text(
                 text = title,
-                style = MaterialTheme.typography.headlineSmall
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold
             )
         },
         text = {
             Text(
                 text = message,
-                style = MaterialTheme.typography.bodyMedium
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         },
         confirmButton = {
-            Button(
+            LabButton(
                 onClick = onConfirm,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = iconColor
-                )
-            ) {
-                Text(confirmText)
-            }
+                text = confirmText,
+                containerColor = iconColor
+            )
         },
         dismissButton = {
-            OutlinedButton(onClick = onDismiss) {
-                Text(dismissText)
-            }
-        }
+            LabOutlinedButton(onClick = onDismiss, text = dismissText)
+        },
+        containerColor = MaterialTheme.colorScheme.surface,
+        shape = RoundedCornerShape(SmartDosingTokens.radius.lg)
     )
 }
 
@@ -530,7 +493,7 @@ fun StepProgressIndicator(
     totalSteps: Int,
     modifier: Modifier = Modifier,
     activeColor: Color = MaterialTheme.colorScheme.primary,
-    inactiveColor: Color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+    inactiveColor: Color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
 ) {
     Row(
         modifier = modifier.fillMaxWidth(),
@@ -544,12 +507,12 @@ fun StepProgressIndicator(
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .height(4.dp)
-                    .clip(RoundedCornerShape(2.dp))
+                    .height(3.dp)
+                    .clip(RoundedCornerShape(1.5.dp))
                     .background(
                         when {
                             isActive -> activeColor
-                            isCurrent -> activeColor.copy(alpha = 0.5f)
+                            isCurrent -> activeColor.copy(alpha = 0.6f)
                             else -> inactiveColor
                         }
                     )
@@ -566,7 +529,7 @@ fun CircularProgressWithText(
     progress: Float,
     modifier: Modifier = Modifier,
     size: Dp = 64.dp,
-    strokeWidth: Dp = 6.dp,
+    strokeWidth: Dp = 4.dp,
     color: Color = MaterialTheme.colorScheme.primary
 ) {
     Box(
@@ -578,11 +541,11 @@ fun CircularProgressWithText(
             modifier = Modifier.fillMaxSize(),
             strokeWidth = strokeWidth,
             color = color,
-            trackColor = color.copy(alpha = 0.2f)
+            trackColor = color.copy(alpha = 0.1f)
         )
         Text(
             text = "${(progress * 100).toInt()}%",
-            style = MaterialTheme.typography.labelMedium,
+            style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Bold,
             color = color
         )
@@ -621,7 +584,7 @@ fun AnimatedListItem(
     var visible by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
-        kotlinx.coroutines.delay(index * 50L)
+        kotlinx.coroutines.delay(index * 30L)
         visible = true
     }
 
@@ -629,7 +592,7 @@ fun AnimatedListItem(
         visible = visible,
         enter = fadeIn(animationSpec = tween(300)) +
                 slideInVertically(
-                    initialOffsetY = { it / 2 },
+                    initialOffsetY = { it / 4 },
                     animationSpec = tween(300)
                 ),
         modifier = modifier
@@ -659,14 +622,15 @@ fun SearchBar(
         placeholder = {
             Text(
                 text = placeholder,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodyMedium
             )
         },
         leadingIcon = {
             Icon(
                 imageVector = leadingIcon,
                 contentDescription = "搜索",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha=0.6f)
             )
         },
         trailingIcon = {
@@ -685,10 +649,13 @@ fun SearchBar(
             }
         },
         singleLine = true,
-        shape = RoundedCornerShape(12.dp),
+        textStyle = MaterialTheme.typography.bodyMedium,
+        shape = RoundedCornerShape(SmartDosingTokens.radius.md),
         colors = OutlinedTextFieldDefaults.colors(
             focusedBorderColor = MaterialTheme.colorScheme.primary,
-            unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
+            unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+            focusedContainerColor = MaterialTheme.colorScheme.surface,
+            unfocusedContainerColor = MaterialTheme.colorScheme.surface
         )
     )
 }
@@ -706,20 +673,21 @@ fun SectionDivider(
     Row(
         modifier = modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        horizontalArrangement = Arrangement.spacedBy(SmartDosingTokens.spacing.md)
     ) {
         HorizontalDivider(
             modifier = Modifier.weight(1f),
-            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
         )
         Text(
             text = title,
             style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontWeight = FontWeight.Medium
         )
         HorizontalDivider(
             modifier = Modifier.weight(1f),
-            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
         )
     }
 }

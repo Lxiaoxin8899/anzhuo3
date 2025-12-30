@@ -16,9 +16,7 @@ val IndustrialBackground = Color(0xFFF0F2F5)
 val IndustrialSurface = Color(0xFFFFFFFF)
 val IndustrialSurfaceVariant = Color(0xFFF5F5F5)
 
-val TextPrimary = Color(0xFF263238)
-val TextSecondary = Color(0xFF757575)
-val TextWhite = Color(0xFFFFFFFF)
+
 
 // Legacy Colors (can be removed if not used anymore, but keeping for now just in case)
 val Purple80 = Color(0xFFD0BCFF)

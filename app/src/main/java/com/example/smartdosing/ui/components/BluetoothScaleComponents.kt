@@ -1,5 +1,8 @@
 package com.example.smartdosing.ui.components
 
+import androidx.compose.ui.text.font.FontFamily
+import com.example.smartdosing.ui.theme.SmartDosingTokens
+
 import android.Manifest
 import android.app.Activity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -474,6 +477,10 @@ private fun DeviceListItem(
  * 带蓝牙功能的重量显示框
  * 当蓝牙已连接时显示蓝牙读取的重量，否则显示手动输入的重量
  */
+/**
+ * 带蓝牙功能的重量显示框 (实验室版)
+ * 当蓝牙已连接时显示蓝牙读取的重量，否则显示手动输入的重量
+ */
 @Composable
 fun BluetoothWeightDisplayBox(
     modifier: Modifier = Modifier,
@@ -487,87 +494,86 @@ fun BluetoothWeightDisplayBox(
     } else {
         manualWeight.ifBlank { "0.0" }
     }
+    
+    val unit = if (isBluetoothConnected && bluetoothWeight != null) bluetoothWeight.unit else "KG"
 
-    Surface(
+    val statusColor = if (isBluetoothConnected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
+
+    LabCard(
         modifier = modifier,
-        shape = RoundedCornerShape(12.dp),
-        color = if (isBluetoothConnected) Color(0xFFE3F2FD) else Color.White,
-        border = BorderStroke(
-            width = if (isBluetoothConnected) 2.dp else 1.dp,
-            color = if (isBluetoothConnected) Color(0xFF1976D2) else Color(0xFFB0BEC5)
-        ),
-        shadowElevation = 2.dp
+        backgroundColor = if (isBluetoothConnected) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surfaceVariant.copy(alpha=0.3f),
+        borderColor = statusColor.copy(alpha = if (isBluetoothConnected) 0.5f else 0.2f)
     ) {
-        Box(
-            modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp),
-            contentAlignment = Alignment.Center
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(vertical = SmartDosingTokens.spacing.sm)
         ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                // 数据来源标签
-                if (isBluetoothConnected) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Bluetooth,
-                            contentDescription = null,
-                            tint = Color(0xFF1976D2),
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Text(
-                            text = if (bluetoothWeight?.isStable == true) "蓝牙读取 · 稳定" else "蓝牙读取 · 等待稳定",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = if (bluetoothWeight?.isStable == true) Color(0xFF4CAF50) else Color(0xFFFF9800)
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                }
-
-                // 重量数值
+            // 数据来源标签
+            if (isBluetoothConnected) {
                 Row(
-                    verticalAlignment = Alignment.Bottom,
-                    horizontalArrangement = Arrangement.Center
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Text(
-                        text = displayWeight,
-                        style = MaterialTheme.typography.displayLarge.copy(fontSize = 48.sp),
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF263238),
-                        textAlign = TextAlign.Center
+                    Icon(
+                        imageVector = Icons.Default.Bluetooth,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(16.dp)
                     )
-                    if (isBluetoothConnected && bluetoothWeight != null) {
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = bluetoothWeight.unit,
-                            style = MaterialTheme.typography.headlineMedium,
-                            color = Color(0xFF757575),
-                            modifier = Modifier.padding(bottom = 8.dp)
-                        )
-                    }
+                    Text(
+                        text = if (bluetoothWeight?.isStable == true) "蓝牙读取 · 稳定" else "蓝牙读取 · 等待稳定",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (bluetoothWeight?.isStable == true) SmartDosingTokens.colors.success else SmartDosingTokens.colors.warning
+                    )
                 }
+                Spacer(modifier = Modifier.height(SmartDosingTokens.spacing.sm))
+            } else {
+                 Text(
+                    text = "手动输入",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                 Spacer(modifier = Modifier.height(SmartDosingTokens.spacing.sm))
+            }
 
-                // 使用此重量按钮 (蓝牙模式下)
-                if (isBluetoothConnected && bluetoothWeight != null && bluetoothWeight.isStable) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    TextButton(
-                        onClick = onUseBluetoothWeight,
-                        colors = ButtonDefaults.textButtonColors(
-                            contentColor = Color(0xFF1976D2)
-                        )
-                    ) {
-                        Text("点击使用此重量", fontWeight = FontWeight.Medium)
-                    }
-                }
+            // 重量数值
+            Row(
+                verticalAlignment = Alignment.Bottom,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    text = displayWeight,
+                    style = MaterialTheme.typography.displayLarge.copy(
+                        fontSize = 48.sp,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold
+                    ),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = unit,
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+            }
+
+            // 使用此重量按钮 (蓝牙模式下)
+            if (isBluetoothConnected && bluetoothWeight != null && bluetoothWeight.isStable) {
+                Spacer(modifier = Modifier.height(SmartDosingTokens.spacing.sm))
+                LabButton(
+                    onClick = onUseBluetoothWeight,
+                    text = "使用此重量",
+                    modifier = Modifier.fillMaxWidth(0.8f) // Slightly smaller width
+                )
             }
         }
     }
 }
 
 /**
- * 蓝牙秤操作按钮组
+ * 蓝牙秤操作按钮组 (实验室版)
  */
 @Composable
 fun BluetoothScaleActionButtons(
@@ -580,29 +586,27 @@ fun BluetoothScaleActionButtons(
     if (isConnected) {
         Row(
             modifier = modifier,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(SmartDosingTokens.spacing.md)
         ) {
             // 去皮按钮
-            OutlinedButton(
+            LabOutlinedButton(
                 onClick = { scaleManager.tare() },
-                modifier = Modifier.weight(1f)
-            ) {
-                Text("去皮")
-            }
+                modifier = Modifier.weight(1f),
+                text = "去皮"
+            )
 
             // 置零按钮
-            OutlinedButton(
+            LabOutlinedButton(
                 onClick = { scaleManager.zero() },
-                modifier = Modifier.weight(1f)
-            ) {
-                Text("置零")
-            }
+                modifier = Modifier.weight(1f),
+                text = "置零"
+            )
         }
     }
 }
 
 /**
- * 投料界面专用蓝牙状态栏
+ * 投料界面专用蓝牙状态栏 (实验室版)
  * 紧凑设计，包含连接状态、当前重量、去皮/置零按钮
  */
 @Composable
@@ -617,43 +621,29 @@ fun DosingBluetoothStatusBar(
     val currentWeight by scaleManager.currentWeight.collectAsState()
     val isConnected = connectionState == ConnectionState.CONNECTED
 
+    val statusColor = when (connectionState) {
+        ConnectionState.CONNECTED -> SmartDosingTokens.colors.success
+        ConnectionState.CONNECTING, ConnectionState.SCANNING -> SmartDosingTokens.colors.warning
+        ConnectionState.ERROR -> MaterialTheme.colorScheme.error
+        else -> MaterialTheme.colorScheme.outline
+    }
+
     Surface(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(8.dp),
-        color = when (connectionState) {
-            ConnectionState.CONNECTED -> Color(0xFFE8F5E9)
-            ConnectionState.CONNECTING, ConnectionState.SCANNING -> Color(0xFFFFF3E0)
-            ConnectionState.ERROR -> Color(0xFFFFEBEE)
-            else -> Color(0xFFFAFAFA)
-        },
-        border = BorderStroke(
-            1.dp,
-            when (connectionState) {
-                ConnectionState.CONNECTED -> Color(0xFF4CAF50)
-                ConnectionState.CONNECTING, ConnectionState.SCANNING -> Color(0xFFFF9800)
-                ConnectionState.ERROR -> Color(0xFFF44336)
-                else -> Color(0xFFE0E0E0)
-            }
-        )
+        shape = RoundedCornerShape(SmartDosingTokens.radius.md),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, statusColor.copy(alpha = 0.3f))
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            modifier = Modifier.padding(horizontal = SmartDosingTokens.spacing.md, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(SmartDosingTokens.spacing.md)
         ) {
             // 连接状态指示灯
             Box(
                 modifier = Modifier
-                    .size(12.dp)
-                    .clip(CircleShape)
-                    .background(
-                        when (connectionState) {
-                            ConnectionState.CONNECTED -> Color(0xFF4CAF50)
-                            ConnectionState.CONNECTING, ConnectionState.SCANNING -> Color(0xFFFF9800)
-                            ConnectionState.ERROR -> Color(0xFFF44336)
-                            else -> Color(0xFFBDBDBD)
-                        }
-                    )
+                    .size(8.dp)
+                    .background(statusColor, CircleShape)
             )
 
             // 设备名称/状态
@@ -666,8 +656,9 @@ fun DosingBluetoothStatusBar(
                         ConnectionState.ERROR -> "连接错误"
                         ConnectionState.DISCONNECTED -> "未连接蓝牙秤"
                     },
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -681,60 +672,47 @@ fun DosingBluetoothStatusBar(
                 ) {
                     Text(
                         text = currentWeight!!.getDisplayValue(),
-                        style = MaterialTheme.typography.titleLarge,
+                        style = MaterialTheme.typography.titleLarge.copy(fontFamily = FontFamily.Monospace),
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF263238)
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
                         text = currentWeight!!.unit,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = Color(0xFF757575)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     // 稳定指示
                     if (currentWeight!!.isStable) {
                         Icon(
                             imageVector = Icons.Default.CheckCircle,
                             contentDescription = "稳定",
-                            tint = Color(0xFF4CAF50),
-                            modifier = Modifier.size(16.dp)
+                            tint = SmartDosingTokens.colors.success,
+                            modifier = Modifier.size(14.dp)
                         )
                     }
                 }
             }
 
             // 操作按钮
-            if (isConnected) {
-                // 去皮按钮
-                OutlinedButton(
-                    onClick = { scaleManager.tare() },
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                    modifier = Modifier.height(32.dp)
-                ) {
-                    Text("去皮", style = MaterialTheme.typography.bodySmall)
-                }
-                // 置零按钮
-                OutlinedButton(
-                    onClick = { scaleManager.zero() },
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                    modifier = Modifier.height(32.dp)
-                ) {
-                    Text("置零", style = MaterialTheme.typography.bodySmall)
-                }
-            } else {
-                // 连接按钮
-                Button(
-                    onClick = onConnectClick,
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                    modifier = Modifier.height(32.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1976D2))
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Bluetooth,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (isConnected) {
+                    LabOutlinedButton(
+                        onClick = { scaleManager.tare() },
+                        text = "去皮",
+                        modifier = Modifier.height(30.dp)
                     )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("连接", style = MaterialTheme.typography.bodySmall)
+                    LabOutlinedButton(
+                        onClick = { scaleManager.zero() },
+                        text = "置零",
+                        modifier = Modifier.height(30.dp)
+                    )
+                } else {
+                    LabButton(
+                        onClick = onConnectClick,
+                        text = "连接",
+                        icon = Icons.Default.Bluetooth,
+                        modifier = Modifier.height(30.dp)
+                    )
                 }
             }
         }

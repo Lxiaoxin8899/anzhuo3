@@ -11,40 +11,44 @@ import androidx.compose.ui.unit.dp
  * SmartDosing 设计系统 - 间距定义
  * 统一的 spacing 便于页面保持相同的密度
  */
+/**
+ * SmartDosing 设计系统 - 间距定义 (实验室版 - 更紧凑)
+ */
 data class SmartDosingSpacing(
     val none: Dp = 0.dp,
+    val compact: Dp = 4.dp, // New for lab
     val xxs: Dp = 2.dp,
-    val xs: Dp = 4.dp,
-    val sm: Dp = 8.dp,
-    val md: Dp = 12.dp,
-    val lg: Dp = 16.dp,
-    val xl: Dp = 24.dp,
-    val xxl: Dp = 32.dp,
-    val giant: Dp = 48.dp
+    val xs: Dp = 6.dp,     // Adjusted
+    val sm: Dp = 10.dp,    // Adjusted
+    val md: Dp = 16.dp,    // Adjusted
+    val lg: Dp = 24.dp,
+    val xl: Dp = 32.dp,
+    val xxl: Dp = 48.dp,
+    val giant: Dp = 64.dp
 )
 
 /**
- * SmartDosing 设计系统 - 圆角规范
+ * SmartDosing 设计系统 - 圆角规范 (实验室版 - 更精致)
  */
 data class SmartDosingRadius(
     val none: Dp = 0.dp,
-    val xs: Dp = 4.dp,
-    val sm: Dp = 8.dp,
-    val md: Dp = 12.dp,
-    val lg: Dp = 16.dp,
-    val xl: Dp = 24.dp
+    val xs: Dp = 2.dp,    // Tiny
+    val sm: Dp = 4.dp,    // Small, standard for inputs
+    val md: Dp = 8.dp,    // Medium, for cards
+    val lg: Dp = 12.dp,   // Large, for dialogs
+    val xl: Dp = 16.dp    // Extra large
 )
 
 /**
- * SmartDosing 设计系统 - 阴影/海拔高度
+ * SmartDosing 设计系统 - 阴影/海拔高度 (实验室版 - 更扁平)
  */
 data class SmartDosingElevation(
     val level0: Dp = 0.dp,
-    val level1: Dp = 1.dp,
-    val level2: Dp = 3.dp,
-    val level3: Dp = 6.dp,
-    val level4: Dp = 10.dp,
-    val level5: Dp = 14.dp
+    val level1: Dp = 1.dp,  // Subtle border/shadow
+    val level2: Dp = 2.dp,  // Card hover
+    val level3: Dp = 4.dp,  // Dropdown
+    val level4: Dp = 8.dp,  // Dialog
+    val level5: Dp = 12.dp
 )
 
 /**

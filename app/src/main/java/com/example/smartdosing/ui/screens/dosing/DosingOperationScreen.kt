@@ -1,11 +1,23 @@
 package com.example.smartdosing.ui.screens.dosing
 
+import androidx.compose.ui.text.font.FontFamily
 import android.net.Uri
 import android.speech.tts.TextToSpeech
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -13,6 +25,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -29,7 +43,17 @@ import com.example.smartdosing.data.DatabaseRecipeRepository
 import com.example.smartdosing.data.settings.DosingPreferencesManager
 import com.example.smartdosing.data.settings.DosingPreferencesState
 import com.example.smartdosing.data.Material as RecipeMaterial
-import com.example.smartdosing.ui.theme.SmartDosingTheme
+import com.example.smartdosing.ui.theme.SmartDosingTokens
+import com.example.smartdosing.ui.components.*
+import androidx.compose.animation.*
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Science
+import androidx.compose.material.icons.filled.UploadFile
+import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.ErrorOutline
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.text.SimpleDateFormat
@@ -309,6 +333,10 @@ class VoiceAnnouncementManager(private val context: android.content.Context) {
  * 投料操作页面
  * 集成CSV文件导入和完整的投料流程
  */
+/**
+ * 投料操作页面 (实验室版)
+ * 集成CSV文件导入和完整的投料流程 - 针对研发场景优化
+ */
 @Composable
 fun DosingOperationScreen(
     recipeId: String? = null,
@@ -322,6 +350,7 @@ fun DosingOperationScreen(
     val preferencesManager = remember { DosingPreferencesManager(context) }
     val preferencesState by preferencesManager.preferencesFlow.collectAsState(initial = DosingPreferencesState())
     val coroutineScope = rememberCoroutineScope()
+    // Lab: Default items might differ, but keep logic same for now
     val checklistItems = remember {
         mutableStateListOf(
             ChecklistItemState("称量设备已校准"),
@@ -345,6 +374,7 @@ fun DosingOperationScreen(
     var loadError by remember(normalizedRecipeId) { mutableStateOf<String?>(null) }
     var isLoading by remember(normalizedRecipeId) { mutableStateOf(!isCsvMode) }
 
+    // Lab: Cleaner import Logic
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         uri?.let {
             try {
@@ -356,11 +386,11 @@ fun DosingOperationScreen(
                         var line: String?
                         while (reader.readLine().also { line = it } != null) {
                             val tokens = line!!.split(',')
-                            if (tokens.size == 3) {
+                            if (tokens.size >= 3) { // Slightly more robust check
                                 val material = Material(
                                     id = tokens[0].trim(),
                                     name = tokens[1].trim(),
-                                    targetWeight = tokens[2].trim().toFloat(),
+                                    targetWeight = tokens[2].trim().toFloatOrNull() ?: 0f,
                                     unit = "KG",
                                     sequence = parsedRecipe.size + 1
                                 )
@@ -422,138 +452,140 @@ fun DosingOperationScreen(
         }
     }
 
-    when {
-        loadError != null -> {
-            DosingErrorState(
-                message = loadError!!,
-                onNavigateBack = onNavigateBack,
-                modifier = modifier
-            )
-        }
-        !isCsvMode && (isLoading || recipe == null) -> {
-            DosingLoadingState(modifier = modifier)
-        }
-        recipe == null -> {
-            CsvImportState(
-                modifier = modifier,
-                onImportFromFile = { launcher.launch(arrayOf("*/*")) },
-                onNavigateBack = onNavigateBack
-            )
-        }
-        else -> {
-            val selectNewRecipeLabel = if (isCsvMode) "选择新配方" else "返回配方管理"
-            val onSelectNewRecipeAction: () -> Unit = if (isCsvMode) {
-                { recipe = null }
-            } else {
-                // 非 CSV 模式下直接退回配方管理，避免用户还要手动退出检查清单
-                { onNavigateToRecipeList() }
+    // Main Container Styling
+    Surface(
+        modifier = modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.background // Scientific Grey/White
+    ) {
+        when {
+            loadError != null -> {
+                DosingErrorState(
+                    message = loadError!!,
+                    onNavigateBack = onNavigateBack
+                )
             }
-            overLimitWarning?.let { warning ->
-                OverLimitDialog(warning = warning, onDismiss = { overLimitWarning = null })
+            !isCsvMode && (isLoading || recipe == null) -> {
+                DosingLoadingState()
             }
-
-            // 预检查对话框
-            PreCheckDialog(
-                operatorName = operatorName,
-                onOperatorNameChange = { operatorName = it },
-                checklistItems = checklistItems,
-                isVisible = showPreCheckDialog,
-                onConfirm = {
-                    isPreCheckCompleted = true
-                    showPreCheckDialog = false
-                    operationStartTime = dateFormat.format(Date()) // 确认开始时记录开始时间
-                },
-                onCancel = onNavigateBack
-            )
-
-            if (!isPreCheckCompleted) {
-                // 显示开始投料准备页面
-                Column(
-                    modifier = Modifier.fillMaxSize().padding(32.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    Text(
-                        text = "配方投料准备",
-                        style = MaterialTheme.typography.headlineLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-
-                    Spacer(modifier = Modifier.height(24.dp))
-
-                    Text(
-                        text = recipeName,
-                        style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    Text(
-                        text = "共 ${recipe!!.size} 种材料",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-
-                    Spacer(modifier = Modifier.height(40.dp))
-
-                    Button(
-                        onClick = { showPreCheckDialog = true },
-                        modifier = Modifier.size(width = 200.dp, height = 60.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary
-                        )
-                    ) {
-                        Text(
-                            text = "开始投料准备",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    OutlinedButton(
-                        onClick = onNavigateBack,
-                        modifier = Modifier.size(width = 200.dp, height = 50.dp)
-                    ) {
-                        Text("返回")
-                    }
+            recipe == null -> {
+                CsvImportState(
+                    onImportFromFile = { launcher.launch(arrayOf("text/comma-separated-values", "text/csv", "*/*")) }, // Enhanced MIME types
+                    onNavigateBack = onNavigateBack
+                )
+            }
+            else -> {
+                val selectNewRecipeLabel = if (isCsvMode) "选择新配方" else "返回配方管理"
+                val onSelectNewRecipeAction: () -> Unit = if (isCsvMode) {
+                    { recipe = null }
+                } else {
+                    { onNavigateToRecipeList() }
                 }
-            } else {
-                // 预检查完成后显示投料界面
-                DosingScreen(
-                    recipe = recipe!!,
-                    onSelectNewRecipe = onSelectNewRecipeAction,
-                    selectNewRecipeLabel = selectNewRecipeLabel,
-                    onNavigateBack = onNavigateBack,
-                    preferencesState = preferencesState,
+                overLimitWarning?.let { warning ->
+                    OverLimitDialog(warning = warning, onDismiss = { overLimitWarning = null })
+                }
+
+                // PreCheck Dialog
+                PreCheckDialog(
                     operatorName = operatorName,
                     onOperatorNameChange = { operatorName = it },
                     checklistItems = checklistItems,
-                    detailInputs = detailInputs,
-                    overLimitWarning = overLimitWarning,
-                    onOverLimitWarningChange = { overLimitWarning = it },
-                    isRecordSaved = isRecordSaved,
-                    onRecordSavedChange = { isRecordSaved = it },
-                    isCsvMode = isCsvMode,
-                    normalizedRecipeId = normalizedRecipeId,
-                    recipeCode = recipeCode,
-                    recipeName = recipeName,
-                    operationStartTime = operationStartTime,
-                    dateFormat = dateFormat,
-                    dosingRecordRepository = dosingRecordRepository,
-                    coroutineScope = coroutineScope,
-                    modifier = modifier
+                    isVisible = showPreCheckDialog,
+                    onConfirm = {
+                        isPreCheckCompleted = true
+                        showPreCheckDialog = false
+                        operationStartTime = dateFormat.format(Date())
+                    },
+                    onCancel = { showPreCheckDialog = false }
                 )
+
+                if (!isPreCheckCompleted) {
+                    // Prep Screen
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        LabCard(
+                            modifier = Modifier.width(500.dp)
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(SmartDosingTokens.spacing.lg)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Science, // Lab Icon
+                                    contentDescription = null,
+                                    modifier = Modifier.size(64.dp),
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                                Text(
+                                    text = "实验准备就绪",
+                                    style = MaterialTheme.typography.headlineSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                
+                                Column(horizontalAlignment = Alignment.Start, modifier = Modifier.fillMaxWidth()) {
+                                    DataValueDisplay(label = "实验配方", value = recipeName)
+                                    Spacer(modifier = Modifier.height(SmartDosingTokens.spacing.sm))
+                                    Text(
+                                        text = "共 ${recipe!!.size} 种组分",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(SmartDosingTokens.spacing.md)
+                                ) {
+                                    LabOutlinedButton(
+                                        onClick = onNavigateBack,
+                                        text = "取消",
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    LabButton(
+                                        onClick = { showPreCheckDialog = true },
+                                        text = "开始投料",
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    // Main Dosing Flow
+                    DosingScreen(
+                        recipe = recipe!!,
+                        onSelectNewRecipe = onSelectNewRecipeAction,
+                        selectNewRecipeLabel = selectNewRecipeLabel,
+                        onNavigateBack = onNavigateBack,
+                        preferencesState = preferencesState,
+                        operatorName = operatorName,
+                        onOperatorNameChange = { operatorName = it },
+                        checklistItems = checklistItems,
+                        detailInputs = detailInputs,
+                        overLimitWarning = overLimitWarning,
+                        onOverLimitWarningChange = { overLimitWarning = it },
+                        isRecordSaved = isRecordSaved,
+                        onRecordSavedChange = { isRecordSaved = it },
+                        isCsvMode = isCsvMode,
+                        normalizedRecipeId = normalizedRecipeId,
+                        recipeCode = recipeCode,
+                        recipeName = recipeName,
+                        operationStartTime = operationStartTime,
+                        dateFormat = dateFormat,
+                        dosingRecordRepository = dosingRecordRepository,
+                        coroutineScope = coroutineScope,
+                        modifier = modifier
+                    )
+                }
             }
         }
     }
 }
 
 /**
- * CSV 导入模式界面
+ * CSV 导入模式界面 (实验室版)
  */
 @Composable
 private fun CsvImportState(
@@ -562,64 +594,59 @@ private fun CsvImportState(
     onNavigateBack: () -> Unit
 ) {
     Column(
-        modifier = modifier.fillMaxSize().padding(32.dp),
+        modifier = modifier.fillMaxSize(),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(
-            text = "选择投料配方",
-            fontSize = 32.sp,
-            fontWeight = FontWeight.Bold,
-            color = Color(0xFF263238)
-        )
+        LabCard(modifier = Modifier.width(480.dp)) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(SmartDosingTokens.spacing.xl)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.UploadFile,
+                    contentDescription = null,
+                    modifier = Modifier.size(64.dp),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                
+                Text(
+                    text = "导入实验数据",
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                
+                Text(
+                    text = "支持 CSV 格式配方文件导入\n格式: 编号, 名称, 重量",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
 
-        Spacer(modifier = Modifier.height(48.dp))
-
-        Button(
-            onClick = onImportFromFile,
-            modifier = Modifier.width(300.dp).height(80.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = Color(0xFF1976D2)
-            ),
-            shape = RoundedCornerShape(12.dp)
-        ) {
-            Text(
-                text = "导入CSV配方文件",
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Medium
-            )
-        }
-
-        Spacer(modifier = Modifier.height(32.dp))
-
-        Text(
-            text = "请选择一个CSV格式的配方文件\n格式: 材料编号,材料名称,重量",
-            fontSize = 16.sp,
-            color = Color(0xFF757575),
-            textAlign = TextAlign.Center
-        )
-
-        Spacer(modifier = Modifier.height(48.dp))
-
-        OutlinedButton(
-            onClick = onNavigateBack,
-            modifier = Modifier.width(200.dp).height(60.dp),
-            colors = ButtonDefaults.outlinedButtonColors(
-                contentColor = Color(0xFF757575)
-            ),
-            shape = RoundedCornerShape(12.dp)
-        ) {
-            Text(
-                text = "返回",
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Medium
-            )
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(SmartDosingTokens.spacing.md)
+                ) {
+                    LabButton(
+                        onClick = onImportFromFile,
+                        text = "选择文件",
+                        icon = Icons.Default.FolderOpen,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    
+                    LabOutlinedButton(
+                        onClick = onNavigateBack,
+                        text = "返回首页",
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
         }
     }
 }
 
 /**
- * 配方载入错误提示
+ * 配方载入错误提示 (实验室版)
  */
 @Composable
 private fun DosingErrorState(
@@ -627,32 +654,31 @@ private fun DosingErrorState(
     onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Column(
-        modifier = modifier.fillMaxSize().padding(32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Text(text = message, fontSize = 20.sp, color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center)
-        Spacer(modifier = Modifier.height(24.dp))
-        Button(onClick = onNavigateBack, modifier = Modifier.width(200.dp).height(56.dp)) {
-            Text(text = "返回", fontSize = 18.sp)
+    Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        LabCard(modifier = Modifier.width(400.dp)) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(SmartDosingTokens.spacing.lg)
+            ) {
+                Icon(Icons.Default.ErrorOutline, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(48.dp))
+                Text(message, color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center)
+                LabButton(onClick = onNavigateBack, text = "返回", containerColor = MaterialTheme.colorScheme.error)
+            }
         }
     }
 }
 
 /**
- * 配方载入过渡态
+ * 配方载入过渡态 (实验室版)
  */
 @Composable
 private fun DosingLoadingState(modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier.fillMaxSize(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        CircularProgressIndicator()
-        Spacer(modifier = Modifier.height(16.dp))
-        Text(text = "正在载入配方信息...", fontSize = 16.sp)
+    Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+            Spacer(modifier = Modifier.height(SmartDosingTokens.spacing.md))
+            Text("正在同步实验数据...", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
     }
 }
 
@@ -669,45 +695,35 @@ fun PreCheckDialog(
         AlertDialog(
             onDismissRequest = onCancel,
             title = {
-                Text(
-                    text = "投料前准备检查",
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold
-                )
+                LabSectionHeader("实验前检查")
             },
             text = {
                 Column(
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                    verticalArrangement = Arrangement.spacedBy(SmartDosingTokens.spacing.md)
                 ) {
-                    Text(
-                        text = "请完成以下准备工作后再开始投料操作：",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-
                     // 操作员姓名输入
-                    OutlinedTextField(
+                    LabTextField(
                         value = operatorName,
                         onValueChange = onOperatorNameChange,
-                        label = { Text("操作人员姓名") },
+                        label = "操作人员",
+                        placeholder = "输入姓名或工号",
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words),
                         modifier = Modifier.fillMaxWidth()
                     )
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
                     // 检查清单
                     checklistItems.forEach { item ->
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth().clickable { item.checked = !item.checked }
                         ) {
                             Checkbox(
                                 checked = item.checked,
                                 onCheckedChange = { checked -> item.checked = checked }
                             )
-                            Spacer(modifier = Modifier.width(8.dp))
                             Text(
                                 text = item.label,
                                 style = MaterialTheme.typography.bodyMedium
@@ -719,31 +735,30 @@ fun PreCheckDialog(
 
                     if (!isAllReady) {
                         Text(
-                            text = "⚠️ 请完成操作员信息填写和全部检查事项",
+                            text = "需完成所有检查项方可开始",
                             color = MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.bodySmall
+                            style = MaterialTheme.typography.labelSmall
                         )
                     }
                 }
             },
             confirmButton = {
                 val isAllReady = operatorName.isNotBlank() && checklistItems.all { it.checked }
-                Button(
+                LabButton(
                     onClick = onConfirm,
-                    enabled = isAllReady
-                ) {
-                    Text("开始投料")
-                }
+                    enabled = isAllReady,
+                    text = "开始投料"
+                )
             },
             dismissButton = {
-                OutlinedButton(onClick = onCancel) {
-                    Text("取消")
-                }
+                LabOutlinedButton(onClick = onCancel, text = "取消")
             },
-            modifier = Modifier.widthIn(min = 400.dp, max = 600.dp)
+            containerColor = MaterialTheme.colorScheme.surface,
+            shape = RoundedCornerShape(SmartDosingTokens.radius.lg)
         )
     }
 }
+
 
 @Composable
 fun TaskChecklistCard(
@@ -787,33 +802,37 @@ fun TaskChecklistCard(
 }
 
 @Composable
-fun InfoCard(title: String, content: String, modifier: Modifier = Modifier) {
-    Card(
-        modifier = modifier,
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White)
-    ) {
+fun LabInfoCard(
+    title: String,
+    content: String,
+    modifier: Modifier = Modifier
+) {
+    LabCard(modifier = modifier) {
         Column(
-            modifier = Modifier.fillMaxSize().padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(text = title, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Spacer(modifier = Modifier.height(16.dp))
-            val contentLength = content.length
-            val fontSize = when {
-                contentLength > 20 -> 26.sp
-                contentLength > 12 -> 30.sp
-                else -> MaterialTheme.typography.displayMedium.fontSize
+            Text(
+                text = title,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(SmartDosingTokens.spacing.sm))
+            
+            // Auto size text based on length
+            val style = when {
+                content.length > 20 -> MaterialTheme.typography.titleMedium
+                content.length > 12 -> MaterialTheme.typography.headlineSmall
+                else -> MaterialTheme.typography.headlineMedium
             }
+            
             Text(
                 text = content,
-                fontSize = fontSize,
-                fontWeight = FontWeight.Bold,
+                style = style.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onSurface,
+                textAlign = TextAlign.Center,
                 maxLines = 2,
-                lineHeight = fontSize * 1.2f,
-                textAlign = TextAlign.Center
+                overflow = TextOverflow.Ellipsis
             )
         }
     }
@@ -847,26 +866,19 @@ fun DosingScreen(
     var currentStep by remember { mutableStateOf(0) }
     var actualWeight by remember { mutableStateOf("") }
     val context = LocalContext.current
-
-    // 使用新的语音播报管理器
     val voiceManager = remember { VoiceAnnouncementManager(context) }
 
-    // 初始化语音播报
     DisposableEffect(context) {
         voiceManager.initialize()
-        onDispose {
-            voiceManager.shutdown()
-        }
+        onDispose { voiceManager.shutdown() }
     }
 
     val currentMaterial = if (currentStep < recipe.size) recipe[currentStep] else null
 
-    // 当材料切换时进行语音播报
     LaunchedEffect(currentMaterial, preferencesState.repeatCountForPlayback) {
         if (currentMaterial != null) {
-            // 先播报步骤，稍等片刻再播报材料信息
             voiceManager.announceStep(currentStep, recipe.size)
-            delay(800) // 等待步骤播报完成
+            delay(800)
             voiceManager.announceMaterial(currentMaterial, preferencesState.repeatCountForPlayback)
         } else {
             voiceManager.announceCompletion()
@@ -901,74 +913,113 @@ fun DosingScreen(
         }
     }
 
+    var isInputExpanded by remember { mutableStateOf(false) }
+
     if (currentMaterial != null) {
         Column(
-            modifier = modifier.fillMaxSize().padding(32.dp),
+            modifier = modifier.fillMaxSize().padding(16.dp), // More compact padding
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Top Banner
+            // Top Navigation & Title
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                OutlinedButton(
+                LabOutlinedButton(
                     onClick = onNavigateBack,
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = Color(0xFF757575)
+                    text = "退出"
+                )
+
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = "投料进行中",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                ) {
-                    Text("← 返回", fontSize = 16.sp)
+                    Text(
+                        text = recipeName,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
 
-                Text(
-                    text = "配方投料操作",
-                    style = MaterialTheme.typography.headlineMedium,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.weight(1f)
+                LabStatusBadge(
+                    text = "步骤 ${currentStep + 1}/${recipe.size}",
+                    color = MaterialTheme.colorScheme.primary
                 )
-
-                Spacer(modifier = Modifier.width(80.dp)) // 平衡布局
             }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            Text(
-                text = "当前步骤：${currentStep + 1}/${recipe.size} · 材料编号：${currentMaterial.id}",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.primary
+            
+            Spacer(modifier = Modifier.height(SmartDosingTokens.spacing.md))
+            
+            // Progress
+            val progress = if (recipe.isNotEmpty()) currentStep.toFloat() / recipe.size.toFloat() else 0f
+            LinearProgressIndicator(
+                progress = { progress },
+                modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)),
+                color = MaterialTheme.colorScheme.primary,
+                trackColor = MaterialTheme.colorScheme.surfaceVariant,
             )
 
-            // Middle Info Row
-            Row(
-                modifier = Modifier.fillMaxWidth().weight(0.5f),
-                horizontalArrangement = Arrangement.spacedBy(24.dp)
+            Spacer(modifier = Modifier.height(SmartDosingTokens.spacing.lg))
+
+            // Info Area
+             Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(if (isInputExpanded) 0.15f else 0.4f)
+                    .animateContentSize()
             ) {
-                InfoCard(title = "材料名称", content = currentMaterial.name, modifier = Modifier.weight(1f))
-                InfoCard(title = "材料编码", content = currentMaterial.id, modifier = Modifier.weight(1f))
-                InfoCard(
-                    title = "投料重量",
-                    content = formatWeightDisplay(currentMaterial.targetWeight, currentMaterial.unit),
-                    modifier = Modifier.weight(1f)
-                )
+                if (isInputExpanded) {
+                     // Compact view
+                     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                         Text(currentMaterial.name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                         Text("目标: ${formatWeightDisplay(currentMaterial.targetWeight, currentMaterial.unit)}", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
+                         IconButton(onClick = { isInputExpanded = false }) { Icon(Icons.Default.KeyboardArrowDown, null) }
+                     }
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(SmartDosingTokens.spacing.md)) {
+                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                             IconButton(onClick = { isInputExpanded = true }) { Icon(Icons.Default.KeyboardArrowUp, null) }
+                         }
+                         Row(
+                            modifier = Modifier.fillMaxSize(),
+                            horizontalArrangement = Arrangement.spacedBy(SmartDosingTokens.spacing.lg)
+                        ) {
+                            LabInfoCard(title = "材料名称", content = currentMaterial.name, modifier = Modifier.weight(1f))
+                            LabInfoCard(title = "材料编码", content = currentMaterial.id, modifier = Modifier.weight(1f))
+                            // Highlight Target Weight
+                            LabCard(modifier = Modifier.weight(1f), backgroundColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha=0.3f), borderColor=MaterialTheme.colorScheme.primary) {
+                                Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text("目标重量", style = MaterialTheme.typography.labelMedium, color=MaterialTheme.colorScheme.primary)
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text(
+                                        formatWeightDisplay(currentMaterial.targetWeight, currentMaterial.unit),
+                                        style = MaterialTheme.typography.headlineMedium.copy(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold),
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
             }
 
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(SmartDosingTokens.spacing.md))
 
-            // 底部控制区域 - 重构为左右两栏布局 (2:1 比例)
-            BottomControlArea(
+            // Bottom Control Area
+            LabBottomControls(
                 modifier = Modifier.fillMaxWidth().weight(1f),
                 currentWeight = actualWeight,
-                onWeightChange = { newWeight -> actualWeight = newWeight },
+                onWeightChange = { actualWeight = it },
                 onClearWeight = { actualWeight = "" },
                 onConfirmNext = {
-                    // 预检查已在前面完成，这里直接进行重量验证
-                    val materialForLog = currentMaterial ?: return@BottomControlArea
+                    val materialForLog = currentMaterial ?: return@LabBottomControls
                     val normalizedInput = actualWeight.replace(',', '.')
                     val actualValue = normalizedInput.toDoubleOrNull()
                     if (actualValue == null) {
                         Toast.makeText(context, "请输入有效的投料重量", Toast.LENGTH_SHORT).show()
-                        return@BottomControlArea
+                        return@LabBottomControls
                     }
                     val target = materialForLog.targetWeight.toDouble()
                     val tolerance = preferencesState.overLimitTolerancePercent.toDouble()
@@ -992,60 +1043,64 @@ fun DosingScreen(
                     }
                     currentStep++
                     actualWeight = ""
+                    isInputExpanded = false
                 },
                 onRepeatAnnouncement = {
-                    // 手动重复播报当前材料信息
                     currentMaterial?.let { material ->
                         voiceManager.repeatCurrentAnnouncement(material, preferencesState.repeatCountForPlayback)
                     }
-                }
+                },
+                targetWeight = currentMaterial.targetWeight,
+                tolerancePercent = preferencesState.overLimitTolerancePercent
             )
         }
     } else {
-        // "配方完成" screen
-        Column(
-            modifier = modifier.fillMaxSize(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+        // Completion Screen
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
         ) {
-            Text(text = "配方完成!", fontSize = 48.sp)
-            Spacer(modifier = Modifier.height(32.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Button(
-                    onClick = {
-                        currentStep = 0
-                        detailInputs.clear()
-                        onRecordSavedChange(false)
-                        // Note: operationStartTime reset is handled in parent scope
-                        onOverLimitWarningChange(null)
-                    },
-                    modifier = Modifier.width(200.dp).height(60.dp)
+            LabCard(modifier = Modifier.width(500.dp)) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(SmartDosingTokens.spacing.xl)
                 ) {
-                    Text("重新开始", fontSize = 24.sp)
-                }
-                Button(
-                    onClick = onSelectNewRecipe,
-                    modifier = Modifier.width(200.dp).height(60.dp)
-                ) {
-                    Text(selectNewRecipeLabel, fontSize = 24.sp)
-                }
-                Button(
-                    onClick = onNavigateBack,
-                    modifier = Modifier.width(200.dp).height(60.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF757575)
+                    Icon(
+                        Icons.Default.CheckCircle, 
+                        null, 
+                        modifier = Modifier.size(80.dp), 
+                        tint = SmartDosingTokens.colors.success
                     )
-                ) {
-                    Text("返回首页", fontSize = 24.sp)
+                    Text("配方投料完成", style = MaterialTheme.typography.headlineMedium)
+                    
+                    Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(SmartDosingTokens.spacing.md)) {
+                         LabButton(
+                            onClick = {
+                                currentStep = 0
+                                detailInputs.clear()
+                                onRecordSavedChange(false)
+                                onOverLimitWarningChange(null)
+                            },
+                            text = "重新开始此配方",
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        LabOutlinedButton(
+                            onClick = onSelectNewRecipe,
+                            text = selectNewRecipeLabel,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                         LabOutlinedButton(
+                            onClick = onNavigateBack,
+                            text = "返回首页",
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
                 }
             }
         }
     }
 }
 
-/**
- * 将配方材料转换为投料操作材料
- */
 private fun RecipeMaterial.toOperationMaterial(): Material {
     val normalizedId = when {
         code.isNotBlank() -> code
@@ -1062,280 +1117,165 @@ private fun RecipeMaterial.toOperationMaterial(): Material {
     )
 }
 
-/**
- * 显示用重量格式化
- */
 private fun formatWeightDisplay(weight: Float, unit: String): String {
     val normalizedUnit = unit.uppercase(Locale.getDefault())
     return String.format(Locale.getDefault(), "%.3f %s", weight, normalizedUnit)
 }
 
-/**
- * 底部控制区域 - 左右两栏布局（2:1 比例）
- * 左侧：数字键盘区域 (66% 宽度)
- * 右侧：功能控制区域 (33% 宽度)
- */
 @Composable
-fun BottomControlArea(
+fun LabBottomControls(
     modifier: Modifier = Modifier,
     currentWeight: String,
     onWeightChange: (String) -> Unit,
     onClearWeight: () -> Unit,
     onConfirmNext: () -> Unit,
-    onRepeatAnnouncement: () -> Unit = {}
+    onRepeatAnnouncement: () -> Unit = {},
+    targetWeight: Float = 0f,
+    tolerancePercent: Float = 0f
 ) {
     Row(
         modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(24.dp)
+        horizontalArrangement = Arrangement.spacedBy(SmartDosingTokens.spacing.lg)
     ) {
-        // 左侧 - 数字键盘区域 (65% 宽度)
+        // Left: Numpad (65%)
         Column(
-            modifier = Modifier.weight(2f).fillMaxHeight(),
-            horizontalAlignment = Alignment.CenterHorizontally
+            modifier = Modifier.weight(0.65f).fillMaxHeight(),
+            verticalArrangement = Arrangement.spacedBy(SmartDosingTokens.spacing.md)
         ) {
-            // 输入显示框 - 放在键盘上方
-            WeightDisplayBox(
-                modifier = Modifier.fillMaxWidth().weight(0.25f),
-                weight = currentWeight
+             LabWeightDisplay(
+                modifier = Modifier.weight(0.3f).fillMaxWidth(),
+                weight = currentWeight,
+                targetWeight = targetWeight,
+                tolerancePercent = tolerancePercent
             )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // 数字键盘 - 标准3x4布局
-            IndustrialNumericKeypad(
-                modifier = Modifier.weight(0.75f),
+            
+            LabNumericKeypad(
+                modifier = Modifier.weight(0.7f),
                 onKeyPress = { key ->
                     when (key) {
-                        "⌫" -> {
-                            // 回退删除最后一位
-                            if (currentWeight.isNotEmpty()) {
-                                onWeightChange(currentWeight.dropLast(1))
-                            }
-                        }
-                        "." -> {
-                            // 小数点逻辑 - 只允许一个小数点且不能是第一位
-                            if (!currentWeight.contains(".") && currentWeight.isNotEmpty()) {
-                                onWeightChange(currentWeight + key)
-                            }
-                        }
-                        else -> {
-                            // 数字输入
-                            onWeightChange(currentWeight + key)
-                        }
+                        "⌫" -> if (currentWeight.isNotEmpty()) onWeightChange(currentWeight.dropLast(1))
+                        "." -> if (!currentWeight.contains(".") && currentWeight.isNotEmpty()) onWeightChange(currentWeight + key)
+                        else -> onWeightChange(currentWeight + key)
                     }
                 }
             )
         }
 
-        // 右侧 - 功能控制区域 (33% 宽度)
-        FunctionControlPanel(
-            modifier = Modifier.weight(1f).fillMaxHeight(),
-            onClearWeight = onClearWeight,
-            onConfirmNext = onConfirmNext,
-            onRepeatAnnouncement = onRepeatAnnouncement,
-            isNextEnabled = currentWeight.isNotBlank() // 预检查已完成，只需验证重量输入
-        )
-    }
-}
-
-/**
- * 重量显示框 - 输入显示区域
- */
-@Composable
-fun WeightDisplayBox(
-    modifier: Modifier = Modifier,
-    weight: String
-) {
-    Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(12.dp),
-        color = Color.White,
-        border = BorderStroke(1.dp, Color(0xFFB0BEC5)),
-        shadowElevation = 2.dp
-    ) {
-        Box(
-            modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp),
-            contentAlignment = Alignment.CenterEnd
+        // Right: Actions (35%)
+        Column(
+            modifier = Modifier.weight(0.35f).fillMaxHeight(),
+            verticalArrangement = Arrangement.spacedBy(SmartDosingTokens.spacing.md)
         ) {
-            Text(
-                text = if (weight.isBlank()) "0.0" else weight,
-                style = MaterialTheme.typography.displayLarge.copy(fontSize = 48.sp),
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF263238),
-                textAlign = TextAlign.End
+             LabButton(
+                onClick = onConfirmNext,
+                text = "下一步",
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                enabled = currentWeight.isNotBlank(),
+                containerColor = MaterialTheme.colorScheme.primary, 
+                // Using standard LabButton but scaling font manually inside if needed, or just relying on labelLarge
             )
+            Row(modifier = Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(SmartDosingTokens.spacing.md)) {
+                 LabOutlinedButton(
+                    onClick = onRepeatAnnouncement,
+                    text = "重播",
+                    modifier = Modifier.weight(1f).fillMaxHeight()
+                )
+                LabButton(
+                    onClick = onClearWeight,
+                    text = "清空",
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
+                    containerColor = MaterialTheme.colorScheme.errorContainer,
+                    contentColor = MaterialTheme.colorScheme.onErrorContainer
+                )
+            }
         }
     }
 }
 
-/**
- * 工业级数字键盘 - 3列 x 4行标准布局，适配10寸平板
- * 布局：7 8 9
- *      4 5 6
- *      1 2 3
- *      . 0 ⌫
- * 优化：适中尺寸，适合10寸平板操作
- */
 @Composable
-fun IndustrialNumericKeypad(
+fun LabWeightDisplay(
+    modifier: Modifier = Modifier,
+    weight: String,
+    targetWeight: Float = 0f,
+    tolerancePercent: Float = 0f
+) {
+    val currentWeightVal = weight.replace(",", ".").toFloatOrNull() ?: 0f
+    
+    // Status Logic
+    val isOver = targetWeight > 0 && currentWeightVal > targetWeight * (1 + tolerancePercent / 100f)
+    val isNear = targetWeight > 0 && currentWeightVal >= targetWeight * (1 - tolerancePercent / 100f)
+    
+    val statusColor = when {
+        isOver -> MaterialTheme.colorScheme.error // Red
+        isNear -> SmartDosingTokens.colors.success // Green
+        currentWeightVal > 0 -> SmartDosingTokens.colors.warning // Orange/Approach
+        else -> MaterialTheme.colorScheme.surface
+    }
+
+    val displayColor = when {
+        isOver -> MaterialTheme.colorScheme.error
+        isNear -> SmartDosingTokens.colors.success
+        else -> MaterialTheme.colorScheme.onSurface
+    }
+
+    LabCard(modifier = modifier, backgroundColor = MaterialTheme.colorScheme.surface, borderColor = statusColor.copy(alpha=0.5f)) {
+        Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center) {
+             Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.CenterEnd) {
+                 Text(
+                    text = if (weight.isBlank()) "0.0" else weight,
+                    style = MaterialTheme.typography.displayLarge.copy(fontSize = 56.sp, fontFamily = FontFamily.Monospace),
+                    fontWeight = FontWeight.Bold,
+                    color = displayColor
+                 )
+             }
+             if (targetWeight > 0) {
+                 val progress = (currentWeightVal / targetWeight).coerceIn(0f, 1.2f)
+                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                     Text("Target: $targetWeight", style = MaterialTheme.typography.bodySmall)
+                     Text("${(progress*100).toInt()}%", style = MaterialTheme.typography.bodySmall)
+                 }
+                 LinearProgressIndicator(
+                     progress = { progress / 1.2f },
+                     modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)),
+                     color = statusColor,
+                     trackColor = MaterialTheme.colorScheme.surfaceVariant
+                 )
+             }
+        }
+    }
+}
+
+@Composable
+fun LabNumericKeypad(
     modifier: Modifier = Modifier,
     onKeyPress: (String) -> Unit
 ) {
-    // 按键布局 - 标准计算器布局
-    val keyLayout = listOf(
+    val keys = listOf(
         listOf("7", "8", "9"),
         listOf("4", "5", "6"),
         listOf("1", "2", "3"),
         listOf(".", "0", "⌫")
     )
 
-    Column(
-        modifier = modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.spacedBy(12.dp) // 适中的垂直间距
-    ) {
-        keyLayout.forEach { row ->
-            Row(
-                modifier = Modifier.weight(1f).fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp) // 适中的水平间距
-            ) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        keys.forEach { row ->
+            Row(modifier = Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 row.forEach { key ->
-                    IndustrialKeyButton(
+                    Button(
+                        onClick = { onKeyPress(key) },
                         modifier = Modifier.weight(1f).fillMaxHeight(),
-                        text = key,
-                        onClick = { onKeyPress(key) }
-                    )
+                        shape = RoundedCornerShape(SmartDosingTokens.radius.xs),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.surface,
+                            contentColor = MaterialTheme.colorScheme.onSurface
+                        ),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                        elevation = ButtonDefaults.buttonElevation(0.dp)
+                    ) {
+                        Text(key, style = MaterialTheme.typography.titleLarge)
+                    }
                 }
             }
-        }
-    }
-}
-
-/**
- * 工业级按键按钮 - 适配10寸平板，便于操作
- */
-@Composable
-fun IndustrialKeyButton(
-    modifier: Modifier = Modifier,
-    text: String,
-    onClick: () -> Unit
-) {
-    Button(
-        onClick = onClick,
-        modifier = modifier,
-        shape = RoundedCornerShape(12.dp), // 恢复圆润设计
-        colors = ButtonDefaults.buttonColors(
-            containerColor = Color.White,
-            contentColor = Color(0xFF263238)
-        ),
-        elevation = ButtonDefaults.buttonElevation(
-            defaultElevation = 4.dp,  // 适中的阴影
-            pressedElevation = 8.dp
-        ),
-        border = BorderStroke(1.dp, Color(0xFFE0E0E0)) // 适中的边框
-    ) {
-        Text(
-            text = text,
-            fontSize = 28.sp, // 适合10寸平板的字体大小
-            fontWeight = FontWeight.Bold,
-            color = Color(0xFF263238),
-            textAlign = TextAlign.Center
-        )
-    }
-}
-
-/**
- * 功能控制面板 - 右侧操作按钮区域
- * 工业级设计：大按钮，方形设计，间距充足
- */
-@Composable
-fun FunctionControlPanel(
-    modifier: Modifier = Modifier,
-    onClearWeight: () -> Unit,
-    onConfirmNext: () -> Unit,
-    onRepeatAnnouncement: () -> Unit,
-    isNextEnabled: Boolean
-) {
-    Column(
-        modifier = modifier.padding(8.dp), // 面板内边距
-        verticalArrangement = Arrangement.spacedBy(20.dp, Alignment.CenterVertically), // 增加按钮间距
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        // "语音重播"按钮 - 工业绿色，超大设计
-        Button(
-            onClick = onRepeatAnnouncement,
-            modifier = Modifier.fillMaxWidth().height(90.dp), // 增加高度
-            shape = RoundedCornerShape(8.dp), // 方形设计
-            colors = ButtonDefaults.buttonColors(
-                containerColor = Color(0xFF4CAF50),
-                contentColor = Color.White
-            ),
-            elevation = ButtonDefaults.buttonElevation(
-                defaultElevation = 8.dp,  // 增加阴影
-                pressedElevation = 16.dp
-            ),
-            border = BorderStroke(2.dp, Color(0xFF388E3C)), // 添加边框
-            contentPadding = PaddingValues(20.dp) // 增加内边距
-        ) {
-            Text(
-                text = "🔊 重播",
-                fontSize = 24.sp, // 增大字体
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center
-            )
-        }
-
-        // "清空"按钮 - 警示色，超大设计
-        Button(
-            onClick = onClearWeight,
-            modifier = Modifier.fillMaxWidth().height(90.dp), // 增加高度
-            shape = RoundedCornerShape(8.dp), // 方形设计
-            colors = ButtonDefaults.buttonColors(
-                containerColor = Color(0xFFEF9A9A),
-                contentColor = Color(0xFFB71C1C)
-            ),
-            elevation = ButtonDefaults.buttonElevation(
-                defaultElevation = 8.dp,  // 增加阴影
-                pressedElevation = 16.dp
-            ),
-            border = BorderStroke(2.dp, Color(0xFFE57373)), // 添加边框
-            contentPadding = PaddingValues(20.dp) // 增加内边距
-        ) {
-            Text(
-                text = "清空",
-                fontSize = 24.sp, // 增大字体
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center
-            )
-        }
-
-        // "下一步"按钮 - 工业蓝，超大设计
-        Button(
-            onClick = onConfirmNext,
-            modifier = Modifier.fillMaxWidth().height(90.dp), // 增加高度
-            shape = RoundedCornerShape(8.dp), // 方形设计
-            colors = ButtonDefaults.buttonColors(
-                containerColor = Color(0xFF1976D2),
-                contentColor = Color.White,
-                disabledContainerColor = Color(0xFFB0BEC5),
-                disabledContentColor = Color.White
-            ),
-            elevation = ButtonDefaults.buttonElevation(
-                defaultElevation = 8.dp,  // 增加阴影
-                pressedElevation = 16.dp
-            ),
-            border = BorderStroke(
-                width = 2.dp,
-                color = if (isNextEnabled) Color(0xFF1565C0) else Color(0xFF90A4AE)
-            ), // 动态边框颜色
-            enabled = isNextEnabled,
-            contentPadding = PaddingValues(20.dp) // 增加内边距
-        ) {
-            Text(
-                text = "下一步",
-                fontSize = 24.sp, // 增大字体
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center
-            )
         }
     }
 }
@@ -1354,34 +1294,17 @@ fun OverLimitDialog(warning: OverLimitWarning, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text("已知晓")
-            }
+            LabButton(onClick = onDismiss, text = "确认偏差并继续")
         },
-        title = { Text("数量超标提醒") },
+        title = { LabSectionHeader("⚠️ 称量偏差警告") },
         text = {
             Text(
-                text = "材料「${warning.materialName}」超出目标 ${"%.2f".format(warning.percent)}%，请复核称量。",
-                fontSize = 16.sp
+                text = "材料「${warning.materialName}」超出目标值 ${"%.2f".format(warning.percent)}%。\n请确认是否通过此偏差？",
+                style = MaterialTheme.typography.bodyLarge
             )
-        }
+        },
+        containerColor = MaterialTheme.colorScheme.errorContainer,
+        textContentColor = MaterialTheme.colorScheme.onErrorContainer,
+        titleContentColor = MaterialTheme.colorScheme.onErrorContainer
     )
-}
-
-@Preview(showBackground = true, device = "spec:width=1280dp,height=800dp,dpi=240")
-@Composable
-fun DosingOperationScreenPreview() {
-    SmartDosingTheme {
-        DosingOperationScreen()
-    }
-}
-
-@Preview(showBackground = true, device = "spec:width=1280dp,height=800dp,dpi=240")
-@Composable
-fun DosingOperationScreenDetailPreview() {
-    // Preview is simplified - full DosingScreen requires too many parameters
-    // Use DosingOperationScreenPreview() for full preview
-    SmartDosingTheme {
-        DosingOperationScreen()
-    }
 }
