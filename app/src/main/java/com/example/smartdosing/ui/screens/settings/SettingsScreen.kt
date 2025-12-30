@@ -54,13 +54,26 @@ fun SettingsScreen(
 
     val settingsSections = listOf(
         SettingsSection(
-            title = "蓝牙电子秤",
-            icon = Icons.Outlined.Bluetooth,
+            title = "投料设置",
+            icon = Icons.Outlined.Scale,
             items = listOf(
+                SettingsItem.Selection(
+                    title = "投料模式",
+                    subtitle = "选择手动输入或蓝牙电子秤模式",
+                    icon = Icons.Outlined.Tune,
+                    selectedValue = preferencesState.dosingMode.displayName,
+                    options = com.example.smartdosing.data.settings.DosingMode.entries.map { it.displayName },
+                    onSelectionChange = { selectedName ->
+                        val mode = com.example.smartdosing.data.settings.DosingMode.entries.find { it.displayName == selectedName }
+                        if (mode != null) {
+                            scope.launch { preferencesManager.setDosingMode(mode) }
+                        }
+                    }
+                ),
                 SettingsItem.Action(
                     title = "蓝牙秤设置",
                     subtitle = "管理蓝牙电子秤连接和参数",
-                    icon = Icons.Outlined.Scale,
+                    icon = Icons.Outlined.Bluetooth,
                     onClick = onNavigateToBluetoothSettings
                 )
             )
@@ -445,7 +458,8 @@ fun SettingsItemView(item: SettingsItem) {
                 subtitle = item.subtitle,
                 icon = item.icon,
                 selectedValue = item.selectedValue,
-                options = item.options
+                options = item.options,
+                onSelectionChange = item.onSelectionChange
             )
         }
         is SettingsItem.Action -> {
@@ -617,13 +631,54 @@ fun SelectionSettingItem(
     subtitle: String,
     icon: ImageVector,
     selectedValue: String,
-    options: List<String>
+    options: List<String>,
+    onSelectionChange: (String) -> Unit = {}
 ) {
+    var showDialog by remember { mutableStateOf(false) }
+    
+    if (showDialog) {
+        AlertDialog(
+            onDismissRequest = { showDialog = false },
+            title = { Text(title) },
+            text = {
+                Column {
+                    options.forEach { option ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    onSelectionChange(option)
+                                    showDialog = false
+                                }
+                                .padding(vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = selectedValue == option,
+                                onClick = {
+                                    onSelectionChange(option)
+                                    showDialog = false
+                                }
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(text = option, style = MaterialTheme.typography.bodyLarge)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showDialog = false }) {
+                    Text("取消")
+                }
+            }
+        )
+    }
+    
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .clickable { },
+            .clickable { showDialog = true },
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {

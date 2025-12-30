@@ -5,16 +5,26 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
 private val Context.dosingPreferencesDataStore by preferencesDataStore(name = "dosing_preferences")
 
+/**
+ * 投料模式枚举
+ */
+enum class DosingMode(val displayName: String) {
+    MANUAL("手动输入"),
+    BLUETOOTH("蓝牙电子秤")
+}
+
 data class DosingPreferencesState(
     val voiceRepeatEnabled: Boolean = false,
     val voiceRepeatCount: Int = 1,
-    val overLimitTolerancePercent: Float = 3f
+    val overLimitTolerancePercent: Float = 3f,
+    val dosingMode: DosingMode = DosingMode.MANUAL
 ) {
     val repeatCountForPlayback: Int
         get() = if (voiceRepeatEnabled) {
@@ -38,7 +48,8 @@ class DosingPreferencesManager(context: Context) {
         DosingPreferencesState(
             voiceRepeatEnabled = prefs[VOICE_REPEAT_ENABLED] ?: true,
             voiceRepeatCount = prefs[VOICE_REPEAT_COUNT] ?: DEFAULT_REPEAT_COUNT,
-            overLimitTolerancePercent = prefs[OVER_LIMIT_TOLERANCE] ?: DEFAULT_TOLERANCE
+            overLimitTolerancePercent = prefs[OVER_LIMIT_TOLERANCE] ?: DEFAULT_TOLERANCE,
+            dosingMode = DosingMode.entries.find { it.name == prefs[DOSING_MODE] } ?: DosingMode.MANUAL
         )
     }
 
@@ -61,6 +72,12 @@ class DosingPreferencesManager(context: Context) {
             prefs[OVER_LIMIT_TOLERANCE] = normalized
         }
     }
+    
+    suspend fun setDosingMode(mode: DosingMode) {
+        dataStore.edit { prefs ->
+            prefs[DOSING_MODE] = mode.name
+        }
+    }
 
     companion object {
         const val MIN_REPEAT_COUNT = 1
@@ -73,5 +90,6 @@ class DosingPreferencesManager(context: Context) {
         private val VOICE_REPEAT_ENABLED = booleanPreferencesKey("voice_repeat_enabled")
         private val VOICE_REPEAT_COUNT = intPreferencesKey("voice_repeat_count")
         private val OVER_LIMIT_TOLERANCE = floatPreferencesKey("over_limit_tolerance")
+        private val DOSING_MODE = stringPreferencesKey("dosing_mode")
     }
 }
