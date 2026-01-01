@@ -21,6 +21,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.smartdosing.ui.theme.SmartDosingTokens
+import com.example.smartdosing.ui.theme.LocalWindowSize
+import com.example.smartdosing.ui.theme.getResponsiveDimensions
 
 /**
  * 实验室风格按钮 - Primary
@@ -102,16 +104,29 @@ fun LabOutlinedButton(
 /**
  * 实验室风格卡片
  * 极简边框，极淡阴影或无阴影，强调内容边界。
+ * @param useResponsiveWidth 启用时自动根据屏幕尺寸限制最大宽度
  */
 @Composable
 fun LabCard(
     modifier: Modifier = Modifier,
     backgroundColor: Color = MaterialTheme.colorScheme.surface,
     borderColor: Color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+    useResponsiveWidth: Boolean = false,
     content: @Composable ColumnScope.() -> Unit
 ) {
+    val windowSize = LocalWindowSize.current
+    val responsiveDimensions = windowSize.getResponsiveDimensions()
+    
+    val responsiveModifier = if (useResponsiveWidth) {
+        modifier
+            .widthIn(max = responsiveDimensions.cardMaxWidth)
+            .fillMaxWidth(responsiveDimensions.cardWidthFraction)
+    } else {
+        modifier
+    }
+    
     Surface(
-        modifier = modifier,
+        modifier = responsiveModifier,
         shape = RoundedCornerShape(SmartDosingTokens.radius.md),
         color = backgroundColor,
         border = BorderStroke(1.dp, borderColor),

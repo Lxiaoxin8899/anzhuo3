@@ -25,6 +25,7 @@ import com.example.smartdosing.ui.screens.device.DeviceInfoScreen
 import com.example.smartdosing.ui.screens.dosing.MaterialConfigurationData
 import com.example.smartdosing.ui.screens.dosing.MaterialConfigurationScreen
 import com.example.smartdosing.ui.screens.home.HomeScreen
+import com.example.smartdosing.ui.screens.materials.MaterialListScreen
 import com.example.smartdosing.ui.screens.records.ConfigurationRecordDetailScreen
 import com.example.smartdosing.ui.screens.records.ConfigurationRecordsScreen
 import com.example.smartdosing.ui.screens.recipes.RecipesScreen
@@ -224,6 +225,12 @@ fun SmartDosingNavHost(
 
         composable(SmartDosingRoutes.DEVICE_INFO) {
             DeviceInfoScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+        
+        composable(SmartDosingRoutes.MATERIAL_LIST) {
+            MaterialListScreen(
                 onNavigateBack = { navController.popBackStack() }
             )
         }

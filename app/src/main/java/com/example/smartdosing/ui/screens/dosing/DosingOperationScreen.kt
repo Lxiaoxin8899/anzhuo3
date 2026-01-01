@@ -47,6 +47,8 @@ import com.example.smartdosing.data.settings.DosingPreferencesManager
 import com.example.smartdosing.data.settings.DosingPreferencesState
 import com.example.smartdosing.data.Material as RecipeMaterial
 import com.example.smartdosing.ui.theme.SmartDosingTokens
+import com.example.smartdosing.ui.theme.LocalWindowSize
+import com.example.smartdosing.ui.theme.SmartDosingWindowWidthClass
 import com.example.smartdosing.ui.components.*
 import androidx.compose.animation.*
 import androidx.compose.ui.text.style.TextOverflow
@@ -511,7 +513,7 @@ fun DosingOperationScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         LabCard(
-                            modifier = Modifier.width(500.dp)
+                            useResponsiveWidth = true
                         ) {
                             Column(
                                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -602,7 +604,7 @@ private fun CsvImportState(
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        LabCard(modifier = Modifier.width(480.dp)) {
+        LabCard(useResponsiveWidth = true) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(SmartDosingTokens.spacing.xl)
@@ -659,7 +661,7 @@ private fun DosingErrorState(
     modifier: Modifier = Modifier
 ) {
     Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        LabCard(modifier = Modifier.width(400.dp)) {
+        LabCard(useResponsiveWidth = true) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(SmartDosingTokens.spacing.lg)
@@ -786,6 +788,10 @@ fun DosingScreen(
     coroutineScope: kotlinx.coroutines.CoroutineScope,
     modifier: Modifier = Modifier
 ) {
+    // 获取窗口尺寸，决定布局模式
+    val windowSize = LocalWindowSize.current
+    val isCompactLayout = windowSize.widthClass == SmartDosingWindowWidthClass.Compact
+    
     var currentStep by remember { mutableStateOf(0) }
     var actualWeight by remember { mutableStateOf("") }
     val context = LocalContext.current
@@ -865,25 +871,70 @@ fun DosingScreen(
     }
 
     if (currentMaterial != null) {
-        Column(
-            modifier = modifier.fillMaxSize().padding(SmartDosingTokens.spacing.md),
-            verticalArrangement = Arrangement.spacedBy(SmartDosingTokens.spacing.md)
-        ) {
-            // Zone A: Material Context List (40%)
-            MaterialContextList(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(0.4f),
-                materials = recipe,
+        if (isCompactLayout) {
+            // === 紧凑布局（手机）：垂直堆叠，隐藏材料列表 ===
+            CompactDosingLayout(
+                modifier = modifier.fillMaxSize(),
+                material = currentMaterial,
                 currentStep = currentStep,
-                listState = listState,
-                onItemClick = { index -> 
-                    currentStep = index
-                    // Optional: Reset weight input when switching manually? 
-                    // Let's keep input for now as user might be just checking connection
-                    actualWeight = "" 
-                }
+                totalSteps = recipe.size,
+                actualWeight = actualWeight,
+                onWeightChange = { actualWeight = it },
+                onClearWeight = { actualWeight = "" },
+                onConfirmNext = {
+                    val normalizedInput = actualWeight.replace(',', '.')
+                    val actualValue = normalizedInput.toDoubleOrNull()
+                    if (actualValue == null) {
+                        Toast.makeText(context, "请输入有效的投料重量", Toast.LENGTH_SHORT).show()
+                        return@CompactDosingLayout
+                    }
+                    val target = currentMaterial.targetWeight.toDouble()
+                    val tolerance = preferencesState.overLimitTolerancePercent.toDouble()
+                    val limit = target * (1 + tolerance / 100.0)
+                    val isOverLimit = target > 0 && actualValue > limit
+                    val overPercent = if (target > 0) ((actualValue - target) / target) * 100.0 else 0.0
+                    detailInputs.add(
+                        DosingRecordDetailInput(
+                            sequence = currentMaterial.sequence,
+                            materialCode = currentMaterial.id,
+                            materialName = currentMaterial.name,
+                            targetWeight = target,
+                            actualWeight = actualValue,
+                            unit = currentMaterial.unit,
+                            isOverLimit = isOverLimit,
+                            overLimitPercent = overPercent
+                        )
+                    )
+                    if (isOverLimit) {
+                        onOverLimitWarningChange(OverLimitWarning(currentMaterial.name, overPercent))
+                    }
+                    currentStep++
+                    actualWeight = ""
+                },
+                onRepeatAnnouncement = {
+                    voiceManager.repeatCurrentAnnouncement(currentMaterial, preferencesState.repeatCountForPlayback)
+                },
+                tolerancePercent = preferencesState.overLimitTolerancePercent
             )
+        } else {
+            // === 常规布局（平板）：水平分割 ===
+            Column(
+                modifier = modifier.fillMaxSize().padding(SmartDosingTokens.spacing.md),
+                verticalArrangement = Arrangement.spacedBy(SmartDosingTokens.spacing.md)
+            ) {
+                // Zone A: Material Context List (40%)
+                MaterialContextList(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(0.4f),
+                    materials = recipe,
+                    currentStep = currentStep,
+                    listState = listState,
+                    onItemClick = { index -> 
+                        currentStep = index
+                        actualWeight = "" 
+                    }
+                )
 
             // Zone B: Active Material Station (60%) - Mode-Specific
             if (isManualMode) {
@@ -982,13 +1033,14 @@ fun DosingScreen(
                 )
             }
         }
+        } // 关闭 else 分支
     } else {
         // Completion Screen
         Box(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
         ) {
-            LabCard(modifier = Modifier.width(500.dp)) {
+            LabCard(useResponsiveWidth = true) {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(SmartDosingTokens.spacing.xl)
@@ -1645,4 +1697,173 @@ fun OverLimitDialog(warning: OverLimitWarning, onDismiss: () -> Unit) {
         textContentColor = MaterialTheme.colorScheme.onErrorContainer,
         titleContentColor = MaterialTheme.colorScheme.onErrorContainer
     )
+}
+
+/**
+ * 紧凑投料布局 - 专为手机小屏幕设计
+ * 垂直堆叠布局：材料头部 -> 重量显示 -> 数字键盘 -> 操作按钮
+ */
+@Composable
+fun CompactDosingLayout(
+    modifier: Modifier = Modifier,
+    material: Material,
+    currentStep: Int,
+    totalSteps: Int,
+    actualWeight: String,
+    onWeightChange: (String) -> Unit,
+    onClearWeight: () -> Unit,
+    onConfirmNext: () -> Unit,
+    onRepeatAnnouncement: () -> Unit,
+    tolerancePercent: Float
+) {
+    Column(
+        modifier = modifier
+            .padding(SmartDosingTokens.spacing.sm),
+        verticalArrangement = Arrangement.spacedBy(SmartDosingTokens.spacing.sm)
+    ) {
+        // 1. 紧凑材料信息头部 (~12%)
+        LabCard(
+            modifier = Modifier.fillMaxWidth(),
+            backgroundColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = "步骤 ${currentStep + 1}/$totalSteps",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        text = material.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+                LabStatusBadge(
+                    text = "${material.targetWeight} ${material.unit}",
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
+        
+        // 2. 大号重量显示区 (~20%)
+        CompactWeightDisplay(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(0.2f),
+            weight = actualWeight,
+            targetWeight = material.targetWeight,
+            tolerancePercent = tolerancePercent
+        )
+        
+        // 3. 数字键盘 (~55%)
+        LabNumericKeypad(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(0.55f),
+            onKeyPress = { key ->
+                when (key) {
+                    "⌫" -> if (actualWeight.isNotEmpty()) onWeightChange(actualWeight.dropLast(1))
+                    "." -> if (!actualWeight.contains(".") && actualWeight.isNotEmpty()) onWeightChange(actualWeight + key)
+                    else -> onWeightChange(actualWeight + key)
+                }
+            }
+        )
+        
+        // 4. 底部操作按钮 (~13%)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(SmartDosingTokens.spacing.sm)
+        ) {
+            LabOutlinedButton(
+                onClick = onClearWeight,
+                text = "清空",
+                modifier = Modifier.weight(1f)
+            )
+            LabOutlinedButton(
+                onClick = onRepeatAnnouncement,
+                text = "重播",
+                modifier = Modifier.weight(1f)
+            )
+            LabButton(
+                onClick = onConfirmNext,
+                text = "下一步",
+                modifier = Modifier.weight(2f),
+                enabled = actualWeight.isNotBlank()
+            )
+        }
+    }
+}
+
+/**
+ * 紧凑重量显示组件 - 用于小屏幕
+ */
+@Composable
+fun CompactWeightDisplay(
+    modifier: Modifier = Modifier,
+    weight: String,
+    targetWeight: Float = 0f,
+    tolerancePercent: Float = 0f
+) {
+    val currentWeightVal = weight.replace(",", ".").toFloatOrNull() ?: 0f
+    
+    val isOver = targetWeight > 0 && currentWeightVal > targetWeight * (1 + tolerancePercent / 100f)
+    val isNear = targetWeight > 0 && currentWeightVal >= targetWeight * (1 - tolerancePercent / 100f)
+    
+    val displayColor = when {
+        isOver -> MaterialTheme.colorScheme.error
+        isNear -> SmartDosingTokens.colors.success
+        else -> MaterialTheme.colorScheme.onSurface
+    }
+    
+    val progressPercent = if (targetWeight > 0) (currentWeightVal / targetWeight * 100).coerceIn(0f, 120f) else 0f
+    
+    LabCard(
+        modifier = modifier,
+        borderColor = displayColor.copy(alpha = 0.5f)
+    ) {
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            // 大号重量数字
+            Text(
+                text = if (weight.isBlank()) "0" else weight,
+                style = MaterialTheme.typography.displayMedium.copy(
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Bold
+                ),
+                color = displayColor
+            )
+            
+            // 进度条
+            LinearProgressIndicator(
+                progress = { (progressPercent / 100f).coerceIn(0f, 1f) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(8.dp)
+                    .padding(top = SmartDosingTokens.spacing.sm),
+                color = displayColor,
+                trackColor = MaterialTheme.colorScheme.surfaceVariant
+            )
+            
+            // 状态文字
+            Text(
+                text = when {
+                    isOver -> "超出目标 ⚠️"
+                    isNear -> "已达标 ✓"
+                    else -> "剩余 ${String.format("%.1f", targetWeight - currentWeightVal)}"
+                },
+                style = MaterialTheme.typography.labelMedium,
+                color = displayColor,
+                modifier = Modifier.padding(top = SmartDosingTokens.spacing.xs)
+            )
+        }
+    }
 }

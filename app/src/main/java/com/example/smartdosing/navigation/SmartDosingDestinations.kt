@@ -2,6 +2,7 @@ package com.example.smartdosing.navigation
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Assignment
+import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Settings
@@ -40,6 +41,12 @@ enum class SmartDosingDestination(
         icon = Icons.Default.Assignment,
         description = "查看历史配置记录与明细"
     ),
+    MATERIAL_LIST(
+        route = SmartDosingRoutes.MATERIAL_LIST,
+        title = "物料清单",
+        icon = Icons.Default.Checklist,
+        description = "按任务查看物料，找料打勾确认"
+    ),
     SETTINGS(
         route = SmartDosingRoutes.SETTINGS,
         title = "系统设置",
@@ -56,6 +63,7 @@ val bottomNavigationDestinations = listOf(
     SmartDosingDestination.TASK_CENTER,
     SmartDosingDestination.RECIPES,
     SmartDosingDestination.RECORDS,
+    SmartDosingDestination.MATERIAL_LIST,
     SmartDosingDestination.SETTINGS
 )
 
@@ -75,6 +83,7 @@ object SmartDosingRoutes {
     const val SETTINGS = "settings"
     const val DEVICE_INFO = "device_info"
     const val BLUETOOTH_SCALE_SETTINGS = "bluetooth_scale_settings"
+    const val MATERIAL_LIST = "material_list"
 
     fun recipeDetail(recipeId: String) = "recipe_detail/$recipeId"
     fun recipeEdit(recipeId: String) = "recipe_edit/$recipeId"
