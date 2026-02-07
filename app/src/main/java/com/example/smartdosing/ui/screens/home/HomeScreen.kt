@@ -2,80 +2,53 @@ package com.example.smartdosing.ui.screens.home
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Assignment
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Cloud
-import androidx.compose.material.icons.filled.FileUpload
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Science
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.SpeakerPhone
-import androidx.compose.material.icons.filled.ViewList
-import androidx.compose.material.icons.filled.TrendingUp
-import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.material.icons.filled.Bolt
-import androidx.compose.material.icons.outlined.Inventory2
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.AssistChipDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.*
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.smartdosing.data.DatabaseRecipeRepository
-import com.example.smartdosing.data.DosingRecord
-import com.example.smartdosing.data.DosingRecordRepository
-import com.example.smartdosing.data.DosingRecordStatus
-import com.example.smartdosing.data.RecipeStats
-import com.example.smartdosing.data.TaskStatus
-import com.example.smartdosing.data.repository.ConfigurationRepositoryProvider
-import com.example.smartdosing.tts.TTSManagerFactory
-import com.example.smartdosing.ui.theme.LocalWindowSize
-import com.example.smartdosing.ui.theme.SmartDosingTheme
-import com.example.smartdosing.ui.theme.SmartDosingWindowWidthClass
-import com.example.smartdosing.web.WebService
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.smartdosing.bluetooth.model.ConnectionState
+import com.example.smartdosing.data.ConfigurationRecord
+import com.example.smartdosing.data.ConfigurationTask
+import com.example.smartdosing.ui.theme.*
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 
 /**
- * SmartDosing 首页，包含自适应的大屏/小屏布局
+ * SmartDosing 实验室研发看板 (Advanced Dashboard)
+ * 采用高密度、高精度、极简实验室风格
  */
 @Composable
 fun HomeScreen(
@@ -83,283 +56,224 @@ fun HomeScreen(
     onNavigateToMaterialConfiguration: (String) -> Unit = {},
     onNavigateToTaskCenter: () -> Unit = {},
     onNavigateToConfigurationRecords: () -> Unit = {},
+    onNavigateToMaterialList: () -> Unit = {},
     onNavigateToSettings: () -> Unit = {},
     onNavigateToDeviceInfo: () -> Unit = {},
     onImportRecipe: () -> Unit = {},
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    viewModel: HomeViewModel = viewModel()
 ) {
-    val context = LocalContext.current
     val windowSize = LocalWindowSize.current
     val isLargeScreen = windowSize.widthClass == SmartDosingWindowWidthClass.Expanded
     val isCompactDevice = windowSize.widthClass == SmartDosingWindowWidthClass.Compact
 
-    // 加载实际数据
-    val repository = remember { DatabaseRecipeRepository.getInstance(context) }
-    val taskRepository = remember { ConfigurationRepositoryProvider.taskRepository }
-    val dosingRepository = remember { DosingRecordRepository.getInstance(context) }
-    var recipeStats by remember { mutableStateOf<RecipeStats?>(null) }
-    var pendingTaskCount by remember { mutableIntStateOf(0) }
-    var inProgressTaskCount by remember { mutableIntStateOf(0) }
-    var completedTodayCount by remember { mutableIntStateOf(0) }
-    var isLoading by remember { mutableStateOf(true) }
-    var recentOperations by remember { mutableStateOf<List<RecentOperation>>(emptyList()) }
-    var isRecentLoading by remember { mutableStateOf(true) }
-
-    val webService = remember { WebService.getInstance(context) }
-    var runtimeStatus by remember {
-        mutableStateOf(
-            HomeRuntimeStatus(
-                isWirelessRunning = webService.isServiceRunning(),
-                wirelessAddress = webService.getDeviceInfo().serverUrl ?: "未连接网络",
-                ttsStatus = "语音服务检测中",
-                ttsHint = "将根据设备能力自动选择语音引擎"
-            )
-        )
-    }
-
-    // 加载统计数据
-    LaunchedEffect(Unit) {
-            try {
-                recipeStats = repository.getRecipeStats()
-                val tasks = taskRepository.fetchTasks()
-                pendingTaskCount = tasks.count {
-                    it.status == TaskStatus.DRAFT || it.status == TaskStatus.READY || it.status == TaskStatus.PUBLISHED
-                }
-                inProgressTaskCount = tasks.count { it.status == TaskStatus.IN_PROGRESS }
-                completedTodayCount = tasks.count { it.status == TaskStatus.COMPLETED }
-                runCatching {
-                    dosingRepository.getRecentRecords(limit = 3)
-                }.onSuccess { records ->
-                    recentOperations = records.map { it.toRecentOperation() }
-                }.onFailure {
-                    recentOperations = emptyList()
-                }
-            } catch (_: Exception) {
-                // 忽略加载错误，使用默认值
-            } finally {
-                isLoading = false
-                isRecentLoading = false
-            }
-    }
-
-    // 轮询无线传输与语音状态，保证首页显示实时运行情况
-    LaunchedEffect(Unit) {
-        while (true) {
-            val deviceInfo = webService.getDeviceInfo()
-            val ttsAvailable = TTSManagerFactory.isTTSAvailable()
-            val ttsTypeLabel = when (TTSManagerFactory.getCurrentTTSType()) {
-                TTSManagerFactory.TTSType.XIAOMI_TTS -> "小米 TTS"
-                TTSManagerFactory.TTSType.FALLBACK_TTS -> "系统 TTS"
-                TTSManagerFactory.TTSType.NONE -> "未启用 TTS"
-            }
-            runtimeStatus = HomeRuntimeStatus(
-                isWirelessRunning = deviceInfo.isServerRunning,
-                wirelessAddress = deviceInfo.serverUrl ?: "未连接网络",
-                ttsStatus = if (ttsAvailable) "$ttsTypeLabel · 可用" else "语音服务不可用",
-                ttsHint = if (ttsAvailable) "可在设置页执行语音自检" else "请检查语音组件安装与权限"
-            )
-            kotlinx.coroutines.delay(3000)
-        }
-    }
+    val stats by viewModel.stats.collectAsState()
+    val runtimeStatus by viewModel.runtimeStatus.collectAsState()
+    val recentOperations by viewModel.recentOperations.collectAsState()
+    val recoveryTask by viewModel.recoveryTask.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
+    val scaleConnectionState by viewModel.scaleConnectionState.collectAsState()
 
     val actionCards = listOf(
         HomeAction(
-            title = "快速配料",
-            description = "选择配方，立即开始配料操作",
-            icon = Icons.Default.Science,
+            title = "实验配置",
+            description = "选择配方，启动高精度配置作业",
+            icon = Icons.Outlined.Science,
             containerColor = MaterialTheme.colorScheme.primary,
             contentColor = MaterialTheme.colorScheme.onPrimary,
             emphasize = true,
             onClick = { onNavigateToMaterialConfiguration("quick_start") }
         ),
         HomeAction(
-            title = "任务中心",
-            description = "查看和管理配置任务",
-            icon = Icons.Default.Assignment,
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-            badge = if (pendingTaskCount > 0) pendingTaskCount.toString() else null,
+            title = "任务领取",
+            description = "查看研发计划并申领配置任务",
+            icon = Icons.Outlined.Assignment,
+            containerColor = MaterialTheme.colorScheme.surface,
+            contentColor = MaterialTheme.colorScheme.onSurface,
+            badge = if (stats.pendingTasks > 0) stats.pendingTasks.toString() else null,
             onClick = onNavigateToTaskCenter
         ),
         HomeAction(
-            title = "配置记录",
-            description = "查看历史配置记录",
-            icon = Icons.Default.CheckCircle,
-            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-            contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+            title = "实验档案",
+            description = "溯源历史实验记录与精度分析",
+            icon = Icons.Outlined.History,
+            containerColor = MaterialTheme.colorScheme.surface,
+            contentColor = MaterialTheme.colorScheme.onSurface,
             onClick = onNavigateToConfigurationRecords
         ),
         HomeAction(
-            title = "导入配方",
-            description = "CSV / Excel 格式配方导入",
-            icon = Icons.Default.FileUpload,
+            title = "物料清单",
+            description = "查看当前任务所需的详细物料列表",
+            icon = Icons.Outlined.FormatListBulleted,
             containerColor = MaterialTheme.colorScheme.surface,
-            contentColor = MaterialTheme.colorScheme.primary,
-            onClick = onImportRecipe
+            contentColor = MaterialTheme.colorScheme.onSurface,
+            onClick = onNavigateToMaterialList
         ),
         HomeAction(
             title = "配方管理",
-            description = "查看 / 编辑 / 管理配方",
-            icon = Icons.Default.ViewList,
-            containerColor = MaterialTheme.colorScheme.primaryContainer,
-            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-            badge = recipeStats?.totalRecipes?.takeIf { it > 0 }?.toString(),
+            description = "维护研发配方库与物料参数",
+            icon = Icons.Outlined.Analytics,
+            containerColor = MaterialTheme.colorScheme.surface,
+            contentColor = MaterialTheme.colorScheme.onSurface,
             onClick = onNavigateToRecipes
         )
     )
 
-    // 统计数据
-    val statsData = DashboardStats(
-        totalRecipes = recipeStats?.totalRecipes ?: 0,
-        pendingTasks = pendingTaskCount,
-        inProgressTasks = inProgressTaskCount,
-        completedToday = completedTodayCount
-    )
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.surface)
+            .drawBehind {
+                // 实验室风格网格背景
+                val gridSize = 40.dp.toPx()
+                val gridColor = Color.LightGray.copy(alpha = 0.05f)
+                val dotColor = Color.LightGray.copy(alpha = 0.1f)
+                
+                // 画线
+                for (x in 0..size.width.toInt() step gridSize.toInt()) {
+                    drawLine(gridColor, Offset(x.toFloat(), 0f), Offset(x.toFloat(), size.height), strokeWidth = 1f)
+                }
+                for (y in 0..size.height.toInt() step gridSize.toInt()) {
+                    drawLine(gridColor, Offset(0f, y.toFloat()), Offset(size.width, y.toFloat()), strokeWidth = 1f)
+                }
+                
+                // 画交点小圆点，增加技术感
+                for (x in 0..size.width.toInt() step gridSize.toInt()) {
+                    for (y in 0..size.height.toInt() step gridSize.toInt()) {
+                        drawCircle(dotColor, radius = 2f, center = Offset(x.toFloat(), y.toFloat()))
+                    }
+                }
+            }
+    ) {
+        val visible = remember { mutableStateOf(false) }
+        LaunchedEffect(Unit) { visible.value = true }
 
-    if (isLargeScreen) {
-        LargeScreenHomeLayout(
-            modifier = modifier,
-            actionCards = actionCards,
-            stats = statsData,
-            isLoading = isLoading,
-            onNavigateToSettings = onNavigateToSettings,
-            onNavigateToConfigurationRecords = onNavigateToConfigurationRecords,
-            onNavigateToDeviceInfo = onNavigateToDeviceInfo,
-            recentOperations = recentOperations,
-            isRecentLoading = isRecentLoading,
-            runtimeStatus = runtimeStatus
-        )
-    } else {
-        CompactHomeLayout(
-            modifier = modifier,
-            actionCards = actionCards,
-            stats = statsData,
-            isLoading = isLoading,
-            onNavigateToSettings = onNavigateToSettings,
-            onNavigateToConfigurationRecords = onNavigateToConfigurationRecords,
-            onNavigateToDeviceInfo = onNavigateToDeviceInfo,
-            isCompactDevice = isCompactDevice,
-            recentOperations = recentOperations,
-            isRecentLoading = isRecentLoading,
-            runtimeStatus = runtimeStatus
-        )
+        AnimatedVisibility(
+            visible = visible.value,
+            enter = fadeIn(animationSpec = tween(800)) + expandVertically(animationSpec = tween(800)),
+            modifier = Modifier.fillMaxSize()
+        ) {
+            if (isLargeScreen) {
+                LargeScreenHomeLayout(
+                    actionCards = actionCards,
+                    stats = stats,
+                    isLoading = isLoading,
+                    onNavigateToSettings = onNavigateToSettings,
+                    onNavigateToConfigurationRecords = onNavigateToConfigurationRecords,
+                    onNavigateToDeviceInfo = onNavigateToDeviceInfo,
+                    recentOperations = recentOperations,
+                    runtimeStatus = runtimeStatus,
+                    recoveryTask = recoveryTask,
+                    scaleConnectionState = scaleConnectionState,
+                    onContinueTask = { task -> onNavigateToMaterialConfiguration(task.id) }
+                )
+            } else {
+                CompactHomeLayout(
+                    actionCards = actionCards,
+                    stats = stats,
+                    isLoading = isLoading,
+                    onNavigateToSettings = onNavigateToSettings,
+                    onNavigateToConfigurationRecords = onNavigateToConfigurationRecords,
+                    onNavigateToDeviceInfo = onNavigateToDeviceInfo,
+                    isCompactDevice = isCompactDevice,
+                    recentOperations = recentOperations,
+                    runtimeStatus = runtimeStatus,
+                    recoveryTask = recoveryTask,
+                    scaleConnectionState = scaleConnectionState,
+                    onContinueTask = { task -> onNavigateToMaterialConfiguration(task.id) }
+                )
+            }
+        }
     }
 }
 
-/**
- * 仪表盘统计数据
- */
-private data class DashboardStats(
-    val totalRecipes: Int = 0,
-    val pendingTasks: Int = 0,
-    val inProgressTasks: Int = 0,
-    val completedToday: Int = 0
-)
-
-private data class DashboardCardInfo(
-    val title: String,
-    val value: String,
-    val icon: ImageVector,
-    val color: Color
-)
-
-private data class HomeRuntimeStatus(
-    val isWirelessRunning: Boolean = false,
-    val wirelessAddress: String = "未连接网络",
-    val ttsStatus: String = "语音服务检测中",
-    val ttsHint: String = "将根据设备能力自动选择语音引擎"
-)
-
-/**
- * ≥900dp 宽度的布局，内容区域占满屏幕，不再嵌套额外的 NavigationRail
- */
 @Composable
 private fun LargeScreenHomeLayout(
-    modifier: Modifier,
     actionCards: List<HomeAction>,
     stats: DashboardStats,
     isLoading: Boolean,
     onNavigateToSettings: () -> Unit,
     onNavigateToConfigurationRecords: () -> Unit,
     onNavigateToDeviceInfo: () -> Unit,
-    recentOperations: List<RecentOperation>,
-    isRecentLoading: Boolean,
-    runtimeStatus: HomeRuntimeStatus
+    recentOperations: List<ConfigurationRecord>,
+    runtimeStatus: HomeRuntimeStatus,
+    recoveryTask: ConfigurationTask?,
+    scaleConnectionState: ConnectionState,
+    onContinueTask: (ConfigurationTask) -> Unit
 ) {
     val scrollState = rememberScrollState()
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .verticalScroll(scrollState)
-            .padding(32.dp),
-        verticalArrangement = Arrangement.spacedBy(24.dp)
-    ) {
-        HomeHeader()
-
-        // 数据概览卡片
-        DashboardOverview(stats = stats, isLoading = isLoading)
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
+    Row(modifier = Modifier.fillMaxSize()) {
+        // 左侧主要内容区
+        Column(
+            modifier = Modifier
+                .weight(1.6f)
+                .fillMaxHeight()
+                .verticalScroll(scrollState)
+                .padding(32.dp),
+            verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
-            SystemStatusCard(
-                modifier = Modifier.weight(2f),
-                runtimeStatus = runtimeStatus
-            )
-            QuickInfoColumn(
-                modifier = Modifier.weight(1f),
-                runtimeStatus = runtimeStatus
-            )
+            HomeHeader()
+
+            // 任务恢复 (如果有)
+            recoveryTask?.let {
+                TaskRecoveryCard(task = it, onContinue = { onContinueTask(it) })
+            }
+
+            DashboardOverview(stats = stats, isLoading = isLoading)
+
+            Text("快捷操作", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            HomeActionGrid(actions = actionCards)
+
+            Spacer(Modifier.height(16.dp))
+            
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                RecentOperationsPanel(
+                    modifier = Modifier.weight(1f),
+                    operations = recentOperations,
+                    isLoading = isLoading,
+                    onViewMore = onNavigateToConfigurationRecords
+                )
+            }
         }
-        HomeActionGrid(actions = actionCards)
-        RecentOperationsPanel(
-            operations = recentOperations,
-            isLoading = isRecentLoading,
-            onViewMore = onNavigateToConfigurationRecords
-        )
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)
+
+        // 右侧侧边栏：系统状态与设备管理
+        Column(
+            modifier = Modifier
+                .weight(0.6f)
+                .fillMaxHeight()
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+                .padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
-            AssistChip(
-                onClick = onNavigateToDeviceInfo,
-                label = { Text("设备管理") },
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Outlined.Inventory2,
-                        contentDescription = "设备管理",
-                        modifier = Modifier.size(16.dp)
-                    )
-                },
-                colors = AssistChipDefaults.assistChipColors(
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer
+            Text("系统监控", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            
+            SystemStatusPanel(runtimeStatus = runtimeStatus, scaleConnectionState = scaleConnectionState)
+            
+            Spacer(Modifier.weight(1f))
+            
+            Divider(color = MaterialTheme.colorScheme.outlineVariant)
+            
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                SettingsActionItem(
+                    title = "设备管理",
+                    icon = Icons.Outlined.DeveloperBoard,
+                    onClick = onNavigateToDeviceInfo
                 )
-            )
-            AssistChip(
-                onClick = onNavigateToSettings,
-                label = { Text("系统设置") },
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Default.Settings,
-                        contentDescription = "系统设置",
-                        modifier = Modifier.size(16.dp)
-                    )
-                },
-                colors = AssistChipDefaults.assistChipColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                SettingsActionItem(
+                    title = "系统偏好设置",
+                    icon = Icons.Outlined.Settings,
+                    onClick = onNavigateToSettings
                 )
-            )
+            }
         }
     }
 }
 
-/**
- * 小屏布局维持纵向滚动结构
- */
 @Composable
 private fun CompactHomeLayout(
-    modifier: Modifier,
     actionCards: List<HomeAction>,
     stats: DashboardStats,
     isLoading: Boolean,
@@ -367,382 +281,335 @@ private fun CompactHomeLayout(
     onNavigateToConfigurationRecords: () -> Unit,
     onNavigateToDeviceInfo: () -> Unit,
     isCompactDevice: Boolean,
-    recentOperations: List<RecentOperation>,
-    isRecentLoading: Boolean,
-    runtimeStatus: HomeRuntimeStatus
+    recentOperations: List<ConfigurationRecord>,
+    runtimeStatus: HomeRuntimeStatus,
+    recoveryTask: ConfigurationTask?,
+    scaleConnectionState: ConnectionState,
+    onContinueTask: (ConfigurationTask) -> Unit
 ) {
     val scrollState = rememberScrollState()
-    val horizontalPadding = if (isCompactDevice) 16.dp else 24.dp
-    val verticalPadding = if (isCompactDevice) 12.dp else 16.dp
+    val padding = if (isCompactDevice) 16.dp else 24.dp
     Column(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxSize()
             .verticalScroll(scrollState)
-            .padding(horizontal = horizontalPadding, vertical = verticalPadding),
+            .padding(padding),
         verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
         HomeHeader()
 
-        // 数据概览卡片
-        DashboardOverview(stats = stats, isLoading = isLoading)
+        recoveryTask?.let {
+            TaskRecoveryCard(task = it, onContinue = { onContinueTask(it) })
+        }
 
-        SystemStatusCard(isCompact = isCompactDevice, runtimeStatus = runtimeStatus)
-        QuickInfoColumn(isCompact = isCompactDevice, runtimeStatus = runtimeStatus)
+        DashboardOverview(stats = stats, isLoading = isLoading)
+        
+        SystemStatusPanel(runtimeStatus = runtimeStatus, scaleConnectionState = scaleConnectionState)
+        
+        Text("核心作业", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
         HomeActionGrid(actions = actionCards)
+        
         RecentOperationsPanel(
             operations = recentOperations,
-            isLoading = isRecentLoading,
+            isLoading = isLoading,
             onViewMore = onNavigateToConfigurationRecords
         )
+
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)
         ) {
             AssistChip(
                 onClick = onNavigateToDeviceInfo,
-                label = { Text("设备管理") },
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Outlined.Inventory2,
-                        contentDescription = "设备管理",
-                        modifier = Modifier.size(16.dp)
-                    )
-                },
-                colors = AssistChipDefaults.assistChipColors(
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer
-                )
+                label = { Text("设备") },
+                leadingIcon = { Icon(Icons.Outlined.Memory, null, Modifier.size(16.dp)) }
             )
             AssistChip(
                 onClick = onNavigateToSettings,
-                label = { Text("系统设置") },
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Default.Settings,
-                        contentDescription = "系统设置",
-                        modifier = Modifier.size(16.dp)
-                    )
-                },
-                colors = AssistChipDefaults.assistChipColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
-                )
+                label = { Text("设置") },
+                leadingIcon = { Icon(Icons.Outlined.Settings, null, Modifier.size(16.dp)) }
             )
         }
     }
 }
 
-/**
- * 首页抬头
- */
 @Composable
 private fun HomeHeader() {
-    var visible by remember { mutableStateOf(false) }
-
-    LaunchedEffect(Unit) {
-        visible = true
-    }
-
-    AnimatedVisibility(
-        visible = visible,
-        enter = fadeIn(animationSpec = tween(500)) + slideInVertically(
-            initialOffsetY = { -20 },
-            animationSpec = tween(500)
-        )
+    val currentTime = remember { LocalDateTime.now() }
+    val formatter = DateTimeFormatter.ofPattern("yyyy年MM月dd日 EEEE")
+    
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.Bottom
     ) {
-        Column(
-            verticalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(
-                text = "快速配置系统",
-                fontSize = 30.sp,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                text = "系统健康，今日可以直接开始投料作业",
-                fontSize = 16.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
-}
-
-/**
- * 数据概览仪表盘
- */
-@Composable
-private fun DashboardOverview(
-    stats: DashboardStats,
-    isLoading: Boolean,
-    modifier: Modifier = Modifier
-) {
-    val windowSize = LocalWindowSize.current
-    val isCompactWidth = windowSize.widthClass == SmartDosingWindowWidthClass.Compact
-    var visible by remember { mutableStateOf(false) }
-
-    LaunchedEffect(Unit) {
-        kotlinx.coroutines.delay(100)
-        visible = true
-    }
-
-    val cardConfigs = listOf(
-        DashboardCardInfo(
-            title = "配方总数",
-            value = if (isLoading) "-" else stats.totalRecipes.toString(),
-            icon = Icons.Outlined.Inventory2,
-            color = MaterialTheme.colorScheme.primary
-        ),
-        DashboardCardInfo(
-            title = "待处理任务",
-            value = if (isLoading) "-" else stats.pendingTasks.toString(),
-            icon = Icons.Default.Schedule,
-            color = MaterialTheme.colorScheme.tertiary
-        ),
-        DashboardCardInfo(
-            title = "进行中",
-            value = if (isLoading) "-" else stats.inProgressTasks.toString(),
-            icon = Icons.Default.TrendingUp,
-            color = MaterialTheme.colorScheme.secondary
-        ),
-        DashboardCardInfo(
-            title = "今日完成",
-            value = if (isLoading) "-" else stats.completedToday.toString(),
-            icon = Icons.Default.CheckCircle,
-            color = MaterialTheme.colorScheme.primary
-        )
-    )
-
-    AnimatedVisibility(
-        visible = visible,
-        enter = fadeIn(animationSpec = tween(400)) + expandVertically()
-    ) {
-        if (isCompactWidth) {
-            Column(
-                modifier = modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                cardConfigs.chunked(2).forEach { rowCards ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        rowCards.forEach { info ->
-                            DashboardStatCard(
-                                title = info.title,
-                                value = info.value,
-                                icon = info.icon,
-                                color = info.color,
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-                        if (rowCards.size == 1) {
-                            Spacer(modifier = Modifier.weight(1f))
-                        }
-                    }
-                }
-            }
-        } else {
-            Row(
-                modifier = modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                cardConfigs.forEach { info ->
-                    DashboardStatCard(
-                        title = info.title,
-                        value = info.value,
-                        icon = info.icon,
-                        color = info.color,
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-            }
-        }
-    }
-}
-
-/**
- * 仪表盘统计卡片
- */
-@Composable
-private fun DashboardStatCard(
-    title: String,
-    value: String,
-    icon: ImageVector,
-    color: Color,
-    modifier: Modifier = Modifier
-) {
-    // 数值动画
-    val animatedValue = remember { Animatable(0f) }
-    val targetValue = value.toFloatOrNull() ?: 0f
-
-    LaunchedEffect(value) {
-        if (value != "-") {
-            animatedValue.animateTo(
-                targetValue = targetValue,
-                animationSpec = tween(800, easing = FastOutSlowInEasing)
-            )
-        }
-    }
-
-    Card(
-        modifier = modifier,
-        colors = CardDefaults.cardColors(
-            containerColor = color.copy(alpha = 0.1f)
-        ),
-        shape = RoundedCornerShape(16.dp)
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clip(CircleShape)
-                        .background(color.copy(alpha = 0.2f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = null,
-                        tint = color,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-            }
-            Text(
-                text = if (value == "-") value else animatedValue.value.toInt().toString(),
-                fontSize = 28.sp,
-                fontWeight = FontWeight.Bold,
+                text = "实验室控制台",
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.ExtraBold,
                 color = MaterialTheme.colorScheme.onSurface
             )
             Text(
-                text = title,
-                style = MaterialTheme.typography.bodyMedium,
-                color = color
+                text = currentTime.format(formatter),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        
+        // 实验室在线状态呼吸灯
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            StatusPulseIndicator(color = Color(0xFF4CAF50))
+            Text("系统在线", style = MaterialTheme.typography.labelSmall, color = Color(0xFF4CAF50), fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+@Composable
+private fun StatusPulseIndicator(color: Color) {
+    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
+    val alpha by infiniteTransition.animateFloat(
+        initialValue = 0.3f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1500, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "alpha"
+    )
+    val scale by infiniteTransition.animateFloat(
+        initialValue = 1f,
+        targetValue = 1.5f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1500, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "scale"
+    )
+
+    Box(contentAlignment = Alignment.Center) {
+        Box(
+            modifier = Modifier
+                .size(8.dp)
+                .scale(scale)
+                .background(color.copy(alpha = alpha * 0.4f), CircleShape)
+        )
+        Box(
+            modifier = Modifier
+                .size(8.dp)
+                .background(color, CircleShape)
+        )
+    }
+}
+
+@Composable
+private fun DashboardOverview(stats: DashboardStats, isLoading: Boolean) {
+    val windowSize = LocalWindowSize.current
+    val isCompact = windowSize.widthClass == SmartDosingWindowWidthClass.Compact
+
+    val cardConfigs = listOf(
+        DashboardCardInfo("研发配方库", if (isLoading) "-" else stats.totalRecipes.toString(), Icons.Outlined.Inventory2, MaterialTheme.colorScheme.primary, "件"),
+        DashboardCardInfo("待处理任务", if (isLoading) "-" else stats.pendingTasks.toString(), Icons.Outlined.Assignment, MaterialTheme.colorScheme.secondary, "项"),
+        DashboardCardInfo("今日已完成", if (isLoading) "-" else stats.completedToday.toString(), Icons.Outlined.CheckCircle, Color(0xFF4CAF50), "次")
+    )
+
+    if (isCompact) {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            cardConfigs.forEach { DashboardStatCard(it, Modifier.fillMaxWidth()) }
+        }
+    } else {
+        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            cardConfigs.forEach { DashboardStatCard(it, Modifier.weight(1f)) }
+        }
+    }
+}
+
+@Composable
+private fun DashboardStatCard(info: DashboardCardInfo, modifier: Modifier = Modifier) {
+    Card(
+        modifier = modifier,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        shape = RoundedCornerShape(20.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+    ) {
+        Box(modifier = Modifier.fillMaxWidth()) {
+            // 背景装饰：模拟数据曲线 (Sparkline)
+            Canvas(modifier = Modifier
+                .fillMaxWidth()
+                .height(80.dp)
+                .align(Alignment.BottomCenter)
+            ) {
+                val path = Path().apply {
+                    val points = listOf(0.2f, 0.4f, 0.3f, 0.7f, 0.5f, 0.8f, 0.6f)
+                    val stepX = size.width / (points.size - 1)
+                    moveTo(0f, size.height)
+                    points.forEachIndexed { index, y ->
+                        lineTo(index * stepX, size.height * (1f - y * 0.3f))
+                    }
+                    lineTo(size.width, size.height)
+                    close()
+                }
+                drawPath(
+                    path = path,
+                    brush = Brush.verticalGradient(
+                        colors = listOf(info.color.copy(alpha = 0.05f), Color.Transparent)
+                    )
+                )
+            }
+
+            Row(
+                modifier = Modifier.padding(20.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .background(info.color.copy(alpha = 0.1f), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(info.icon, null, tint = info.color, modifier = Modifier.size(24.dp))
+                }
+                
+                Column {
+                    Text(text = info.title, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(
+                            text = info.value,
+                            fontSize = 28.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            fontFamily = FontFamily.Monospace,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(text = info.unit, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 4.dp))
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SystemStatusPanel(runtimeStatus: HomeRuntimeStatus, scaleConnectionState: ConnectionState) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        shape = RoundedCornerShape(24.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+    ) {
+        Column(modifier = Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+            StatusItem(
+                title = "高精度电子天平",
+                status = when(scaleConnectionState) {
+                    ConnectionState.CONNECTED -> "已连接"
+                    ConnectionState.CONNECTING -> "正在握手..."
+                    else -> "离线"
+                },
+                color = when(scaleConnectionState) {
+                    ConnectionState.CONNECTED -> Color(0xFF4CAF50)
+                    ConnectionState.CONNECTING -> Color(0xFFFF9800)
+                    else -> Color(0xFF757575)
+                },
+                icon = Icons.Outlined.Balance
+            )
+            
+            Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+            
+            StatusItem(
+                title = "数据同步服务",
+                status = if (runtimeStatus.isWirelessRunning) "运行中" else "未启动",
+                color = if (runtimeStatus.isWirelessRunning) Color(0xFF4CAF50) else Color(0xFFF44336),
+                icon = Icons.Outlined.WifiTethering,
+                subtitle = runtimeStatus.wirelessAddress
+            )
+            
+            Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+            
+            StatusItem(
+                title = "语音引导引擎",
+                status = runtimeStatus.ttsStatus,
+                color = if (runtimeStatus.ttsStatus.contains("可用")) Color(0xFF4CAF50) else Color(0xFFFF9800),
+                icon = Icons.Outlined.RecordVoiceOver,
+                subtitle = runtimeStatus.ttsHint
             )
         }
     }
 }
 
-/**
- * 系统状态卡片
- */
 @Composable
-private fun SystemStatusCard(
-    modifier: Modifier = Modifier,
-    isCompact: Boolean = false,
-    runtimeStatus: HomeRuntimeStatus
-) {
-    val cardPadding = if (isCompact) 20.dp else 24.dp
-    val statusTitle = if (runtimeStatus.isWirelessRunning) {
-        "无线传输服务运行中"
-    } else {
-        "无线传输服务未启动"
+private fun StatusItem(title: String, status: String, color: Color, icon: ImageVector, subtitle: String? = null) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        Icon(icon, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+            if (subtitle != null) {
+                Text(subtitle, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        Surface(
+            color = color.copy(alpha = 0.1f),
+            shape = RoundedCornerShape(8.dp),
+            border = androidx.compose.foundation.BorderStroke(1.dp, color.copy(alpha = 0.2f))
+        ) {
+            Text(
+                text = status,
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                fontSize = 11.sp,
+                color = color,
+                fontWeight = FontWeight.Bold
+            )
+        }
     }
-    val statusDescription = if (runtimeStatus.isWirelessRunning) {
-        "可通过局域网进行无线数据传输"
-    } else {
-        "请在设置中开启自动启动或手动启动服务"
-    }
-    val runningChipText = if (runtimeStatus.isWirelessRunning) "传输状态：已启动" else "传输状态：未启动"
-    val runningChipColor = if (runtimeStatus.isWirelessRunning) {
-        MaterialTheme.colorScheme.primary
-    } else {
-        MaterialTheme.colorScheme.error
-    }
-    val wirelessAddressText = runtimeStatus.wirelessAddress.ifBlank { "未连接网络" }
+}
 
+@Composable
+private fun TaskRecoveryCard(task: ConfigurationTask, onContinue: () -> Unit) {
     Card(
-        modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.secondaryContainer
-        ),
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)),
         shape = RoundedCornerShape(20.dp)
     ) {
-        Column(
-            modifier = Modifier.padding(cardPadding),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+        Row(
+            modifier = Modifier.padding(20.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .background(MaterialTheme.colorScheme.primary, CircleShape),
+                contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = Icons.Default.CheckCircle,
-                    contentDescription = "系统状态",
-                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                    modifier = Modifier.size(36.dp)
-                )
-                Column {
-                    Text(
-                        text = statusTitle,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer
-                    )
-                    Text(
-                        text = statusDescription,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.9f)
-                    )
-                }
+                Icon(Icons.Default.PlayArrow, null, tint = MaterialTheme.colorScheme.onPrimary)
             }
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-                verticalAlignment = Alignment.CenterVertically
+            Column(modifier = Modifier.weight(1f)) {
+                Text("检测到进行中的实验项目", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    "项目: ${task.recipeName} · 已于 ${task.acceptedAt?.substringAfter(" ") ?: "不久前"} 开始",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(0.8f)
+                )
+            }
+            Button(
+                onClick = onContinue,
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
             ) {
-                StatusChip(text = runningChipText, color = runningChipColor)
-                StatusChip(text = "地址：$wirelessAddressText", color = MaterialTheme.colorScheme.tertiary)
+                Text("继续实验")
             }
         }
     }
 }
 
-/**
- * 无线传输状态、语音播报状态
- */
-@Composable
-private fun QuickInfoColumn(
-    modifier: Modifier = Modifier,
-    isCompact: Boolean = false,
-    runtimeStatus: HomeRuntimeStatus
-) {
-    val spacing = if (isCompact) 8.dp else 12.dp
-
-    Column(
-        modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(spacing)
-    ) {
-        InfoCard(
-            title = "无线传输服务",
-            content = runtimeStatus.wirelessAddress,
-            icon = Icons.Default.Cloud,
-            hint = if (runtimeStatus.isWirelessRunning) "已启动 · 支持局域网无线传输" else "未启动 · 请在设置页开启服务"
-        )
-        InfoCard(
-            title = "语音播报",
-            content = runtimeStatus.ttsStatus,
-            icon = Icons.Default.SpeakerPhone,
-            hint = runtimeStatus.ttsHint
-        )
-    }
-}
-
-/**
- * 快捷操作区域
- */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun HomeActionGrid(
-    actions: List<HomeAction>
-) {
+private fun HomeActionGrid(actions: List<HomeAction>) {
     val windowSize = LocalWindowSize.current
     val columns = when (windowSize.widthClass) {
         SmartDosingWindowWidthClass.Compact -> 1
         SmartDosingWindowWidthClass.Medium -> 2
-        SmartDosingWindowWidthClass.Expanded -> 3
+        else -> 2
     }
     FlowRow(
         modifier = Modifier.fillMaxWidth(),
@@ -750,187 +617,144 @@ private fun HomeActionGrid(
         verticalArrangement = Arrangement.spacedBy(16.dp),
         maxItemsInEachRow = columns
     ) {
-        actions.forEachIndexed { index, action ->
-            HomeActionCard(action = action, index = index)
+        actions.forEach { action ->
+            HomeActionCard(action, Modifier.weight(1f))
         }
     }
 }
 
-/**
- * 单个操作卡片
- */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun HomeActionCard(
-    action: HomeAction,
-    index: Int = 0
-) {
-    var visible by remember { mutableStateOf(false) }
-    var isPressed by remember { mutableStateOf(false) }
-
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.96f else 1f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessLow
-        ),
-        label = "scale"
-    )
-
-    LaunchedEffect(Unit) {
-        kotlinx.coroutines.delay(index * 80L)
-        visible = true
+private fun HomeActionCard(action: HomeAction, modifier: Modifier = Modifier) {
+    val isPrimary = action.emphasize
+    
+    // 强调卡片的呼吸效果
+    val infiniteTransition = rememberInfiniteTransition(label = "primary_pulse")
+    val pulseScale by if (isPrimary) {
+        infiniteTransition.animateFloat(
+            initialValue = 1f,
+            targetValue = 1.02f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(2000, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "scale"
+        )
+    } else {
+        remember { mutableStateOf(1f) }
     }
 
-    AnimatedVisibility(
-        visible = visible,
-        enter = fadeIn(animationSpec = tween(300)) +
-                scaleIn(initialScale = 0.9f, animationSpec = tween(300))
+    Card(
+        onClick = action.onClick,
+        modifier = modifier
+            .heightIn(min = 100.dp)
+            .scale(pulseScale),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isPrimary) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
+            contentColor = if (isPrimary) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+        ),
+        shape = RoundedCornerShape(24.dp),
+        border = if (!isPrimary) androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)) else null,
+        elevation = CardDefaults.cardElevation(defaultElevation = if (isPrimary) 6.dp else 0.dp)
     ) {
-        Card(
-            onClick = action.onClick,
-            modifier = Modifier.scale(scale),
-            colors = CardDefaults.cardColors(
-                containerColor = action.containerColor,
-                contentColor = action.contentColor
-            ),
-            shape = RoundedCornerShape(16.dp),
-            elevation = CardDefaults.cardElevation(defaultElevation = if (action.emphasize) 8.dp else 2.dp)
-        ) {
-            Box {
-                Column(
-                    modifier = Modifier.padding(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.Top
-                    ) {
-                        Icon(
-                            imageVector = action.icon,
-                            contentDescription = action.title,
-                            modifier = Modifier.size(32.dp)
-                        )
-
-                        // 显示 Badge
-                        action.badge?.let { badgeText ->
-                            Box(
-                                modifier = Modifier
-                                    .clip(CircleShape)
-                                    .background(
-                                        if (action.emphasize)
-                                            MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.2f)
-                                        else
-                                            MaterialTheme.colorScheme.primary
-                                    )
-                                    .padding(horizontal = 8.dp, vertical = 4.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = badgeText,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (action.emphasize)
-                                        MaterialTheme.colorScheme.onPrimary
-                                    else
-                                        MaterialTheme.colorScheme.onPrimary
-                                )
-                            }
+        Box(modifier = Modifier.fillMaxSize()) {
+            if (isPrimary) {
+                // 装饰性背景：高科技纹理
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    val nativePath = android.graphics.Path().apply {
+                        moveTo(size.width * 0.7f, 0f)
+                        quadTo(size.width * 0.85f, size.height * 0.4f, size.width, size.height * 0.2f)
+                        lineTo(size.width, 0f)
+                        close()
+                    }
+                    drawIntoCanvas { canvas ->
+                        canvas.nativeCanvas.drawPath(nativePath, android.graphics.Paint().apply {
+                            color = android.graphics.Color.WHITE
+                            alpha = (255 * 0.12f).toInt()
+                            style = android.graphics.Paint.Style.FILL
+                            isAntiAlias = true
+                        })
+                    }
+                    
+                    // 额外的装饰线
+                    drawLine(
+                        color = Color.White.copy(alpha = 0.1f),
+                        start = Offset(0f, size.height * 0.8f),
+                        end = Offset(size.width * 0.2f, size.height),
+                        strokeWidth = 2.dp.toPx()
+                    )
+                }
+            }
+            
+            Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
+                    Icon(
+                        action.icon, 
+                        null, 
+                        modifier = Modifier.size(32.dp), 
+                        tint = if (isPrimary) Color.White else MaterialTheme.colorScheme.primary
+                    )
+                    action.badge?.let {
+                        Surface(
+                            color = if (isPrimary) Color.White.copy(0.2f) else MaterialTheme.colorScheme.primaryContainer,
+                            shape = CircleShape
+                        ) {
+                            Text(
+                                it,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isPrimary) Color.White else MaterialTheme.colorScheme.primary
+                            )
                         }
                     }
-
+                }
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(action.title, fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.titleLarge)
                     Text(
-                        text = action.title,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
+                        action.description,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = (if (isPrimary) Color.White else MaterialTheme.colorScheme.onSurfaceVariant).copy(0.8f),
+                        maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
-                    Text(
-                        text = action.description,
-                        fontSize = 14.sp,
-                        color = action.contentColor.copy(alpha = 0.9f)
-                    )
                 }
             }
         }
     }
 }
 
-/**
- * 最近操作面板
- */
 @Composable
-private fun RecentOperationsPanel(
-    operations: List<RecentOperation>,
-    isLoading: Boolean,
-    onViewMore: () -> Unit = {}
-) {
-    var visible by remember { mutableStateOf(false) }
-
-    LaunchedEffect(Unit) {
-        kotlinx.coroutines.delay(400)
-        visible = true
-    }
-
-    AnimatedVisibility(
-        visible = visible,
-        enter = fadeIn(animationSpec = tween(400)) + slideInVertically(
-            initialOffsetY = { it / 4 },
-            animationSpec = tween(400)
-        )
+private fun RecentOperationsPanel(modifier: Modifier = Modifier, operations: List<ConfigurationRecord>, isLoading: Boolean, onViewMore: () -> Unit) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
     ) {
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp)
-        ) {
-            Column(
-                modifier = Modifier.padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(
-                        text = "最近操作",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    IconButton(onClick = onViewMore) {
-                        Icon(
-                            imageVector = Icons.Default.ViewList,
-                            contentDescription = "查看更多配置记录"
-                        )
-                    }
+        Column(modifier = Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Icon(Icons.Outlined.History, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                    Text("最近实验成果", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
                 }
-
-                when {
-                    isLoading -> {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 24.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            CircularProgressIndicator()
-                        }
-                    }
-                operations.isEmpty() -> {
-                    Text(
-                        text = "暂无最近配置记录",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                TextButton(onClick = onViewMore) { Text("查看完整报告", style = MaterialTheme.typography.labelMedium) }
+            }
+            
+            if (isLoading) {
+                Box(Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
                 }
-                else -> {
-                    operations.forEachIndexed { index, operation ->
-                        RecentOperationRow(operation = operation)
-                        if (index != operations.lastIndex) {
-                            HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+            } else if (operations.isEmpty()) {
+                Box(Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.Center) {
+                    Text("暂无归档记录", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    operations.take(4).forEachIndexed { index, record ->
+                        RecentOperationRow(record)
+                        if (index < operations.take(4).size - 1) {
+                            Divider(modifier = Modifier.padding(start = 40.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
                         }
-                    }
                     }
                 }
             }
@@ -939,133 +763,81 @@ private fun RecentOperationsPanel(
 }
 
 @Composable
-private fun RecentOperationRow(operation: RecentOperation) {
+private fun RecentOperationRow(record: ConfigurationRecord) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Column {
-            Text(
-                text = operation.title,
-                fontWeight = FontWeight.Medium
-            )
-            Text(
-                text = operation.desc,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        StatusChip(text = operation.status, color = MaterialTheme.colorScheme.secondary)
-    }
-}
-
-private data class RecentOperation(
-    val title: String,
-    val desc: String,
-    val status: String
-)
-
-private fun DosingRecord.toRecentOperation(): RecentOperation {
-    val operatorDisplay = operatorName.ifBlank { "未设置操作人" }
-    val timeDisplay = endTime.takeIf { it.isNotBlank() } ?: createdAt
-    val statusLabel = when (status) {
-        DosingRecordStatus.COMPLETED -> "已完成"
-        DosingRecordStatus.ABORTED -> "已中止"
-    }
-    val progress = "$completedMaterials/$totalMaterials 步"
-    return RecentOperation(
-        title = recipeName.ifBlank { recipeCode ?: "未命名配方" },
-        desc = "$timeDisplay · $operatorDisplay",
-        status = "$statusLabel · $progress"
-    )
-}
-
-@Composable
-private fun InfoCard(
-    title: String,
-    content: String,
-    icon: ImageVector,
-    hint: String
-) {
-    Card(
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        )
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape),
+            contentAlignment = Alignment.Center
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = title,
-                    tint = MaterialTheme.colorScheme.primary
-                )
-                Text(
-                    text = title,
-                    fontWeight = FontWeight.Bold
-                )
-            }
+            Icon(
+                imageVector = if (record.resultStatus == com.example.smartdosing.data.ConfigurationRecordStatus.COMPLETED) Icons.Default.Check else Icons.Default.Close,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp),
+                tint = if (record.resultStatus == com.example.smartdosing.data.ConfigurationRecordStatus.COMPLETED) Color(0xFF4CAF50) else Color(0xFFF44336)
+            )
+        }
+        
+        Column(modifier = Modifier.weight(1f)) {
+            Text(record.recipeName, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
-                text = content,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Medium
+                "${record.updatedAt} · ${record.operator}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        
+        Column(horizontalAlignment = Alignment.End) {
+            Text(
+                "${record.actualQuantity} ${record.unit}",
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.Monospace
             )
             Text(
-                text = hint,
-                fontSize = 13.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                if (record.resultStatus == com.example.smartdosing.data.ConfigurationRecordStatus.COMPLETED) "配置成功" else "已中止",
+                style = MaterialTheme.typography.labelSmall,
+                color = if (record.resultStatus == com.example.smartdosing.data.ConfigurationRecordStatus.COMPLETED) Color(0xFF4CAF50) else Color(0xFFF44336)
             )
         }
     }
 }
 
 @Composable
-private fun StatusChip(
-    text: String,
-    color: Color
-) {
-    Box(
+private fun SettingsActionItem(title: String, icon: ImageVector, onClick: () -> Unit) {
+    Surface(
         modifier = Modifier
-            .background(color.copy(alpha = 0.1f), RoundedCornerShape(50))
-            .padding(horizontal = 12.dp, vertical = 6.dp)
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        color = Color.Transparent,
+        shape = RoundedCornerShape(12.dp)
     ) {
-        Text(
-            text = text,
-            color = color,
-            fontWeight = FontWeight.Medium
-        )
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Icon(icon, null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(title, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.weight(1f))
+            Icon(Icons.Default.ChevronRight, null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.outline)
+        }
     }
 }
 
-private data class HomeAction(
-    val title: String,
-    val description: String,
-    val icon: ImageVector,
-    val containerColor: Color,
-    val contentColor: Color,
-    val emphasize: Boolean = false,
-    val badge: String? = null,
-    val onClick: () -> Unit
-)
+private data class DashboardCardInfo(val title: String, val value: String, val icon: ImageVector, val color: Color, val unit: String)
+private data class HomeAction(val title: String, val description: String, val icon: ImageVector, val containerColor: Color, val contentColor: Color, val emphasize: Boolean = false, val badge: String? = null, val onClick: () -> Unit)
 
 @Preview(showBackground = true, device = "spec:width=1280dp,height=800dp,dpi=240")
 @Composable
 private fun HomeScreenLargePreview() {
-    SmartDosingTheme {
-        HomeScreen()
-    }
+    SmartDosingTheme { HomeScreen() }
 }
 
-@Preview(showBackground = true, device = "spec:width=411dp,height=891dp,dpi=420")
-@Composable
-private fun HomeScreenPhonePreview() {
-    SmartDosingTheme {
-        HomeScreen()
-    }
-}

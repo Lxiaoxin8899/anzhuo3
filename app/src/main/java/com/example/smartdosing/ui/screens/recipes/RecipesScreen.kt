@@ -72,6 +72,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -1037,37 +1038,30 @@ fun CompactStatChip(
     }
 
     Surface(
-        shape = RoundedCornerShape(30.dp),
-        tonalElevation = 2.dp,
-        color = MaterialTheme.colorScheme.surfaceColorAtElevation(3.dp)
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Box(
-                modifier = Modifier
-                    .size(28.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    icon,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp),
-                    tint = MaterialTheme.colorScheme.primary
-                )
-            }
+            Icon(
+                icon,
+                contentDescription = null,
+                modifier = Modifier.size(14.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
             Text(
                 animatedValue.value.toInt().toString(),
-                fontWeight = FontWeight.Bold,
-                fontSize = 15.sp
+                fontWeight = FontWeight.ExtraBold,
+                fontSize = 16.sp,
+                fontFamily = FontFamily.Monospace
             )
             Text(
                 label,
-                fontSize = 13.sp,
+                fontSize = 12.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
@@ -1318,100 +1312,94 @@ fun DosingRecipeCard(
         onClick = { onRecipeClick(recipe.id) },
         modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-        shape = RoundedCornerShape(12.dp)
+        shape = RoundedCornerShape(20.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
     ) {
         Column(
-            modifier = Modifier.padding(if (compact) 10.dp else 12.dp),
-            verticalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 8.dp)
+            modifier = Modifier.padding(if (compact) 16.dp else 20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(
                         recipe.name,
-                        fontSize = if (compact) 15.sp else 16.sp,
-                        fontWeight = FontWeight.SemiBold
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text("编码：${recipe.code}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        if (recipe.customer.isNotEmpty()) {
-                            Text("客户：${recipe.customer}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        Text("总重：${recipe.totalWeight} g", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
+                    Text(
+                        "编码: ${recipe.code} | 客户: ${recipe.customer.ifBlank { "通用" }}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    IconButton(
-                        onClick = { onDeleteRecipe(recipe) },
-                        colors = IconButtonDefaults.iconButtonColors(
-                            contentColor = MaterialTheme.colorScheme.error
-                        )
-                    ) {
-                        Icon(
-                            Icons.Default.Delete,
-                            contentDescription = "删除配方",
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
+                
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     FolderMenuButton(
                         folders = folders,
                         onFolderSelected = { folderId -> onAddToFolder(recipe.id, folderId) }
                     )
-                    Button(
-                        onClick = { onMaterialConfiguration(recipe.id) },
-                        shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(
-                            horizontal = if (compact) 8.dp else 10.dp,
-                            vertical = if (compact) 2.dp else 4.dp
-                        ),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.secondary
-                        )
+                    IconButton(
+                        onClick = { onDeleteRecipe(recipe) },
+                        colors = IconButtonDefaults.iconButtonColors(contentColor = MaterialTheme.colorScheme.error.copy(alpha = 0.7f))
                     ) {
-                        Icon(Icons.Default.Science, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(if (compact) "配置" else "研发配置", fontSize = 12.sp)
+                        Icon(Icons.Default.Delete, null, modifier = Modifier.size(20.dp))
                     }
                 }
             }
 
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+            // 技术参数展示区
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+                    .padding(12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                StatusPill(
-                    text = recipe.status.label,
-                    color = when (recipe.status) {
-                        RecipeStatus.ACTIVE -> MaterialTheme.colorScheme.primary
-                        RecipeStatus.DRAFT -> MaterialTheme.colorScheme.tertiary
-                        RecipeStatus.INACTIVE -> MaterialTheme.colorScheme.error
-                        RecipeStatus.ARCHIVED -> MaterialTheme.colorScheme.outline
-                    },
-                    icon = Icons.Default.Verified
-                )
-                StatusPill(
-                    text = recipe.priority.label,
-                    color = when (recipe.priority) {
-                        RecipePriority.URGENT -> MaterialTheme.colorScheme.error
-                        RecipePriority.HIGH -> MaterialTheme.colorScheme.primary
-                        RecipePriority.NORMAL -> MaterialTheme.colorScheme.secondary
-                        RecipePriority.LOW -> MaterialTheme.colorScheme.outline
-                    },
-                    icon = Icons.Default.Flag
-                )
-                Text(
-                    text = "材料：${recipe.materials.size} 项",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    text = "最近：${recipe.lastUsed?.takeIf { it.isNotBlank() } ?: "未记录"}",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Column {
+                    Text("总设计重", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("${recipe.totalWeight} g", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("组分", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("${recipe.materials.size}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    Text("最近更新", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(recipe.updateTime.substringBefore(" "), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    StatusPill(
+                        text = recipe.status.label,
+                        color = when (recipe.status) {
+                            RecipeStatus.ACTIVE -> Color(0xFF4CAF50)
+                            RecipeStatus.DRAFT -> MaterialTheme.colorScheme.primary
+                            else -> MaterialTheme.colorScheme.outline
+                        },
+                        icon = Icons.Default.Circle
+                    )
+                }
+                
+                Button(
+                    onClick = { onMaterialConfiguration(recipe.id) },
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+                ) {
+                    Icon(Icons.Default.Science, null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("启动实验", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                }
             }
         }
     }

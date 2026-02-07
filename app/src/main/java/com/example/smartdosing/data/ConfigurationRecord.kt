@@ -2,7 +2,7 @@
 package com.example.smartdosing.data
 
 /**
- * 配置记录数据类，表示一次完整的配料操作记录
+ * 配置记录数据类，表示一次完整的实验配置操作记录
  */
 data class ConfigurationRecord(
     val id: String,
@@ -25,7 +25,7 @@ data class ConfigurationRecord(
 )
 
 /**
- * 配置材料记录，用于在配置记录详情中显示每个材料的投料情况
+ * 配置材料记录，用于在配置记录详情中显示每个材料的配置情况
  */
 data class ConfigurationMaterialRecord(
     val sequence: Int,

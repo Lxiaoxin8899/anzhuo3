@@ -25,6 +25,7 @@ import com.example.smartdosing.data.repository.ConfigurationRepositoryProvider
 import com.example.smartdosing.ui.screens.device.DeviceInfoScreen
 import com.example.smartdosing.ui.screens.dosing.MaterialConfigurationData
 import com.example.smartdosing.ui.screens.dosing.MaterialConfigurationScreen
+import com.example.smartdosing.ui.screens.lab.LabCenterScreen
 import com.example.smartdosing.ui.screens.home.HomeScreen
 import com.example.smartdosing.ui.screens.materials.MaterialListScreen
 import com.example.smartdosing.ui.screens.records.ConfigurationRecordDetailScreen
@@ -71,33 +72,29 @@ fun SmartDosingNavHost(
     ) {
         composable(SmartDosingRoutes.HOME) {
             HomeScreen(
-                onNavigateToRecipes = {
-                    navController.navigate(SmartDosingRoutes.RECIPES)
+                onNavigateToTaskCenter = {
+                    navController.navigate(SmartDosingRoutes.LAB_CENTER)
                 },
                 onNavigateToMaterialConfiguration = { recipeId ->
                     navController.navigateToMaterialConfiguration(recipeId)
                 },
-                onNavigateToTaskCenter = {
-                    navController.navigate(SmartDosingRoutes.TASK_CENTER)
-                },
                 onNavigateToConfigurationRecords = {
                     navController.navigate(SmartDosingRoutes.CONFIGURATION_RECORDS)
+                },
+                onNavigateToMaterialList = {
+                    navController.navigate(SmartDosingRoutes.MATERIAL_LIST)
                 },
                 onNavigateToSettings = {
                     navController.navigate(SmartDosingRoutes.SETTINGS)
                 },
                 onNavigateToDeviceInfo = {
                     navController.navigate(SmartDosingRoutes.DEVICE_INFO)
-                },
-                onImportRecipe = {
-                    navController.navigateToMaterialConfiguration("import_csv")
                 }
             )
         }
 
-        composable(SmartDosingRoutes.TASK_CENTER) {
-            TaskCenterScreen(
-                refreshSignal = taskRefreshSignal,
+        composable(SmartDosingRoutes.LAB_CENTER) {
+            LabCenterScreen(
                 onNavigateBack = { navController.popBackStack() },
                 onStartTask = { task ->
                     navController.navigateToMaterialConfiguration(
@@ -105,18 +102,6 @@ fun SmartDosingNavHost(
                         taskId = task.id
                     )
                 },
-                onConfigureTask = { task ->
-                    navController.navigateToMaterialConfiguration(
-                        recipeId = task.recipeId.ifBlank { "quick_start" },
-                        taskId = task.id
-                    )
-                }
-            )
-        }
-
-        composable(SmartDosingRoutes.RECIPES) {
-            RecipesScreen(
-                onNavigateToRecipeDetail = { /* 详情页暂由列表内部处理 */ },
                 onNavigateToMaterialConfiguration = { recipeId ->
                     navController.navigateToMaterialConfiguration(recipeId)
                 }
@@ -191,7 +176,7 @@ fun SmartDosingNavHost(
                 recordId = recordId,
                 onNavigateBack = { navController.popBackStack() },
                 onNavigateToTaskCenter = {
-                    navController.navigate(SmartDosingRoutes.TASK_CENTER)
+                    navController.navigate(SmartDosingRoutes.LAB_CENTER)
                 },
                 onSaveConfiguration = { configData ->
                     scope.launch {
@@ -316,7 +301,7 @@ private fun MaterialConfigurationData.toConfigurationRecord(tolerancePermille: I
     val defaultTaskId = if (taskId.isNotBlank()) taskId else "TASK-${UUID.randomUUID()}"
     val totalTarget = materials.sumOf { it.targetWeight }
     val totalActual = materials.sumOf { if (it.actualWeight > 0) it.actualWeight else it.targetWeight }
-    val unit = materials.firstOrNull()?.unit ?: "g"
+    val baseUnit = materials.firstOrNull()?.unit ?: "g"
     val timestamp = SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).format(Date(now))
     // 将材料配置数据转换成有序的材料明细，便于详情页和后端还原最终结果
     val materialDetails = materials.mapIndexed { index, item ->
@@ -337,7 +322,7 @@ private fun MaterialConfigurationData.toConfigurationRecord(tolerancePermille: I
                 ?: "${recipeCode.ifBlank { "RND" }}-${index + 1}",
             targetWeight = item.targetWeight,
             actualWeight = actual,
-            unit = item.unit.ifBlank { unit },
+            unit = item.unit.ifBlank { baseUnit },
             deviation = deviation,
             isOutOfTolerance = isOutOfTolerance
         )
@@ -352,7 +337,7 @@ private fun MaterialConfigurationData.toConfigurationRecord(tolerancePermille: I
         category = "研发配置",
         operator = perfumer.ifBlank { "研发配置工位" },
         quantity = if (totalTarget > 0) totalTarget else totalActual,
-        unit = unit,
+        unit = baseUnit,
         actualQuantity = totalActual,
         customer = customer.ifBlank { "内部研发" },
         salesOwner = salesOwner.ifBlank { "研发团队" },

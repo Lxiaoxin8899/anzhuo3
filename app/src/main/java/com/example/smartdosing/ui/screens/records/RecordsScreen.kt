@@ -31,8 +31,8 @@ import com.example.smartdosing.ui.theme.LocalWindowSize
 import com.example.smartdosing.ui.theme.SmartDosingWindowWidthClass
 
 /**
- * 投料记录页面
- * 显示历史投料记录和统计
+ * 实验记录页面
+ * 显示历史配置记录和统计
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -42,7 +42,7 @@ fun RecordsScreen(
     modifier: Modifier = Modifier
 ) {
     var selectedTab by remember { mutableStateOf(0) }
-    val tabs = listOf("投料记录", "统计报表")
+    val tabs = listOf("实验记录", "统计报表")
     val context = LocalContext.current
 
     // 详情页面状态管理
@@ -219,7 +219,7 @@ fun RecordsScreen(
                         color = MaterialTheme.colorScheme.primary
                     )
                     Text(
-                        text = "正在加载投料记录...",
+                        text = "正在加载实验记录...",
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
@@ -329,13 +329,13 @@ fun EmptyStateContent() {
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
             )
             Text(
-                text = "暂无投料记录",
+                text = "暂无实验记录",
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Medium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Text(
-                text = "完成投料操作后，记录将显示在这里",
+                text = "完成实验配置后，记录将显示在这里",
                 fontSize = 14.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
@@ -709,7 +709,7 @@ fun RecordCard(
                         )
                     }
 
-                    // 重复投料按钮（增大尺寸）
+                    // 重新配置按钮（增大尺寸）
                     // 重新配置按钮
 
                     Button(
@@ -899,7 +899,7 @@ fun DosingDetailsSection(record: DosingRecord) {
                 modifier = Modifier.size(16.dp)
             )
             Text(
-                text = "投料详情 (${record.details.size} 种材料)",
+                text = "实验详情 (${record.details.size} 种材料)",
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Medium,
                 color = MaterialTheme.colorScheme.primary
@@ -1243,7 +1243,7 @@ fun StatisticsContent(stats: RecordStats) {
                     "记录总数" to "${stats.totalCount} 次",
                     "完成记录" to "${stats.completedCount} 次",
                     "平均偏差" to formatPercent(stats.averageDeviation),
-                    "累计投料" to "${formatWeight(stats.totalActualWeight)}"
+                    "累计实验重量" to "${formatWeight(stats.totalActualWeight)}"
                 )
             )
         }
@@ -1430,7 +1430,7 @@ private fun calculateDuration(startTime: String, endTime: String): String {
 }
 
 /**
- * 简化版投料详情区域 - 用于排查白屏问题
+ * 简化版实验详情区域 - 用于排查白屏问题
  * 只显示基本信息，不包含复杂的展开/收起逻辑
  */
 @Composable
@@ -1469,7 +1469,7 @@ fun SimpleDosingDetailsSection(record: DosingRecord) {
         ) {
             // 标题
             Text(
-                text = "投料详情 (${record.details.size} 种材料)",
+                text = "配置详情 (${record.details.size} 种材料)",
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary
@@ -1636,7 +1636,7 @@ fun RecordDetailScreen(
                 title = {
                     Column {
                         Text(
-                            text = "投料记录详情",
+                            text = "实验记录详情",
                             style = MaterialTheme.typography.headlineSmall,
                             fontWeight = FontWeight.Bold
                         )
@@ -1794,7 +1794,7 @@ fun RecordDetailStatsCard(record: DosingRecord) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "投料统计",
+                    text = "实验配置统计",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary
@@ -1915,7 +1915,7 @@ fun RecordDetailMaterialsCard(record: DosingRecord) {
                     modifier = Modifier.size(20.dp)
                 )
                 Text(
-                    text = "投料详情 (${record.details.size} 种材料)",
+                    text = "实验详情 (${record.details.size} 种材料)",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary

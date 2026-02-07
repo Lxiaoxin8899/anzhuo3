@@ -271,7 +271,7 @@ fun BluetoothScaleSettingsScreen(
             text = {
                 Column {
                     Text(
-                        text = "只有当实际重量在目标重量的误差范围内时，才会开始自动确认计时。使用千分比(‰)以满足精密投料需求。",
+                        text = "只有当实际重量在目标重量的误差范围内时，才会开始自动确认计时。使用千分比(‰)以满足精密实验配置需求。",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(bottom = 12.dp)
@@ -568,7 +568,7 @@ fun BluetoothScaleSettingsScreen(
                             icon = Icons.Outlined.Edit,
                             title = "设备别名",
                             value = preferencesState.deviceAlias ?: "",
-                            placeholder = "如：1号秤、配料间秤",
+                            placeholder = "如：1号天平、实验间天平",
                             onValueChange = { newAlias ->
                                 scope.launch {
                                     preferencesManager.setDeviceAlias(newAlias.takeIf { it.isNotBlank() })
@@ -688,10 +688,10 @@ fun BluetoothScaleSettingsScreen(
                 }
             }
 
-            // 投料设置分区
+            // 自动化配置设置分区
             item {
                 SettingsCard(
-                    title = "投料设置",
+                    title = "自动化配置",
                     icon = Icons.Outlined.Scale
                 ) {
                     // 稳定后自动确认
@@ -779,7 +779,7 @@ fun BluetoothScaleSettingsScreen(
                                 color = if (preferencesState.demoModeEnabled) Color(0xFF1565C0) else Color(0xFF424242)
                             )
                             Text(
-                                text = "无需真实蓝牙秤，模拟投料过程用于演示和培训",
+                                text = "无需真实蓝牙天平，模拟实验过程用于演示和培训",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = if (preferencesState.demoModeEnabled) Color(0xFF1976D2) else Color(0xFF757575)
                             )
@@ -871,7 +871,7 @@ fun BluetoothScaleSettingsScreen(
                                             demoManager.simulateWeighing(50.0 + Math.random() * 50)
                                         }
                                     ) {
-                                        Text("模拟投料")
+                                        Text("模拟实验")
                                     }
                                 }
                             }
@@ -913,7 +913,7 @@ fun BluetoothScaleSettingsScreen(
                         }
                     } else {
                         Text(
-                            text = "请先连接蓝牙电子秤",
+                            text = "请先连接蓝牙电子天平",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(vertical = 8.dp)

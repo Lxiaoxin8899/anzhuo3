@@ -56,11 +56,11 @@ fun SettingsScreen(
 
     val settingsSections = listOf(
         SettingsSection(
-            title = "投料设置",
+            title = "实验配置",
             icon = Icons.Outlined.Scale,
             items = listOf(
                 SettingsItem.Selection(
-                    title = "投料模式",
+                    title = "配置模式",
                     subtitle = "选择手动输入或蓝牙电子秤模式",
                     icon = Icons.Outlined.Tune,
                     selectedValue = preferencesState.dosingMode.displayName,
@@ -73,8 +73,8 @@ fun SettingsScreen(
                     }
                 ),
                 SettingsItem.Action(
-                    title = "蓝牙秤设置",
-                    subtitle = "管理蓝牙电子秤连接和参数",
+                    title = "天平设置",
+                    subtitle = "管理蓝牙电子天平连接和参数",
                     icon = Icons.Outlined.Bluetooth,
                     onClick = onNavigateToBluetoothSettings
                 ),
@@ -87,7 +87,7 @@ fun SettingsScreen(
             )
         ),
         SettingsSection(
-            title = "投料语音设置",
+            title = "语音播报设置",
             icon = Icons.AutoMirrored.Filled.VolumeUp,
             items = listOf(
                 SettingsItem.Switch(
@@ -113,12 +113,12 @@ fun SettingsScreen(
             )
         ),
         SettingsSection(
-            title = "语音设置",
+            title = "系统语音",
             icon = Icons.Outlined.Campaign,
             items = listOf(
                 SettingsItem.Switch(
                     title = "启用语音播报",
-                    subtitle = "开启材料投料语音提示",
+                    subtitle = "开启材料配置语音提示",
                     icon = Icons.Outlined.VolumeUp,
                     isChecked = true,
                     onCheckedChange = { _ -> Toast.makeText(context, "该功能开发中", Toast.LENGTH_SHORT).show() }
@@ -140,7 +140,7 @@ fun SettingsScreen(
             )
         ),
         SettingsSection(
-            title = "界面设置",
+            title = "界面偏好",
             icon = Icons.Outlined.Palette,
             items = listOf(
                 SettingsItem.Switch(
@@ -167,12 +167,12 @@ fun SettingsScreen(
             )
         ),
         SettingsSection(
-            title = "投料设置",
+            title = "精度控制",
             icon = Icons.Outlined.Scale,
             items = listOf(
                 SettingsItem.Slider(
                     title = "精度要求",
-                    subtitle = "投料重量精度要求（%）",
+                    subtitle = "实验配置重量精度要求（%）",
                     icon = Icons.Outlined.Straighten,
                     value = 0.95f,
                     onValueChange = { _ -> Toast.makeText(context, "该功能开发中", Toast.LENGTH_SHORT).show() },
@@ -199,7 +199,7 @@ fun SettingsScreen(
                 ),
                 SettingsItem.Selection(
                     title = "重量单位",
-                    subtitle = "投料重量显示单位",
+                    subtitle = "实验配置重量显示单位",
                     icon = Icons.Outlined.Balance,
                     selectedValue = "公斤",
                     options = listOf("克", "公斤", "磅")
@@ -207,12 +207,12 @@ fun SettingsScreen(
             )
         ),
         SettingsSection(
-            title = "数据管理",
+            title = "数据维护",
             icon = Icons.Outlined.Storage,
             items = listOf(
                 SettingsItem.Action(
                     title = "备份数据",
-                    subtitle = "备份配方和投料记录",
+                    subtitle = "备份配方和实验记录",
                     icon = Icons.Outlined.CloudUpload,
                     onClick = { Toast.makeText(context, "该功能开发中", Toast.LENGTH_SHORT).show() }
                 ),

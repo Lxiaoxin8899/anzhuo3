@@ -1,10 +1,10 @@
 package com.example.smartdosing.navigation
 
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Assignment
-import androidx.compose.material.icons.filled.Checklist
+import androidx.compose.material.icons.filled.Archive
+import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.Science
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.ui.graphics.vector.ImageVector
 
@@ -17,41 +17,29 @@ enum class SmartDosingDestination(
     val icon: ImageVector,
     val description: String
 ) {
-    HOME(
+    DASHBOARD(
         route = SmartDosingRoutes.HOME,
         title = "首页",
-        icon = Icons.Default.Home,
-        description = "任务、配置、导入等总览入口"
+        icon = Icons.Default.Dashboard,
+        description = "研发看板、状态监控与任务恢复"
     ),
-    TASK_CENTER(
-        route = SmartDosingRoutes.TASK_CENTER,
-        title = "任务中心",
-        icon = Icons.Default.Assignment,
-        description = "接单、开始配置、更新状态"
+    LAB_CENTER(
+        route = SmartDosingRoutes.LAB_CENTER,
+        title = "实验中心",
+        icon = Icons.Default.Science,
+        description = "任务领取、配方调阅与实验配置"
     ),
-    RECIPES(
-        route = SmartDosingRoutes.RECIPES,
-        title = "配方管理",
-        icon = Icons.Default.List,
-        description = "导入、筛选、维护配方字段"
-    ),
-    RECORDS(
+    ARCHIVE(
         route = SmartDosingRoutes.CONFIGURATION_RECORDS,
-        title = "配置记录",
-        icon = Icons.Default.Assignment,
-        description = "查看历史配置记录与明细"
-    ),
-    MATERIAL_LIST(
-        route = SmartDosingRoutes.MATERIAL_LIST,
-        title = "物料清单",
-        icon = Icons.Default.Checklist,
-        description = "按任务查看物料，找料打勾确认"
+        title = "档案库",
+        icon = Icons.Default.Archive,
+        description = "实验记录、统计报表与数据追溯"
     ),
     SETTINGS(
         route = SmartDosingRoutes.SETTINGS,
         title = "系统设置",
         icon = Icons.Default.Settings,
-        description = "网络、语音、无线传输等设置"
+        description = "网络、语音、天平连接等系统配置"
     )
 }
 
@@ -59,11 +47,9 @@ enum class SmartDosingDestination(
  * 底部导航展示顺序
  */
 val bottomNavigationDestinations = listOf(
-    SmartDosingDestination.HOME,
-    SmartDosingDestination.TASK_CENTER,
-    SmartDosingDestination.RECIPES,
-    SmartDosingDestination.RECORDS,
-    SmartDosingDestination.MATERIAL_LIST,
+    SmartDosingDestination.DASHBOARD,
+    SmartDosingDestination.LAB_CENTER,
+    SmartDosingDestination.ARCHIVE,
     SmartDosingDestination.SETTINGS
 )
 
@@ -72,6 +58,7 @@ val bottomNavigationDestinations = listOf(
  */
 object SmartDosingRoutes {
     const val HOME = "home"
+    const val LAB_CENTER = "lab_center"
     const val RECIPES = "recipes"
     const val MATERIAL_CONFIGURATION = "material_configuration/{recipeId}?taskId={taskId}&recordId={recordId}"
     const val TASK_CENTER = "task_center"
