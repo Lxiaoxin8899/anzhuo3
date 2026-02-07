@@ -73,9 +73,6 @@ val bottomNavigationDestinations = listOf(
 object SmartDosingRoutes {
     const val HOME = "home"
     const val RECIPES = "recipes"
-    const val RECIPE_DETAIL = "recipe_detail/{recipeId}"
-    const val RECIPE_CREATE = "recipe_create"
-    const val RECIPE_EDIT = "recipe_edit/{recipeId}"
     const val MATERIAL_CONFIGURATION = "material_configuration/{recipeId}?taskId={taskId}&recordId={recordId}"
     const val TASK_CENTER = "task_center"
     const val CONFIGURATION_RECORDS = "configuration_records"
@@ -85,8 +82,6 @@ object SmartDosingRoutes {
     const val BLUETOOTH_SCALE_SETTINGS = "bluetooth_scale_settings"
     const val MATERIAL_LIST = "material_list"
 
-    fun recipeDetail(recipeId: String) = "recipe_detail/$recipeId"
-    fun recipeEdit(recipeId: String) = "recipe_edit/$recipeId"
     fun materialConfiguration(
         recipeId: String,
         taskId: String? = null,

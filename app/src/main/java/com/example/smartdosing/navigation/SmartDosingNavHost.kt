@@ -7,6 +7,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -59,8 +60,8 @@ fun SmartDosingNavHost(
     ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var taskRefreshSignal by remember { mutableStateOf(0) }
-    var configurationRefreshSignal by remember { mutableStateOf(0) }
+    var taskRefreshSignal by rememberSaveable { mutableStateOf(0) }
+    var configurationRefreshSignal by rememberSaveable { mutableStateOf(0) }
 
     NavHost(
         navController = navController,

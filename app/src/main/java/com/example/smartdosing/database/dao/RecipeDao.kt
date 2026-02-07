@@ -177,6 +177,30 @@ interface RecipeDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertRecipeTags(tags: List<RecipeTagEntity>)
 
+    /**
+     * 事务更新配方及其关联的材料和标签
+     */
+    @Transaction
+    suspend fun updateRecipeWithMaterials(
+        recipe: RecipeEntity,
+        materials: List<MaterialEntity>,
+        tags: List<String>
+    ) {
+        updateRecipe(recipe)
+        // 先删除旧的材料和标签，再插入新的
+        deleteMaterialsByRecipeId(recipe.id)
+        deleteRecipeTagsByRecipeId(recipe.id)
+        if (materials.isNotEmpty()) {
+            insertMaterials(materials)
+        }
+        if (tags.isNotEmpty()) {
+            insertRecipeTags(tags.map { RecipeTagEntity(recipe.id, it) })
+        }
+    }
+
+    @Query("DELETE FROM materials WHERE recipe_id = :recipeId")
+    suspend fun deleteMaterialsByRecipeId(recipeId: String)
+
     @Transaction
     suspend fun insertRecipesBatch(recipesWithMaterials: List<RecipeWithMaterials>) {
         val recipes = recipesWithMaterials.map { it.recipe }

@@ -286,7 +286,7 @@ class TTSTestRunner(private val context: Context) {
             }
             
             // 播放测试
-            TTSManagerFactory.testTTS(context)
+            TTSManagerFactory.speak("TTS快速测试")
             
             SingleTestResult("快速测试", true, "快速测试完成")
         } catch (e: Exception) {

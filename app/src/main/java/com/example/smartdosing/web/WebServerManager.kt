@@ -59,9 +59,20 @@ class WebServerManager(private val context: Context) {
     // 设备通信相关
     private val appContext: Context = context.applicationContext
 
+    // API Key 认证（首次启动时自动生成，持久化到 SharedPreferences）
+    val apiKey: String by lazy {
+        val prefs = context.getSharedPreferences("web_server_prefs", Context.MODE_PRIVATE)
+        prefs.getString("api_key", null) ?: UUID.randomUUID().toString().also {
+            prefs.edit().putString("api_key", it).apply()
+            Log.i(TAG, "已生成新的 API Key")
+        }
+    }
+
     companion object {
         private const val TAG = "WebServerManager"
         private const val DEFAULT_PORT = 8080
+        private const val API_KEY_HEADER = "X-API-Key"
+        private const val MAX_UPLOAD_SIZE = 10L * 1024 * 1024 // 10MB
     }
 
     /**
@@ -122,7 +133,8 @@ class WebServerManager(private val context: Context) {
             allowHeader(HttpHeaders.AccessControlAllowHeaders)
             allowHeader(HttpHeaders.ContentType)
             allowHeader(HttpHeaders.AccessControlAllowOrigin)
-            anyHost()
+            allowHeader(API_KEY_HEADER)
+            anyHost() // 局域网场景，IP 不固定，保留 anyHost
         }
 
         install(StatusPages) {
@@ -132,9 +144,25 @@ class WebServerManager(private val context: Context) {
                     HttpStatusCode.InternalServerError,
                     ApiResponse<Unit>(
                         success = false,
-                        message = "服务器内部错误: ${cause.localizedMessage}"
+                        message = "服务器内部错误，请稍后重试"
                     )
                 )
+            }
+        }
+
+        // API Key 认证拦截器：/api 路径下的请求需要携带有效的 API Key
+        intercept(ApplicationCallPipeline.Plugins) {
+            val path = call.request.path()
+            // 静态页面和根路径不需要认证
+            if (!path.startsWith("/api")) return@intercept
+            val requestKey = call.request.headers[API_KEY_HEADER]
+                ?: call.request.queryParameters["api_key"]
+            if (requestKey != apiKey) {
+                call.respond(
+                    HttpStatusCode.Unauthorized,
+                    ApiResponse<Unit>(success = false, message = "未授权：请提供有效的 API Key")
+                )
+                finish()
             }
         }
 
@@ -218,7 +246,26 @@ class WebServerManager(private val context: Context) {
 
         suspend fun ApplicationCall.respondHtml(builder: HTML.() -> Unit) {
             val htmlContent = createHTML().html { builder() }
-            respondText(htmlContent, ContentType.Text.Html.withCharset(Charsets.UTF_8))
+            // 在 </head> 前注入 API Key 脚本，让前端 fetch 自动携带认证头
+            val apiKeyScript = """
+<script>
+(function() {
+    const API_KEY = '${apiKey}';
+    const _fetch = window.fetch;
+    window.fetch = function(url, opts) {
+        opts = opts || {};
+        opts.headers = opts.headers || {};
+        if (opts.headers instanceof Headers) {
+            opts.headers.set('X-API-Key', API_KEY);
+        } else {
+            opts.headers['X-API-Key'] = API_KEY;
+        }
+        return _fetch.call(this, url, opts);
+    };
+})();
+</script>"""
+            val injected = htmlContent.replace("</head>", "$apiKeyScript\n</head>")
+            respondText(injected, ContentType.Text.Html.withCharset(Charsets.UTF_8))
         }
 
         get("/") { call.respondHtml { generateMainPage() } }
@@ -1053,17 +1100,30 @@ class WebServerManager(private val context: Context) {
                     var fileBytes: ByteArray? = null
                     var fileName: String? = null
 
+                    var fileTooLarge = false
                     multipart.forEachPart { part ->
                         when (part) {
                             is PartData.FileItem -> {
                                 fileName = part.originalFileName
                                 Log.i(TAG, "[Import] 接收文件: $fileName")
-                                fileBytes = part.streamProvider().readBytes()
-                                Log.i(TAG, "[Import] 文件大小: ${fileBytes?.size} bytes")
+                                val bytes = part.streamProvider().readBytes()
+                                if (bytes.size > MAX_UPLOAD_SIZE) {
+                                    fileTooLarge = true
+                                } else {
+                                    fileBytes = bytes
+                                    Log.i(TAG, "[Import] 文件大小: ${fileBytes?.size} bytes")
+                                }
                             }
                             else -> Unit
                         }
                         part.dispose()
+                    }
+
+                    if (fileTooLarge) {
+                        return@post call.respond(
+                            HttpStatusCode.PayloadTooLarge,
+                            ApiResponse<Unit>(success = false, message = "文件大小超过限制（最大 ${MAX_UPLOAD_SIZE / 1024 / 1024}MB）")
+                        )
                     }
 
                     val bytes = fileBytes ?: return@post call.respond(

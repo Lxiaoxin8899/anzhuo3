@@ -222,9 +222,8 @@ class DatabaseRecipeRepository(private val context: Context) {
 
         // 构建更新后的配方，带上导入模板中的材料编码
         val materials = request.materials.mapIndexed { index, materialImport ->
-            android.util.Log.d("DBRepository", "创建Material: name=${materialImport.name}, code='${materialImport.code}'")
             Material(
-                id = "material_${System.currentTimeMillis()}_$index",
+                id = "material_${UUID.randomUUID()}_$index",
                 name = materialImport.name,
                 weight = materialImport.weight,
                 unit = materialImport.unit,
@@ -252,9 +251,10 @@ class DatabaseRecipeRepository(private val context: Context) {
             reviewer = request.reviewer
         )
 
-        // 更新数据库
-        recipeDao.updateRecipe(updatedRecipe.toEntity())
-        // TODO: 实现材料和标签的更新
+        // 事务更新配方、材料和标签
+        val recipeEntity = updatedRecipe.toEntity()
+        val materialEntities = updatedRecipe.materials.map { it.toEntity(updatedRecipe.id) }
+        recipeDao.updateRecipeWithMaterials(recipeEntity, materialEntities, updatedRecipe.tags)
 
         return updatedRecipe
     }

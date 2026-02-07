@@ -61,19 +61,16 @@ class InMemoryConfigurationTaskRepository : ConfigurationTaskRepository {
     private val tasks = TaskSampleData.dailyTasks().toMutableList()
 
     override suspend fun fetchTasks(status: TaskStatus?): List<ConfigurationTask> {
-        delay(120) // 模拟网络延迟
         return mutex.withLock {
             status?.let { target -> tasks.filter { it.status == target } } ?: tasks.toList()
         }
     }
 
     override suspend fun fetchTask(taskId: String): ConfigurationTask? {
-        delay(60)
         return mutex.withLock { tasks.find { it.id == taskId } }
     }
 
     override suspend fun updateTaskStatus(taskId: String, status: TaskStatus): ConfigurationTask? {
-        delay(80)
         return mutex.withLock {
             val index = tasks.indexOfFirst { it.id == taskId }
             if (index < 0) return@withLock null
@@ -88,7 +85,6 @@ class InMemoryConfigurationTaskRepository : ConfigurationTaskRepository {
 
     override suspend fun acceptTask(taskId: String, acceptedBy: String): ConfigurationTask? {
         Log.d("TaskRepository", "开始接单 - taskId: $taskId, acceptedBy: $acceptedBy")
-        delay(100)
         return mutex.withLock {
             val index = tasks.indexOfFirst { it.id == taskId }
             if (index < 0) {
@@ -131,7 +127,6 @@ class InMemoryConfigurationRecordRepository : ConfigurationRecordRepository {
     private val records = ConfigurationRecordSampleData.records().toMutableList()
 
     override suspend fun fetchRecords(filter: ConfigurationRecordFilter): List<ConfigurationRecord> {
-        delay(120)
         return mutex.withLock {
             var result = records.toList()
             filter.customer?.takeIf { it.isNotBlank() }?.let { customer ->
@@ -154,12 +149,10 @@ class InMemoryConfigurationRecordRepository : ConfigurationRecordRepository {
     }
 
     override suspend fun fetchRecord(recordId: String): ConfigurationRecord? {
-        delay(80)
         return mutex.withLock { records.find { it.id == recordId } }
     }
 
     override suspend fun createRecord(record: ConfigurationRecord): ConfigurationRecord {
-        delay(100)
         return mutex.withLock {
             records.add(0, record)
             record
@@ -171,7 +164,6 @@ class InMemoryConfigurationRecordRepository : ConfigurationRecordRepository {
         status: ConfigurationRecordStatus,
         note: String?
     ): ConfigurationRecord? {
-        delay(100)
         return mutex.withLock {
             val index = records.indexOfFirst { it.id == recordId }
             if (index < 0) return@withLock null

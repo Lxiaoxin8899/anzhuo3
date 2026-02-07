@@ -16,8 +16,13 @@ import com.example.smartdosing.database.converters.DatabaseConverters
 /**
  * SmartDosing应用的Room数据库主类
  *
- * 版本: 1
- * 包含表: recipes, materials, recipe_tags, templates, template_fields, import_logs
+ * 版本: 5
+ * 包含表: recipes, materials, recipe_tags, templates, template_fields,
+ *         import_logs, dosing_records, dosing_record_details,
+ *         authorized_senders, received_tasks
+ *
+ * 迁移策略：从 v5 起使用显式 Migration，禁止破坏性迁移。
+ * 历史版本（v1-v4）因无 Migration 定义，仍允许破坏性重建。
  */
 @Database(
     entities = [
@@ -54,6 +59,10 @@ abstract class SmartDosingDatabase : RoomDatabase() {
 
         /**
          * 获取数据库单例实例
+         *
+         * 迁移策略：
+         * - v1~v4 → v5：无历史 Migration，允许破坏性重建（fallbackToDestructiveMigrationFrom）
+         * - v5 → v6+：必须提供显式 Migration，保护用户数据
          */
         fun getDatabase(context: Context): SmartDosingDatabase {
             return INSTANCE ?: synchronized(this) {
@@ -63,14 +72,25 @@ abstract class SmartDosingDatabase : RoomDatabase() {
                     DATABASE_NAME
                 )
                 .addCallback(DatabaseCallback(context))
-                .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING) // 启用WAL模式
-                .fallbackToDestructiveMigration() // 开发阶段允许破坏性迁移
+                .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
+                // 仅允许从历史版本（v1-v4）破坏性升级到 v5
+                .fallbackToDestructiveMigrationFrom(1, 2, 3, 4)
+                // 未来新增版本时在此添加 Migration，例如：
+                // .addMigrations(MIGRATION_5_6)
                 .build()
 
                 INSTANCE = instance
                 instance
             }
         }
+
+        // === 迁移定义区 ===
+        // 未来版本升级时在此添加 Migration 对象，示例：
+        // val MIGRATION_5_6 = object : Migration(5, 6) {
+        //     override fun migrate(db: SupportSQLiteDatabase) {
+        //         db.execSQL("ALTER TABLE recipes ADD COLUMN new_field TEXT DEFAULT ''")
+        //     }
+        // }
 
         /**
          * 清除数据库实例（用于测试）

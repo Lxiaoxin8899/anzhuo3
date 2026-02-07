@@ -8,6 +8,7 @@ import com.example.smartdosing.database.entities.DosingRecordEntity
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlin.math.abs
+import java.util.UUID
 
 /**
  * 投料记录存储仓库
@@ -17,7 +18,7 @@ class DosingRecordRepository private constructor(context: Context) {
     private val database = SmartDosingDatabase.getDatabase(context)
     private val recordDao = database.dosingRecordDao()
     suspend fun saveRecord(request: DosingRecordSaveRequest) {
-        val recordId = "dosing_record_${System.currentTimeMillis()}"
+        val recordId = "dosing_record_${UUID.randomUUID()}"
         val totalActualWeight = request.details.sumOf { it.actualWeight }
         val overLimitCount = request.details.count { it.isOverLimit }
         val avgDeviationPercent = if (request.details.isEmpty()) {

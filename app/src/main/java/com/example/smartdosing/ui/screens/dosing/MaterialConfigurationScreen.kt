@@ -23,6 +23,9 @@ import androidx.compose.material.icons.filled.Science
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -94,19 +97,19 @@ fun MaterialConfigurationScreen(
     val isBluetoothConnected = if (isDemoMode) demoActive else connectionState == ConnectionState.CONNECTED
 
     // 活动行状态（当前正在接收蓝牙重量的行）
-    var activeRowIndex by remember { mutableStateOf<Int?>(null) }
+    var activeRowIndex by rememberSaveable { mutableStateOf<Int?>(null) }
 
     var recipe by remember { mutableStateOf<Recipe?>(null) }
-    var materialStates by remember { mutableStateOf<List<MaterialConfigState>>(emptyList()) }
-    var isLoading by remember { mutableStateOf(true) }
-    var loadError by remember { mutableStateOf<String?>(null) }
-    var customer by remember { mutableStateOf("") }
-    var salesOwner by remember { mutableStateOf("") }
-    var perfumer by remember { mutableStateOf("") }
-    var notes by remember { mutableStateOf("") }
-    var currentTaskId by remember { mutableStateOf(taskId) }
-    var currentRecordId by remember { mutableStateOf(recordId) }
-    var showTaskSelectionHint by remember { mutableStateOf(false) }
+    var materialStates by rememberSaveable(stateSaver = MaterialConfigStateListSaver) { mutableStateOf<List<MaterialConfigState>>(emptyList()) }
+    var isLoading by rememberSaveable { mutableStateOf(true) }
+    var loadError by rememberSaveable { mutableStateOf<String?>(null) }
+    var customer by rememberSaveable { mutableStateOf("") }
+    var salesOwner by rememberSaveable { mutableStateOf("") }
+    var perfumer by rememberSaveable { mutableStateOf("") }
+    var notes by rememberSaveable { mutableStateOf("") }
+    var currentTaskId by rememberSaveable { mutableStateOf(taskId) }
+    var currentRecordId by rememberSaveable { mutableStateOf(recordId) }
+    var showTaskSelectionHint by rememberSaveable { mutableStateOf(false) }
 
     fun resetMetaInfo() {
         customer = ""
@@ -133,8 +136,20 @@ fun MaterialConfigurationScreen(
         }
     }
 
-    // 加载配方数据
+    // 加载配方数据（仅在 materialStates 为空时加载，避免屏幕旋转后覆盖已保存的状态）
     LaunchedEffect(recipeId, taskId, recordId) {
+        // 如果已有材料状态数据，说明是屏幕旋转恢复，只需重新加载 recipe 对象（不重置 materialStates）
+        if (materialStates.isNotEmpty()) {
+            if (recipe == null) {
+                val normalizedId = recipeId?.takeIf { it.isNotBlank() && it != "quick_start" }
+                if (normalizedId != null) {
+                    recipe = repository.getRecipeById(normalizedId)
+                }
+            }
+            isLoading = false
+            return@LaunchedEffect
+        }
+
         isLoading = true
         loadError = null
         showTaskSelectionHint = false
@@ -272,7 +287,8 @@ fun MaterialConfigurationScreen(
         }
     }
 
-    // 独立的倒计时定时器，每秒检查一次是否应该自动确认
+    // 独立的倒计时定时器，每500ms检查一次是否应该自动确认
+    // 最大循环次数 = (自动确认延迟 + 安全余量) / 检查间隔，防止无限循环
     LaunchedEffect(pendingAutoConfirmIndex, stableStartTime) {
         val startTime = stableStartTime
         val targetIndex = pendingAutoConfirmIndex
@@ -281,8 +297,12 @@ fun MaterialConfigurationScreen(
             return@LaunchedEffect
         }
 
-        // 循环检测，每500ms检查一次条件
-        while (true) {
+        val maxIterations = ((autoConfirmDelayMs + 5000L) / 500).toInt()
+        var iteration = 0
+
+        // 有限次循环检测，每500ms检查一次条件
+        while (iteration < maxIterations) {
+            iteration++
             delay(500)
 
             // 检查是否已经过了足够的时间
@@ -392,6 +412,10 @@ fun MaterialConfigurationScreen(
             pendingAutoConfirmIndex = null
             return@LaunchedEffect
         }
+        // 循环结束仍未确认，超时清理
+        android.util.Log.w("AutoConfirm", "自动确认倒计时超时，重置状态")
+        stableStartTime = null
+        pendingAutoConfirmIndex = null
     }
 
     when {
@@ -496,6 +520,82 @@ data class MaterialConfigState(
     val actualWeight: String,
     val isConfirmed: Boolean,
     val hasError: Boolean
+)
+
+/**
+ * MaterialConfigState 的 Saver，用于屏幕旋转时保存状态
+ */
+val MaterialConfigStateSaver = listSaver<MaterialConfigState, Any>(
+    save = { state ->
+        listOf(
+            state.material.id,
+            state.material.name,
+            state.material.weight,
+            state.material.unit,
+            state.material.sequence,
+            state.material.notes,
+            state.material.code,
+            state.actualWeight,
+            state.isConfirmed,
+            state.hasError
+        )
+    },
+    restore = { list ->
+        MaterialConfigState(
+            material = DataMaterial(
+                id = list[0] as String,
+                name = list[1] as String,
+                weight = list[2] as Double,
+                unit = list[3] as String,
+                sequence = list[4] as Int,
+                notes = list[5] as String,
+                code = list[6] as String
+            ),
+            actualWeight = list[7] as String,
+            isConfirmed = list[8] as Boolean,
+            hasError = list[9] as Boolean
+        )
+    }
+)
+
+/**
+ * MaterialConfigState 列表的 Saver
+ */
+val MaterialConfigStateListSaver = Saver<List<MaterialConfigState>, ArrayList<ArrayList<Any>>>(
+    save = { states ->
+        ArrayList(states.map { state ->
+            arrayListOf(
+                state.material.id,
+                state.material.name,
+                state.material.weight,
+                state.material.unit,
+                state.material.sequence,
+                state.material.notes,
+                state.material.code,
+                state.actualWeight,
+                state.isConfirmed,
+                state.hasError
+            )
+        })
+    },
+    restore = { lists ->
+        lists.map { list ->
+            MaterialConfigState(
+                material = DataMaterial(
+                    id = list[0] as String,
+                    name = list[1] as String,
+                    weight = list[2] as Double,
+                    unit = list[3] as String,
+                    sequence = list[4] as Int,
+                    notes = list[5] as String,
+                    code = list[6] as String
+                ),
+                actualWeight = list[7] as String,
+                isConfirmed = list[8] as Boolean,
+                hasError = list[9] as Boolean
+            )
+        }
+    }
 )
 
 /**
@@ -921,6 +1021,7 @@ private fun RecipeHeader(
 /**
  * 单个材料配置项 - 支持展开/收缩模式
  * 活动行展开显示大号重量和按钮，非活动行紧凑显示
+ * 支持蓝牙模式自动展开和手动模式点击展开
  */
 @Composable
 private fun MaterialConfigCard(
@@ -938,8 +1039,9 @@ private fun MaterialConfigCard(
     autoConfirmProgress: Float = 0f // 0-1 进度
 ) {
     val isConfirmed = state.isConfirmed
-    // 是否展开：活动行且蓝牙连接且未确认时展开
-    val isExpanded = isActive && isBluetoothConnected && !isConfirmed
+
+    // 是否展开：活动行且未确认时自动展开（无论蓝牙是否连接）
+    val isExpanded = isActive && !isConfirmed
 
     // 背景色
     val backgroundColor by animateColorAsState(
@@ -1035,39 +1137,114 @@ private fun MaterialConfigCard(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // 中间：大号重量显示
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    color = Color(0xFFBBDEFB),
-                    shape = RoundedCornerShape(12.dp),
-                    border = BorderStroke(2.dp, Color(0xFF1976D2))
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
+                // 中间：重量显示/输入区域（根据蓝牙连接状态显示不同内容）
+                if (isBluetoothConnected) {
+                    // 蓝牙模式：显示蓝牙读取的重量
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = Color(0xFFBBDEFB),
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(2.dp, Color(0xFF1976D2))
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Bluetooth,
-                            contentDescription = null,
-                            tint = Color(0xFF1976D2),
-                            modifier = Modifier.size(28.dp)
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text(
-                            text = state.actualWeight.ifBlank { "0.000" },
-                            style = MaterialTheme.typography.displaySmall,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF0D47A1)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "g",
-                            style = MaterialTheme.typography.titleLarge,
-                            color = Color(0xFF1976D2)
-                        )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Bluetooth,
+                                contentDescription = null,
+                                tint = Color(0xFF1976D2),
+                                modifier = Modifier.size(28.dp)
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(
+                                text = state.actualWeight.ifBlank { "0.000" },
+                                style = MaterialTheme.typography.displaySmall,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF0D47A1)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "g",
+                                style = MaterialTheme.typography.titleLarge,
+                                color = Color(0xFF1976D2)
+                            )
+                        }
+                    }
+                } else {
+                    // 手动模式：显示大号输入框
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = Color(0xFFFFF8E1),
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(2.dp, Color(0xFFFFA000))
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            // 手动输入提示
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Edit,
+                                    contentDescription = null,
+                                    tint = Color(0xFFF57C00),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "手动输入重量",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = Color(0xFFF57C00)
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(12.dp))
+                            // 大号输入框
+                            OutlinedTextField(
+                                value = state.actualWeight,
+                                onValueChange = onWeightChanged,
+                                placeholder = {
+                                    Text(
+                                        "0.000",
+                                        style = MaterialTheme.typography.displaySmall,
+                                        color = Color(0xFFBDBDBD)
+                                    )
+                                },
+                                singleLine = true,
+                                textStyle = MaterialTheme.typography.displaySmall.copy(
+                                    textAlign = TextAlign.Center,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFE65100)
+                                ),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(80.dp),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                isError = state.hasError,
+                                shape = RoundedCornerShape(12.dp),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = Color(0xFFFFA000),
+                                    unfocusedBorderColor = Color(0xFFFFCC80),
+                                    focusedContainerColor = Color.White,
+                                    unfocusedContainerColor = Color.White
+                                ),
+                                suffix = {
+                                    Text(
+                                        text = "g",
+                                        style = MaterialTheme.typography.titleLarge,
+                                        color = Color(0xFFF57C00)
+                                    )
+                                }
+                            )
+                        }
                     }
                 }
 
@@ -1128,12 +1305,15 @@ private fun MaterialConfigCard(
             }
         }
     } else {
-        // 紧凑模式 - 单行
+        // 紧凑模式 - 单行（非活动行或已确认行）
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(backgroundColor)
-                .clickable(enabled = !isConfirmed) { onRowClick() }
+                .clickable(enabled = !isConfirmed) {
+                    // 点击行时调用行点击回调（切换活动行）
+                    onRowClick()
+                }
                 .animateContentSize()
         ) {
             Row(
@@ -1159,13 +1339,18 @@ private fun MaterialConfigCard(
 
                 // 物料信息
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = state.material.name,
-                        style = MaterialTheme.typography.bodySmall,
-                        fontWeight = FontWeight.Medium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = state.material.name,
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(
                             text = state.material.code.ifBlank { "-" },
