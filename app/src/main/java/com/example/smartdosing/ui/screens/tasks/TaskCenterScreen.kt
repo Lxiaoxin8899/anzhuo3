@@ -56,6 +56,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -64,6 +65,7 @@ import androidx.compose.ui.unit.sp
 import com.example.smartdosing.data.ConfigurationTask
 import com.example.smartdosing.data.TaskPriority
 import com.example.smartdosing.data.TaskStatus
+import com.example.smartdosing.data.device.DeviceUIDManager
 import com.example.smartdosing.data.repository.ConfigurationRepositoryProvider
 import kotlinx.coroutines.launch
 import com.example.smartdosing.ui.theme.LocalWindowSize
@@ -83,6 +85,7 @@ fun TaskCenterScreen(
     onConfigureTask: (ConfigurationTask) -> Unit = {},
     refreshSignal: Int = 0
 ) {
+    val context = LocalContext.current
     val repository = remember { ConfigurationRepositoryProvider.taskRepository }
     val windowSize = LocalWindowSize.current
     val isCompactWidth = windowSize.widthClass == SmartDosingWindowWidthClass.Compact
@@ -99,9 +102,11 @@ fun TaskCenterScreen(
     // Snackbar状态
     var snackbarMessage by remember { mutableStateOf<String?>(null) }
     var showSnackbar by remember { mutableStateOf(false) }
-    
-    // 获取当前用户（这里暂时硬编码，实际应该从用户session获取）
-    val currentUser = "操作员" // TODO: 从实际的用户session或preferences获取
+
+    // 优先使用设备名作为操作员标识，避免硬编码导致审计信息失真。
+    val currentUser = remember {
+        DeviceUIDManager.getDeviceIdentity(context).deviceName.ifBlank { "本机操作员" }
+    }
 
     fun refreshTasks() {
         scope.launch {
@@ -128,11 +133,9 @@ fun TaskCenterScreen(
     }
 
     val displayedTasks = remember(selectedStatus, tasks) {
-        selectedStatus?.let { status -> 
-            tasks.filter { it.status == status } 
-        } ?: tasks.filter { 
-            it.status != TaskStatus.COMPLETED && it.status != TaskStatus.CANCELLED 
-        }
+        selectedStatus?.let { status ->
+            tasks.filter { it.status == status }
+        } ?: tasks
     }
 
     Scaffold(
@@ -200,8 +203,8 @@ fun TaskCenterScreen(
                                 },
                                 onStart = {
                                     scope.launch {
-                                        // 标记为已完成
-                                        val newStatus = TaskStatus.COMPLETED
+                                        // 开始配置仅进入进行中，避免误写为“已完成”。
+                                        val newStatus = TaskStatus.IN_PROGRESS
                                         repository.updateTaskStatus(task.id, newStatus)
                                         
                                         // 手动更新本地列表，使其立即生效
@@ -654,8 +657,6 @@ private fun TaskCard(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            val isAccepted = task.status != TaskStatus.DRAFT && task.status != TaskStatus.READY
-            
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -663,7 +664,7 @@ private fun TaskCard(
             ) {
                 PriorityTag(priority = task.priority)
                 Text(
-                    text = if (isAccepted) task.title.ifBlank { task.recipeName } else "待接单任务",
+                    text = task.title.ifBlank { task.recipeName },
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.weight(1f),
@@ -683,17 +684,17 @@ private fun TaskCard(
             ) {
                 InfoRow(
                     title = "编码",
-                    value = if (isAccepted) task.recipeCode else "***",
-                    secondary = if (isAccepted) "数量 ${task.quantity} ${task.unit}" else "数量 ***"
+                    value = task.recipeCode,
+                    secondary = "数量 ${task.quantity} ${task.unit}"
                 )
                 InfoRow(
                     title = "调香师",
-                    value = if (isAccepted) (task.perfumer.ifBlank { task.requestedBy.ifBlank { "未指定" } }) else "***",
-                    secondary = if (isAccepted) "客户 ${task.customer.ifBlank { "未指定" }}" else "客户 ***"
+                    value = task.perfumer.ifBlank { task.requestedBy.ifBlank { "未指定" } },
+                    secondary = "客户 ${task.customer.ifBlank { "未指定" }}"
                 )
                 InfoRow(
                     title = "业务员",
-                    value = if (isAccepted) task.salesOwner.ifBlank { "未指定" } else "***",
+                    value = task.salesOwner.ifBlank { "未指定" },
                     secondary = "截止 ${task.deadline.ifBlank { "待安排" }}"
                 )
             }

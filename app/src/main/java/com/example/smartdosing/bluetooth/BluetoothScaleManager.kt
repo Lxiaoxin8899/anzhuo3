@@ -1,7 +1,10 @@
 package com.example.smartdosing.bluetooth
 
+import android.Manifest
 import android.bluetooth.BluetoothDevice
 import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -9,6 +12,7 @@ import cn.wch.ch9140lib.CH9140BluetoothManager
 import cn.wch.ch9140lib.callback.ConnectStatus
 import cn.wch.ch9140lib.callback.EnumResult
 import cn.wch.ch9140lib.exception.CH9140LibException
+import androidx.core.content.ContextCompat
 import com.example.smartdosing.bluetooth.model.ConnectionState
 import com.example.smartdosing.bluetooth.model.ScaleDevice
 import com.example.smartdosing.bluetooth.model.WeightData
@@ -131,6 +135,14 @@ class BluetoothScaleManager(private val context: Context) {
         }
     }
 
+    private fun hasScanPermissionForSdk(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED
+        } else {
+            ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        }
+    }
+
     private fun handleConnectFailure(mac: String?, errorMsg: String) {
         if (mac != null && retryCount < MAX_RETRY_COUNT) {
             retryCount++
@@ -148,9 +160,14 @@ class BluetoothScaleManager(private val context: Context) {
     }
 
     fun startScan() {
-        if (!BluetoothPermissionHelper.hasAllPermissions(context)) {
-            Log.e(TAG, "缺少蓝牙权限")
-            _errorMessage.value = "请授予蓝牙权限"
+        // 显式权限判断：让 lint 能识别，同时避免运行时因权限被拒而崩溃
+        if (!hasScanPermissionForSdk()) {
+            Log.e(TAG, "缺少扫描权限")
+            _errorMessage.value = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                "请授予蓝牙扫描权限"
+            } else {
+                "请授予定位权限以进行蓝牙扫描"
+            }
             return
         }
         try {
@@ -159,6 +176,11 @@ class BluetoothScaleManager(private val context: Context) {
             deviceMap.clear()
             _scannedDevices.value = emptyList()
             CH9140BluetoothManager.getInstance().startEnumDevices(enumResult)
+        } catch (e: SecurityException) {
+            // 部分 ROM/设备会在权限被用户拒绝时抛出 SecurityException
+            Log.e(TAG, "扫描需要权限", e)
+            _connectionState.value = ConnectionState.ERROR
+            _errorMessage.value = "扫描需要权限"
         } catch (e: CH9140LibException) {
             Log.e(TAG, "扫描失败", e)
             _connectionState.value = ConnectionState.ERROR

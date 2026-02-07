@@ -68,11 +68,11 @@ import com.example.smartdosing.data.DosingRecordStatus
 import com.example.smartdosing.data.RecipeStats
 import com.example.smartdosing.data.TaskStatus
 import com.example.smartdosing.data.repository.ConfigurationRepositoryProvider
-import com.example.smartdosing.data.device.DeviceUIDManager
+import com.example.smartdosing.tts.TTSManagerFactory
 import com.example.smartdosing.ui.theme.LocalWindowSize
 import com.example.smartdosing.ui.theme.SmartDosingTheme
 import com.example.smartdosing.ui.theme.SmartDosingWindowWidthClass
-import kotlinx.coroutines.launch
+import com.example.smartdosing.web.WebService
 
 /**
  * SmartDosing 首页，包含自适应的大屏/小屏布局
@@ -92,7 +92,6 @@ fun HomeScreen(
     val windowSize = LocalWindowSize.current
     val isLargeScreen = windowSize.widthClass == SmartDosingWindowWidthClass.Expanded
     val isCompactDevice = windowSize.widthClass == SmartDosingWindowWidthClass.Compact
-    val scope = rememberCoroutineScope()
 
     // 加载实际数据
     val repository = remember { DatabaseRecipeRepository.getInstance(context) }
@@ -106,9 +105,20 @@ fun HomeScreen(
     var recentOperations by remember { mutableStateOf<List<RecentOperation>>(emptyList()) }
     var isRecentLoading by remember { mutableStateOf(true) }
 
+    val webService = remember { WebService.getInstance(context) }
+    var runtimeStatus by remember {
+        mutableStateOf(
+            HomeRuntimeStatus(
+                isWirelessRunning = webService.isServiceRunning(),
+                wirelessAddress = webService.getDeviceInfo().serverUrl ?: "未连接网络",
+                ttsStatus = "语音服务检测中",
+                ttsHint = "将根据设备能力自动选择语音引擎"
+            )
+        )
+    }
+
     // 加载统计数据
     LaunchedEffect(Unit) {
-        scope.launch {
             try {
                 recipeStats = repository.getRecipeStats()
                 val tasks = taskRepository.fetchTasks()
@@ -130,6 +140,25 @@ fun HomeScreen(
                 isLoading = false
                 isRecentLoading = false
             }
+    }
+
+    // 轮询无线传输与语音状态，保证首页显示实时运行情况
+    LaunchedEffect(Unit) {
+        while (true) {
+            val deviceInfo = webService.getDeviceInfo()
+            val ttsAvailable = TTSManagerFactory.isTTSAvailable()
+            val ttsTypeLabel = when (TTSManagerFactory.getCurrentTTSType()) {
+                TTSManagerFactory.TTSType.XIAOMI_TTS -> "小米 TTS"
+                TTSManagerFactory.TTSType.FALLBACK_TTS -> "系统 TTS"
+                TTSManagerFactory.TTSType.NONE -> "未启用 TTS"
+            }
+            runtimeStatus = HomeRuntimeStatus(
+                isWirelessRunning = deviceInfo.isServerRunning,
+                wirelessAddress = deviceInfo.serverUrl ?: "未连接网络",
+                ttsStatus = if (ttsAvailable) "$ttsTypeLabel · 可用" else "语音服务不可用",
+                ttsHint = if (ttsAvailable) "可在设置页执行语音自检" else "请检查语音组件安装与权限"
+            )
+            kotlinx.coroutines.delay(3000)
         }
     }
 
@@ -197,7 +226,8 @@ fun HomeScreen(
             onNavigateToConfigurationRecords = onNavigateToConfigurationRecords,
             onNavigateToDeviceInfo = onNavigateToDeviceInfo,
             recentOperations = recentOperations,
-            isRecentLoading = isRecentLoading
+            isRecentLoading = isRecentLoading,
+            runtimeStatus = runtimeStatus
         )
     } else {
         CompactHomeLayout(
@@ -210,7 +240,8 @@ fun HomeScreen(
             onNavigateToDeviceInfo = onNavigateToDeviceInfo,
             isCompactDevice = isCompactDevice,
             recentOperations = recentOperations,
-            isRecentLoading = isRecentLoading
+            isRecentLoading = isRecentLoading,
+            runtimeStatus = runtimeStatus
         )
     }
 }
@@ -232,6 +263,13 @@ private data class DashboardCardInfo(
     val color: Color
 )
 
+private data class HomeRuntimeStatus(
+    val isWirelessRunning: Boolean = false,
+    val wirelessAddress: String = "未连接网络",
+    val ttsStatus: String = "语音服务检测中",
+    val ttsHint: String = "将根据设备能力自动选择语音引擎"
+)
+
 /**
  * ≥900dp 宽度的布局，内容区域占满屏幕，不再嵌套额外的 NavigationRail
  */
@@ -245,7 +283,8 @@ private fun LargeScreenHomeLayout(
     onNavigateToConfigurationRecords: () -> Unit,
     onNavigateToDeviceInfo: () -> Unit,
     recentOperations: List<RecentOperation>,
-    isRecentLoading: Boolean
+    isRecentLoading: Boolean,
+    runtimeStatus: HomeRuntimeStatus
 ) {
     val scrollState = rememberScrollState()
     Column(
@@ -265,10 +304,12 @@ private fun LargeScreenHomeLayout(
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             SystemStatusCard(
-                modifier = Modifier.weight(2f)
+                modifier = Modifier.weight(2f),
+                runtimeStatus = runtimeStatus
             )
             QuickInfoColumn(
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
+                runtimeStatus = runtimeStatus
             )
         }
         HomeActionGrid(actions = actionCards)
@@ -327,7 +368,8 @@ private fun CompactHomeLayout(
     onNavigateToDeviceInfo: () -> Unit,
     isCompactDevice: Boolean,
     recentOperations: List<RecentOperation>,
-    isRecentLoading: Boolean
+    isRecentLoading: Boolean,
+    runtimeStatus: HomeRuntimeStatus
 ) {
     val scrollState = rememberScrollState()
     val horizontalPadding = if (isCompactDevice) 16.dp else 24.dp
@@ -344,8 +386,8 @@ private fun CompactHomeLayout(
         // 数据概览卡片
         DashboardOverview(stats = stats, isLoading = isLoading)
 
-        SystemStatusCard(isCompact = isCompactDevice)
-        QuickInfoColumn(isCompact = isCompactDevice)
+        SystemStatusCard(isCompact = isCompactDevice, runtimeStatus = runtimeStatus)
+        QuickInfoColumn(isCompact = isCompactDevice, runtimeStatus = runtimeStatus)
         HomeActionGrid(actions = actionCards)
         RecentOperationsPanel(
             operations = recentOperations,
@@ -591,9 +633,28 @@ private fun DashboardStatCard(
 @Composable
 private fun SystemStatusCard(
     modifier: Modifier = Modifier,
-    isCompact: Boolean = false
+    isCompact: Boolean = false,
+    runtimeStatus: HomeRuntimeStatus
 ) {
     val cardPadding = if (isCompact) 20.dp else 24.dp
+    val statusTitle = if (runtimeStatus.isWirelessRunning) {
+        "无线传输服务运行中"
+    } else {
+        "无线传输服务未启动"
+    }
+    val statusDescription = if (runtimeStatus.isWirelessRunning) {
+        "可通过局域网进行无线数据传输"
+    } else {
+        "请在设置中开启自动启动或手动启动服务"
+    }
+    val runningChipText = if (runtimeStatus.isWirelessRunning) "传输状态：已启动" else "传输状态：未启动"
+    val runningChipColor = if (runtimeStatus.isWirelessRunning) {
+        MaterialTheme.colorScheme.primary
+    } else {
+        MaterialTheme.colorScheme.error
+    }
+    val wirelessAddressText = runtimeStatus.wirelessAddress.ifBlank { "未连接网络" }
+
     Card(
         modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
@@ -617,13 +678,13 @@ private fun SystemStatusCard(
                 )
                 Column {
                     Text(
-                        text = "系统正常 · 可以开始投料",
+                        text = statusTitle,
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSecondaryContainer
                     )
                     Text(
-                        text = "最近一次自检：09:30，所有服务在线",
+                        text = statusDescription,
                         color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.9f)
                     )
                 }
@@ -632,29 +693,22 @@ private fun SystemStatusCard(
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                StatusChip(text = "批次：S001-上午班", color = MaterialTheme.colorScheme.primary)
-                StatusChip(text = "Web 服务运行中", color = MaterialTheme.colorScheme.tertiary)
+                StatusChip(text = runningChipText, color = runningChipColor)
+                StatusChip(text = "地址：$wirelessAddressText", color = MaterialTheme.colorScheme.tertiary)
             }
         }
     }
 }
 
 /**
- * Web 后台、语音播报状态
+ * 无线传输状态、语音播报状态
  */
 @Composable
 private fun QuickInfoColumn(
     modifier: Modifier = Modifier,
-    isCompact: Boolean = false
+    isCompact: Boolean = false,
+    runtimeStatus: HomeRuntimeStatus
 ) {
-    val context = LocalContext.current
-    // 动态获取设备信息
-    val deviceIdentity = remember { DeviceUIDManager.getDeviceIdentity(context) }
-    val webAddress = deviceIdentity.ipAddress?.let {
-        "http://$it:${deviceIdentity.port}"
-    } ?: "未连接网络"
-    val isConnected = deviceIdentity.ipAddress != null
-
     val spacing = if (isCompact) 8.dp else 12.dp
 
     Column(
@@ -662,16 +716,16 @@ private fun QuickInfoColumn(
         verticalArrangement = Arrangement.spacedBy(spacing)
     ) {
         InfoCard(
-            title = "Web 管理后台",
-            content = webAddress,
+            title = "无线传输服务",
+            content = runtimeStatus.wirelessAddress,
             icon = Icons.Default.Cloud,
-            hint = if (isConnected) "已启动 · 支持局域网访问" else "请连接 WiFi 网络"
+            hint = if (runtimeStatus.isWirelessRunning) "已启动 · 支持局域网无线传输" else "未启动 · 请在设置页开启服务"
         )
         InfoCard(
             title = "语音播报",
-            content = "Xiaomi TTS · 在线",
+            content = runtimeStatus.ttsStatus,
             icon = Icons.Default.SpeakerPhone,
-            hint = "播报速率：1.0 · 中文女声"
+            hint = runtimeStatus.ttsHint
         )
     }
 }

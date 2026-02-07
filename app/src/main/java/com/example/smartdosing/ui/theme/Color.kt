@@ -2,19 +2,19 @@ package com.example.smartdosing.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Industrial Color Palette
-val IndustrialBlue = Color(0xFF1976D2)
-val IndustrialBlueLight = Color(0xFF63A4FF)
-val IndustrialBlueDark = Color(0xFF004BA0)
+// Lab Color Palette
+val LabBlue = Color(0xFF1976D2)
+val LabBlueLight = Color(0xFF63A4FF)
+val LabBlueDark = Color(0xFF004BA0)
 
-val IndustrialGreen = Color(0xFF4CAF50)
-val IndustrialOrange = Color(0xFFFF9800)
-val IndustrialPurple = Color(0xFF9C27B0)
-val IndustrialRed = Color(0xFFD32F2F)
+val LabGreen = Color(0xFF4CAF50)
+val LabOrange = Color(0xFFFF9800)
+val LabPurple = Color(0xFF9C27B0)
+val LabRed = Color(0xFFD32F2F)
 
-val IndustrialBackground = Color(0xFFF0F2F5)
-val IndustrialSurface = Color(0xFFFFFFFF)
-val IndustrialSurfaceVariant = Color(0xFFF5F5F5)
+val LabBackground = Color(0xFFF0F2F5)
+val LabSurface = Color(0xFFFFFFFF)
+val LabSurfaceVariant = Color(0xFFF5F5F5)
 
 
 

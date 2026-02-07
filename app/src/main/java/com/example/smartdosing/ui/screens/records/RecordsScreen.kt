@@ -197,10 +197,9 @@ fun RecordsScreen(
                         )
                     ) {
                         Text("重试")
-    }
-}
-
-}
+                    }
+                }
+            }
 
             Spacer(modifier = Modifier.height(16.dp))
         }
@@ -814,8 +813,8 @@ fun CompactStatItem(
 @Composable
 fun StatusChip(status: DosingRecordStatus) {
     val (label, backgroundColor, textColor) = when (status) {
-        DosingRecordStatus.COMPLETED -> Triple("完成", IndustrialGreen.copy(alpha = 0.1f), IndustrialGreen)
-        DosingRecordStatus.ABORTED -> Triple("异常", IndustrialRed.copy(alpha = 0.1f), IndustrialRed)
+        DosingRecordStatus.COMPLETED -> Triple("完成", LabGreen.copy(alpha = 0.1f), LabGreen)
+        DosingRecordStatus.ABORTED -> Triple("异常", LabRed.copy(alpha = 0.1f), LabRed)
     }
 
     Card(

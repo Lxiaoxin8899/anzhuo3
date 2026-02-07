@@ -27,7 +27,7 @@ import com.example.smartdosing.web.WebServiceResult
 import kotlinx.coroutines.launch
 
 /**
- * Web服务设置页面 - 包含Web服务管理
+ * 无线传输服务设置页面 - 包含无线传输服务管理
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -46,8 +46,8 @@ fun WebServiceSettingsScreen(
     var statusMessage by remember { mutableStateOf("") }
 
     // 设置状态
-    var webPort by remember { mutableStateOf(8080) }
-    var autoStart by remember { mutableStateOf(true) }
+    var webPort by remember { mutableStateOf(webService.getPreferredPort()) }
+    var autoStart by remember { mutableStateOf(webService.isAutoStartEnabled()) }
     var showAdvanced by remember { mutableStateOf(false) }
 
     // 加载设备信息
@@ -56,7 +56,8 @@ fun WebServiceSettingsScreen(
         isServerRunning = deviceInfo.isServerRunning
         serverUrl = deviceInfo.serverUrl
         deviceIP = deviceInfo.ipAddress
-        webPort = deviceInfo.port
+        webPort = webService.getPreferredPort()
+        autoStart = webService.isAutoStartEnabled()
     }
 
     Column(
@@ -69,7 +70,7 @@ fun WebServiceSettingsScreen(
         // 页面标题
         SettingsHeader()
 
-        // Web服务控制
+        // 无线传输服务控制
         WebServiceControlCard(
             isServerRunning = isServerRunning,
             serverUrl = serverUrl,
@@ -82,20 +83,21 @@ fun WebServiceSettingsScreen(
                         val success = webService.stopWebService()
                         isServerRunning = false
                         serverUrl = null
-                        statusMessage = if (success) "Web服务已停止" else "停止服务失败"
+                        statusMessage = if (success) "无线传输服务已停止" else "停止服务失败"
                     } else {
                         // 启动服务
+                        webService.setPreferredPort(webPort)
                         when (val result = webService.startWebService(webPort)) {
                             is WebServiceResult.Success -> {
                                 isServerRunning = true
                                 serverUrl = result.serverUrl
                                 deviceIP = result.ipAddress
-                                statusMessage = "Web服务启动成功"
+                                statusMessage = "无线传输服务启动成功"
                             }
                             is WebServiceResult.AlreadyRunning -> {
                                 isServerRunning = true
                                 serverUrl = result.serverUrl
-                                statusMessage = "Web服务已在运行中"
+                                statusMessage = "无线传输服务已在运行中"
                             }
                             is WebServiceResult.NetworkError -> {
                                 statusMessage = result.message
@@ -110,22 +112,30 @@ fun WebServiceSettingsScreen(
             onCopyUrl = {
                 serverUrl?.let { url ->
                     clipboardManager.setText(AnnotatedString(url))
-                    statusMessage = "URL已复制到剪贴板"
+                    statusMessage = "无线传输地址已复制到剪贴板"
                 }
             }
         )
 
-        // Web服务配置
+        // 无线传输服务配置
         WebServiceConfigCard(
             webPort = webPort,
             autoStart = autoStart,
             showAdvanced = showAdvanced,
-            onPortChange = { webPort = it },
-            onAutoStartChange = { autoStart = it },
+            onPortChange = {
+                webPort = it
+                webService.setPreferredPort(it)
+            },
+            onAutoStartChange = {
+                autoStart = it
+                webService.setAutoStartEnabled(it)
+                statusMessage = if (it) "已启用自动启动无线传输服务" else "已关闭自动启动无线传输服务"
+            },
             onShowAdvancedChange = { showAdvanced = it },
             onRestartService = {
                 scope.launch {
-                    statusMessage = "正在重启服务..."
+                    statusMessage = "正在重启无线传输服务..."
+                    webService.setPreferredPort(webPort)
                     when (val result = webService.restartWebService(webPort)) {
                         is WebServiceResult.Success -> {
                             isServerRunning = true
@@ -163,7 +173,7 @@ fun SettingsHeader() {
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = "管理Web服务和应用配置",
+            text = "管理无线传输服务和应用配置",
             fontSize = 16.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -171,7 +181,7 @@ fun SettingsHeader() {
 }
 
 /**
- * Web服务控制卡片
+ * 无线传输服务控制卡片
  */
 @Composable
 fun WebServiceControlCard(
@@ -198,7 +208,7 @@ fun WebServiceControlCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Web管理后台",
+                    text = "无线传输服务",
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
@@ -317,7 +327,7 @@ fun ServiceStatusInfo(
 
         if (isServerRunning && serverUrl != null) {
             InfoRow(
-                label = "访问地址",
+                label = "无线传输地址",
                 value = serverUrl,
                 icon = Icons.Default.Home
             )
@@ -342,7 +352,7 @@ fun ServiceStatusInfo(
 }
 
 /**
- * Web服务配置卡片
+ * 无线传输服务配置卡片
  */
 @Composable
 fun WebServiceConfigCard(
@@ -375,7 +385,7 @@ fun WebServiceConfigCard(
             // 端口设置
             SettingRow(
                 title = "服务端口",
-                subtitle = "Web服务器监听端口号",
+                subtitle = "无线传输服务器监听端口号",
                 icon = Icons.Default.Settings
             ) {
                 OutlinedTextField(
@@ -396,7 +406,7 @@ fun WebServiceConfigCard(
             // 自动启动
             SettingRow(
                 title = "自动启动",
-                subtitle = "应用启动时自动开启Web服务",
+                subtitle = "应用启动时自动开启无线传输服务",
                 icon = Icons.Default.PlayArrow
             ) {
                 Switch(
@@ -434,7 +444,7 @@ fun WebServiceConfigCard(
                         modifier = Modifier.size(20.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("重启Web服务")
+                    Text("重启无线传输服务")
                 }
             }
         }

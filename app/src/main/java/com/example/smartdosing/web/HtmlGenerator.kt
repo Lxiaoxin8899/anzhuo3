@@ -606,7 +606,7 @@ fun HEAD.generateCommonHead() {
     }
     meta {
         name = "description"
-        content = "SmartDosing智能投料系统管理后台"
+        content = "SmartDosing 无线传输服务"
     }
 
     // 引入样式

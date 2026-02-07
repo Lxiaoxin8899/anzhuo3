@@ -1,61 +1,356 @@
-﻿> Task :app:preBuild UP-TO-DATE
-> Task :app:preDebugBuild UP-TO-DATE
-> Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
+﻿Initialized native services in: C:\Users\Administrator\.gradle\native
+Initialized jansi services in: C:\Users\Administrator\.gradle\native
+Found daemon DaemonInfo{pid=92412, address=[da474aba-2a87-49a0-8e49-209618c11bde port:11987, addresses:[/127.0.0.1]], state=Idle, lastBusy=1767272754845, context=DefaultDaemonContext[uid=1a229f1e-bb38-471f-a718-b37cb2e724c3,javaHome=D:\Android\Android Studio\jbr,javaVersion=21,javaVendor=JetBrains s.r.o.,daemonRegistryDir=C:\Users\Administrator\.gradle\daemon,pid=92412,idleTimeout=10800000,priority=NORMAL,applyInstrumentationAgent=true,nativeServicesMode=ENABLED,daemonOpts=-Xmx2048m,-Dfile.encoding=UTF-8,-Duser.country=CN,-Duser.language=zh,-Duser.variant]} however its context does not match the desired criteria.
+JVM is incompatible.
+Wanted: DaemonRequestContext{jvmCriteria=C:\Program Files\Java\jdk-21 (no JDK specified, using current Java home), daemonOpts=[-Xmx2048m, -Dfile.encoding=UTF-8, -Duser.country=CN, -Duser.language=zh, -Duser.variant], applyInstrumentationAgent=true, nativeServicesMode=ENABLED, priority=NORMAL}
+Actual: DefaultDaemonContext[uid=1a229f1e-bb38-471f-a718-b37cb2e724c3,javaHome=D:\Android\Android Studio\jbr,javaVersion=21,javaVendor=JetBrains s.r.o.,daemonRegistryDir=C:\Users\Administrator\.gradle\daemon,pid=92412,idleTimeout=10800000,priority=NORMAL,applyInstrumentationAgent=true,nativeServicesMode=ENABLED,daemonOpts=-Xmx2048m,-Dfile.encoding=UTF-8,-Duser.country=CN,-Duser.language=zh,-Duser.variant]
+
+  Looking for a different daemon...
+The client will now receive all logging from the daemon (pid: 8932). The daemon log file: C:\Users\Administrator\.gradle\daemon\8.13\daemon-8932.out.log
+Starting 5th build in daemon [uptime: 3 mins 19.035 secs, performance: 100%, GC rate: 0.00/s, heap usage: 0% of 2 GiB]
+Using 24 worker leases.
+Now considering [E:\daima-ck\anzhuo3] as hierarchies to watch
+Watching the file system is configured to be enabled if available
+File system watching is active
+Starting Build
+Settings evaluated using settings file 'E:\daima-ck\anzhuo3\settings.gradle.kts'.
+Projects loaded. Root project using build file 'E:\daima-ck\anzhuo3\build.gradle.kts'.
+Included projects: [root project 'SmartDosing', project ':app']
+
+> Configure project :
+Evaluating root project 'SmartDosing' using build file 'E:\daima-ck\anzhuo3\build.gradle.kts'.
+Resolved plugin [id: 'com.android.application', version: '8.13.1', apply: false]
+Resolved plugin [id: 'org.jetbrains.kotlin.android', version: '1.9.24', apply: false]
+
+> Configure project :app
+Evaluating project ':app' using build file 'E:\daima-ck\anzhuo3\app\build.gradle.kts'.
+Resolved plugin [id: 'com.android.application', version: '8.13.1']
+Resolved plugin [id: 'org.jetbrains.kotlin.android', version: '1.9.24']
+Resolved plugin [id: 'org.jetbrains.kotlin.kapt']
+Using default execution profile
+Using Kotlin Gradle Plugin gradle82 variant
+All projects evaluated.
+Task name matched 'compileDebugKotlin'
+Selected primary task 'compileDebugKotlin' from project :
+Tasks to be executed: [task ':app:checkKotlinGradlePluginConfigurationErrors', task ':app:preBuild', task ':app:preDebugBuild', task ':app:checkDebugAarMetadata', task ':app:processDebugNavigationResources', task ':app:compileDebugNavigationResources', task ':app:generateDebugResValues', task ':app:mapDebugSourceSetPaths', task ':app:generateDebugResources', task ':app:mergeDebugResources', task ':app:packageDebugResources', task ':app:parseDebugLocalResources', task ':app:createDebugCompatibleScreenManifests', task ':app:extractDeepLinksDebug', task ':app:processDebugMainManifest', task ':app:processDebugManifest', task ':app:processDebugManifestForPackage', task ':app:processDebugResources', task ':app:kaptGenerateStubsDebugKotlin', task ':app:kaptDebugKotlin', task ':app:compileDebugKotlin']
+Tasks that were excluded: []
+Resolve mutations for :app:checkKotlinGradlePluginConfigurationErrors (Thread[#927,Execution worker,5,main]) started.
+:app:checkKotlinGradlePluginConfigurationErrors (Thread[#936,Execution worker Thread 10,5,main]) started.
+
 > Task :app:checkKotlinGradlePluginConfigurationErrors
+Caching disabled for task ':app:checkKotlinGradlePluginConfigurationErrors' because:
+  Build cache is disabled
+Task ':app:checkKotlinGradlePluginConfigurationErrors' is not up-to-date because:
+  Task has not declared any outputs despite executing actions.
+Resolve mutations for :app:preBuild (Thread[#936,Execution worker Thread 10,5,main]) started.
+:app:preBuild (Thread[#936,Execution worker Thread 10,5,main]) started.
+
+> Task :app:preBuild UP-TO-DATE
+Skipping task ':app:preBuild' as it has no actions.
+Resolve mutations for :app:preDebugBuild (Thread[#936,Execution worker Thread 10,5,main]) started.
+:app:preDebugBuild (Thread[#933,Execution worker Thread 7,5,main]) started.
+
+> Task :app:preDebugBuild UP-TO-DATE
+Skipping task ':app:preDebugBuild' as it has no actions.
+Resolve mutations for :app:checkDebugAarMetadata (Thread[#933,Execution worker Thread 7,5,main]) started.
+:app:checkDebugAarMetadata (Thread[#931,Execution worker Thread 5,5,main]) started.
+
 > Task :app:checkDebugAarMetadata UP-TO-DATE
+Caching disabled for task ':app:checkDebugAarMetadata' because:
+  Build cache is disabled
+  Caching has been disabled for the task
+Skipping task ':app:checkDebugAarMetadata' as it is up-to-date.
+Resolve mutations for :app:processDebugNavigationResources (Thread[#931,Execution worker Thread 5,5,main]) started.
+:app:processDebugNavigationResources (Thread[#931,Execution worker Thread 5,5,main]) started.
+
 > Task :app:processDebugNavigationResources UP-TO-DATE
+Caching disabled for task ':app:processDebugNavigationResources' because:
+  Build cache is disabled
+Skipping task ':app:processDebugNavigationResources' as it is up-to-date.
+Resolve mutations for :app:compileDebugNavigationResources (Thread[#931,Execution worker Thread 5,5,main]) started.
+:app:compileDebugNavigationResources (Thread[#931,Execution worker Thread 5,5,main]) started.
+
 > Task :app:compileDebugNavigationResources UP-TO-DATE
+Caching disabled for task ':app:compileDebugNavigationResources' because:
+  Build cache is disabled
+Skipping task ':app:compileDebugNavigationResources' as it is up-to-date.
+Resolve mutations for :app:generateDebugResValues (Thread[#931,Execution worker Thread 5,5,main]) started.
+:app:generateDebugResValues (Thread[#930,Execution worker Thread 4,5,main]) started.
+
 > Task :app:generateDebugResValues UP-TO-DATE
+Caching disabled for task ':app:generateDebugResValues' because:
+  Build cache is disabled
+Skipping task ':app:generateDebugResValues' as it is up-to-date.
+Resolve mutations for :app:mapDebugSourceSetPaths (Thread[#930,Execution worker Thread 4,5,main]) started.
+:app:mapDebugSourceSetPaths (Thread[#930,Execution worker Thread 4,5,main]) started.
+
 > Task :app:mapDebugSourceSetPaths UP-TO-DATE
+Caching disabled for task ':app:mapDebugSourceSetPaths' because:
+  Build cache is disabled
+  Caching has been disabled for the task
+Skipping task ':app:mapDebugSourceSetPaths' as it is up-to-date.
+Resolve mutations for :app:generateDebugResources (Thread[#931,Execution worker Thread 5,5,main]) started.
+:app:generateDebugResources (Thread[#926,included builds,5,main]) started.
+
 > Task :app:generateDebugResources UP-TO-DATE
+Caching disabled for task ':app:generateDebugResources' because:
+  Build cache is disabled
+Skipping task ':app:generateDebugResources' as it is up-to-date.
+Resolve mutations for :app:mergeDebugResources (Thread[#926,included builds,5,main]) started.
+:app:mergeDebugResources (Thread[#926,included builds,5,main]) started.
+
 > Task :app:mergeDebugResources UP-TO-DATE
+Caching disabled for task ':app:mergeDebugResources' because:
+  Build cache is disabled
+Skipping task ':app:mergeDebugResources' as it is up-to-date.
+Resolve mutations for :app:packageDebugResources (Thread[#926,included builds,5,main]) started.
+:app:packageDebugResources (Thread[#926,included builds,5,main]) started.
+
 > Task :app:packageDebugResources UP-TO-DATE
+Caching disabled for task ':app:packageDebugResources' because:
+  Build cache is disabled
+Skipping task ':app:packageDebugResources' as it is up-to-date.
+Resolve mutations for :app:parseDebugLocalResources (Thread[#926,included builds,5,main]) started.
+:app:parseDebugLocalResources (Thread[#926,included builds,5,main]) started.
+
 > Task :app:parseDebugLocalResources UP-TO-DATE
+Caching disabled for task ':app:parseDebugLocalResources' because:
+  Build cache is disabled
+Skipping task ':app:parseDebugLocalResources' as it is up-to-date.
+Resolve mutations for :app:createDebugCompatibleScreenManifests (Thread[#926,included builds,5,main]) started.
+:app:createDebugCompatibleScreenManifests (Thread[#926,included builds,5,main]) started.
+
 > Task :app:createDebugCompatibleScreenManifests UP-TO-DATE
+Caching disabled for task ':app:createDebugCompatibleScreenManifests' because:
+  Build cache is disabled
+  Caching has been disabled for the task
+Skipping task ':app:createDebugCompatibleScreenManifests' as it is up-to-date.
+Resolve mutations for :app:extractDeepLinksDebug (Thread[#926,included builds,5,main]) started.
+:app:extractDeepLinksDebug (Thread[#926,included builds,5,main]) started.
+
 > Task :app:extractDeepLinksDebug UP-TO-DATE
+Caching disabled for task ':app:extractDeepLinksDebug' because:
+  Build cache is disabled
+Skipping task ':app:extractDeepLinksDebug' as it is up-to-date.
+Resolve mutations for :app:processDebugMainManifest (Thread[#926,included builds,5,main]) started.
+:app:processDebugMainManifest (Thread[#926,included builds,5,main]) started.
+
 > Task :app:processDebugMainManifest UP-TO-DATE
+Caching disabled for task ':app:processDebugMainManifest' because:
+  Build cache is disabled
+Skipping task ':app:processDebugMainManifest' as it is up-to-date.
+Resolve mutations for :app:processDebugManifest (Thread[#926,included builds,5,main]) started.
+:app:processDebugManifest (Thread[#926,included builds,5,main]) started.
+
 > Task :app:processDebugManifest UP-TO-DATE
+Caching disabled for task ':app:processDebugManifest' because:
+  Build cache is disabled
+Skipping task ':app:processDebugManifest' as it is up-to-date.
+Resolve mutations for :app:processDebugManifestForPackage (Thread[#926,included builds,5,main]) started.
+:app:processDebugManifestForPackage (Thread[#926,included builds,5,main]) started.
+
 > Task :app:processDebugManifestForPackage UP-TO-DATE
+Custom actions are attached to task ':app:processDebugManifestForPackage'.
+Caching disabled for task ':app:processDebugManifestForPackage' because:
+  Build cache is disabled
+Skipping task ':app:processDebugManifestForPackage' as it is up-to-date.
+Resolve mutations for :app:processDebugResources (Thread[#926,included builds,5,main]) started.
+:app:processDebugResources (Thread[#926,included builds,5,main]) started.
+
 > Task :app:processDebugResources UP-TO-DATE
-> Task :app:javaPreCompileDebug UP-TO-DATE
-> Task :app:mergeDebugShaders UP-TO-DATE
-> Task :app:compileDebugShaders NO-SOURCE
-> Task :app:generateDebugAssets UP-TO-DATE
-> Task :app:mergeDebugAssets UP-TO-DATE
-> Task :app:compressDebugAssets UP-TO-DATE
-> Task :app:checkDebugDuplicateClasses UP-TO-DATE
-> Task :app:desugarDebugFileDependencies UP-TO-DATE
-> Task :app:mergeExtDexDebug UP-TO-DATE
-> Task :app:mergeLibDexDebug UP-TO-DATE
-> Task :app:mergeDebugJniLibFolders UP-TO-DATE
-> Task :app:mergeDebugNativeLibs UP-TO-DATE
-> Task :app:stripDebugDebugSymbols UP-TO-DATE
-> Task :app:validateSigningDebug UP-TO-DATE
-> Task :app:writeDebugAppMetadata UP-TO-DATE
-> Task :app:writeDebugSigningConfigVersions UP-TO-DATE
-> Task :app:kaptGenerateStubsDebugKotlin
+Caching disabled for task ':app:processDebugResources' because:
+  Build cache is disabled
+Skipping task ':app:processDebugResources' as it is up-to-date.
+Resolve mutations for :app:kaptGenerateStubsDebugKotlin (Thread[#926,included builds,5,main]) started.
+:app:kaptGenerateStubsDebugKotlin (Thread[#926,included builds,5,main]) started.
+
+> Task :app:kaptGenerateStubsDebugKotlin UP-TO-DATE
+Caching disabled for task ':app:kaptGenerateStubsDebugKotlin' because:
+  Build cache is disabled
+Skipping task ':app:kaptGenerateStubsDebugKotlin' as it is up-to-date.
+Resolve mutations for :app:kaptDebugKotlin (Thread[#926,included builds,5,main]) started.
+:app:kaptDebugKotlin (Thread[#926,included builds,5,main]) started.
+
 > Task :app:kaptDebugKotlin UP-TO-DATE
+file or directory 'E:\daima-ck\anzhuo3\app\src\debug\kotlin', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\debug\kotlin', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\debug\java', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\debug\java', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\debug\kotlin', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\debug\java', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\main\kotlin', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\main\kotlin', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\main\kotlin', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\main\kotlin', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\main\kotlin', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\main\kotlin', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\debug\kotlin', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\debug\kotlin', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\debug\java', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\debug\java', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\debug\kotlin', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\debug\java', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\debug\java', not found
+Caching disabled for task ':app:kaptDebugKotlin' because:
+  Build cache is disabled
+Skipping task ':app:kaptDebugKotlin' as it is up-to-date.
+Resolve mutations for :app:compileDebugKotlin (Thread[#926,included builds,5,main]) started.
+:app:compileDebugKotlin (Thread[#926,included builds,5,main]) started.
 
 > Task :app:compileDebugKotlin
-w: file:///E:/daima-ck/anzhuo3/app/src/main/java/com/example/smartdosing/ui/screens/dosing/DosingOperationScreen.kt:135:35 'setEngineByPackageName(String!): Int' is deprecated. Deprecated in Java
-w: file:///E:/daima-ck/anzhuo3/app/src/main/java/com/example/smartdosing/ui/screens/dosing/DosingOperationScreen.kt:191:31 'setEngineByPackageName(String!): Int' is deprecated. Deprecated in Java
-w: file:///E:/daima-ck/anzhuo3/app/src/main/java/com/example/smartdosing/ui/screens/dosing/DosingOperationScreen.kt:820:13 Condition 'materials != null' is always 'true'
-w: file:///E:/daima-ck/anzhuo3/app/src/main/java/com/example/smartdosing/ui/screens/dosing/DosingOperationScreen.kt:1001:124 'ArrowForward: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.ArrowForward
-w: file:///E:/daima-ck/anzhuo3/app/src/main/java/com/example/smartdosing/ui/screens/dosing/DosingScreen.kt:259:13 'Divider(Modifier = ..., Dp = ..., Color = ...): Unit' is deprecated. Renamed to HorizontalDivider
-w: file:///E:/daima-ck/anzhuo3/app/src/main/java/com/example/smartdosing/ui/screens/dosing/DosingScreen.kt:309:17 'LinearProgressIndicator(Float, Modifier = ..., Color = ..., Color = ..., StrokeCap = ...): Unit' is deprecated. Use the overload that takes `progress` as a lambda
-w: file:///E:/daima-ck/anzhuo3/app/src/main/java/com/example/smartdosing/ui/screens/dosing/DosingScreen.kt:315:13 'Divider(Modifier = ..., Dp = ..., Color = ...): Unit' is deprecated. Renamed to HorizontalDivider
-w: file:///E:/daima-ck/anzhuo3/app/src/main/java/com/example/smartdosing/ui/screens/dosing/DosingScreen.kt:323:21 'Divider(Modifier = ..., Dp = ..., Color = ...): Unit' is deprecated. Renamed to HorizontalDivider
+Caching disabled for task ':app:compileDebugKotlin' because:
+  Build cache is disabled
+Task ':app:compileDebugKotlin' is not up-to-date because:
+  Input property 'sources' file E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\ui\SmartDosingApp.kt has changed.
+  Input property 'sources' file E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\ui\screens\dosing\DosingOperationScreen.kt has changed.
+file or directory 'E:\daima-ck\anzhuo3\app\src\debug\kotlin', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\debug\kotlin', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\debug\java', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\debug\java', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\debug\kotlin', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\debug\java', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\debug\kotlin', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\debug\kotlin', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\debug\java', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\debug\java', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\debug\kotlin', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\debug\java', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\main\kotlin', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\main\kotlin', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\main\kotlin', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\main\kotlin', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\main\kotlin', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\main\kotlin', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\debug\java', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\debug\kotlin', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\debug\kotlin', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\debug\java', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\debug\java', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\debug\kotlin', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\debug\java', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\debug\kotlin', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\debug\kotlin', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\debug\java', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\debug\java', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\debug\kotlin', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\debug\java', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\main\kotlin', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\main\kotlin', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\main\kotlin', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\main\kotlin', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\main\kotlin', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\main\kotlin', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\debug\java', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\debug\kotlin', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\debug\kotlin', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\debug\java', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\debug\java', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\debug\kotlin', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\debug\java', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\debug\kotlin', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\debug\kotlin', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\debug\java', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\debug\java', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\debug\kotlin', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\debug\java', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\main\kotlin', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\main\kotlin', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\main\kotlin', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\main\kotlin', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\main\kotlin', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\main\kotlin', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\debug\java', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\debug\kotlin', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\debug\kotlin', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\debug\java', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\debug\java', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\debug\kotlin', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\debug\java', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\debug\kotlin', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\debug\kotlin', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\debug\java', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\debug\java', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\debug\kotlin', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\debug\java', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\main\kotlin', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\main\kotlin', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\main\kotlin', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\main\kotlin', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\main\kotlin', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\main\kotlin', not found
+file or directory 'E:\daima-ck\anzhuo3\app\src\debug\java', not found
+Kotlin source files: E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\bluetooth\BluetoothPermissionHelper.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\bluetooth\BluetoothScaleManager.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\bluetooth\BluetoothScalePreferencesManager.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\bluetooth\DemoModeManager.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\bluetooth\model\ConnectionState.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\bluetooth\model\ScaleDevice.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\bluetooth\model\WeightData.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\bluetooth\OhausDataParser.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\data\ConfigurationRecord.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\data\ConfigurationTask.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\data\DatabaseRecipeImportManager.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\data\DatabaseRecipeRepository.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\data\device\DeviceIdentity.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\data\device\DeviceUIDManager.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\data\DosingRecord.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\data\DosingRecordRepository.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\data\Recipe.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\data\RecipeImportManager.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\data\RecipeRepository.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\data\repository\ConfigurationRemoteApi.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\data\repository\ConfigurationRepositories.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\data\settings\DosingPreferencesManager.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\data\TemplateRepository.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\data\transfer\IncomingTask.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\data\transfer\TaskReceiver.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\database\converters\DatabaseConverters.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\database\dao\DeviceDao.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\database\dao\DosingRecordDao.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\database\dao\ImportLogDao.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\database\dao\MaterialDao.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\database\dao\RecipeDao.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\database\dao\TemplateDao.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\database\DataMapper.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\database\entities\SmartDosingEntities.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\database\SmartDosingDatabase.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\MainActivity.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\navigation\SmartDosingDestinations.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\navigation\SmartDosingNavHost.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\SmartDosingApplication.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\tts\TTSManagerFactory.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\tts\TTSTestRunner.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\tts\XiaomiTTSManager.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\tts\XiaomiTTSSettingsHelper.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\ui\components\BluetoothScaleComponents.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\ui\components\CommonComponents.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\ui\components\LabComponents.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\ui\components\SmartDosingBottomNavigationBar.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\ui\components\SmartDosingNavigationRail.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\ui\screens\device\DeviceInfoScreen.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\ui\screens\dosing\DosingOperationScreen.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\ui\screens\dosing\DosingScreen.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\ui\screens\dosing\MaterialConfigurationScreen.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\ui\screens\home\HomeScreen.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\ui\screens\materials\MaterialListScreen.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\ui\screens\recipes\RecipesScreen.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\ui\screens\records\ConfigurationRecordDetailScreen.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\ui\screens\records\ConfigurationRecordsScreen.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\ui\screens\records\RecordsScreen.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\ui\screens\settings\BluetoothScaleSettingsScreen.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\ui\screens\settings\SettingsScreen.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\ui\screens\settings\WebSettingsScreen.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\ui\screens\tasks\TaskCenterScreen.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\ui\SmartDosingApp.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\ui\theme\Color.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\ui\theme\DesignTokens.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\ui\theme\Theme.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\ui\theme\Type.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\ui\theme\WindowSizeClass.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\web\CSSGenerator.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\web\HtmlGenerator.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\web\JSGenerator.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\web\transfer\LanTransferProposalAdapter.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\web\WebServerManager.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\web\WebService.kt
+Java source files: E:\daima-ck\anzhuo3\app\build\generated\source\kapt\debug\com\example\smartdosing\database\dao\DeviceDao_Impl.java, E:\daima-ck\anzhuo3\app\build\generated\source\kapt\debug\com\example\smartdosing\database\dao\DosingRecordDao_Impl.java, E:\daima-ck\anzhuo3\app\build\generated\source\kapt\debug\com\example\smartdosing\database\dao\ImportLogDao_Impl.java, E:\daima-ck\anzhuo3\app\build\generated\source\kapt\debug\com\example\smartdosing\database\dao\MaterialDao_Impl.java, E:\daima-ck\anzhuo3\app\build\generated\source\kapt\debug\com\example\smartdosing\database\dao\RecipeDao_Impl.java, E:\daima-ck\anzhuo3\app\build\generated\source\kapt\debug\com\example\smartdosing\database\dao\TemplateDao_Impl.java, E:\daima-ck\anzhuo3\app\build\generated\source\kapt\debug\com\example\smartdosing\database\SmartDosingDatabase_Impl.java
+Script source files: 
+Script file extensions: 
+Using Kotlin/JVM incremental compilation
+[KOTLIN] Kotlin compilation 'jdkHome' argument: null
+i: found daemon on port 17399 (265610 ms old), trying to connect
+i: connected to the daemon
+Options for KOTLIN DAEMON: IncrementalCompilationOptions(super=CompilationOptions(compilerMode=INCREMENTAL_COMPILER, targetPlatform=JVM, reportCategories=[0, 3], reportSeverity=2, requestedCompilationResults=[0], kotlinScriptExtensions=[]), areFileChangesKnown=true, modifiedFiles=[E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\ui\SmartDosingApp.kt, E:\daima-ck\anzhuo3\app\src\main\java\com\example\smartdosing\ui\screens\dosing\DosingOperationScreen.kt], deletedFiles=[], classpathChanges=NoChanges, workingDir=E:\daima-ck\anzhuo3\app\build\kotlin\compileDebugKotlin\cacheable, multiModuleICSettings=MultiModuleICSettings(buildHistoryFile=E:\daima-ck\anzhuo3\app\build\kotlin\compileDebugKotlin\local-state\build-history.bin, useModuleDetection=true), usePreciseJavaTracking=true, outputFiles=[E:\daima-ck\anzhuo3\app\build\tmp\kotlin-classes\debug, E:\daima-ck\anzhuo3\app\build\kotlin\compileDebugKotlin\cacheable, E:\daima-ck\anzhuo3\app\build\kotlin\compileDebugKotlin\local-state])
+.\gradlew.bat : e: f
+ile:///E:/daima-ck/a
+nzhuo3/app/src/main/
+java/com/example/sma
+rtdosing/ui/SmartDos
+ingApp.kt:20:1 This 
+annotation is not re
+peatable
+所在位置 行:1 字符: 1
++ .\gradlew.bat comp
+ileDebugKotlin --inf
+o 2>&1 | Out-File -F
+ilePath bui ...
++ ~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~
+~~~~~~
+    + CategoryInfo  
+            : NotS  
+  pecified: (e: f   
+ ile:///E:/d...     
+not repeatable:    S
+tring) [], Rem    ot
+eException
+    + FullyQualifie 
+   dErrorId : Nati  
+  veCommandError
+ 
+Restoring task outputs to pre-compilation state
 
-> Task :app:compileDebugJavaWithJavac UP-TO-DATE
-> Task :app:processDebugJavaRes UP-TO-DATE
-> Task :app:mergeDebugJavaResource UP-TO-DATE
-> Task :app:dexBuilderDebug
-> Task :app:mergeProjectDexDebug
-> Task :app:packageDebug
-> Task :app:createDebugApkListingFileRedirect UP-TO-DATE
-> Task :app:assembleDebug
+> Task :app:compileDebugKotlin FAILED
 
 [Incubating] Problems report is available at: file:///E:/daima-ck/anzhuo3/build/reports/problems/problems-report.html
+
+FAILURE: Build faile
+d with an exception.
+
+* What went wrong:
+Execution failed for
+ task ':app:compileD
+ebugKotlin'.
+> A failure occurred
+ while executing org
+.jetbrains.kotlin.co
+mpilerRunner.GradleC
+ompilerRunnerWithWor
+kers$GradleKotlinCom
+pilerWorkAction
+   > Compilation err
+or. See log for more
+ details
+
+* Try:
+> Run with --stacktr
+ace option to get th
+e stack trace.
+> Run with --debug o
+ption to get more lo
+g output.
+> Run with --scan to
+ get full insights.
+> Get more help at h
+ttps://help.gradle.o
+rg.
 
 Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
 
@@ -63,5 +358,6 @@ You can use '--warning-mode all' to show the individual deprecation warnings and
 
 For more on this, please refer to https://docs.gradle.org/8.13/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
 
-BUILD SUCCESSFUL in 12s
-40 actionable tasks: 6 executed, 34 up-to-date
+BUILD FAILED in 4s
+19 actionable tasks: 2 executed, 17 up-to-date
+Watched directory hierarchies: [E:\daima-ck\anzhuo3]

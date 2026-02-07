@@ -25,7 +25,21 @@ data class SmartDosingSpacing(
     val xl: Dp = 32.dp,
     val xxl: Dp = 48.dp,
     val giant: Dp = 64.dp
-)
+) {
+    fun scaled(factor: Float): SmartDosingSpacing {
+        return if (factor == 1f) this else copy(
+            compact = compact * factor,
+            xxs = xxs * factor,
+            xs = xs * factor,
+            sm = sm * factor,
+            md = md * factor,
+            lg = lg * factor,
+            xl = xl * factor,
+            xxl = xxl * factor,
+            giant = giant * factor
+        )
+    }
+}
 
 /**
  * SmartDosing 设计系统 - 圆角规范 (实验室版 - 更精致)
@@ -53,7 +67,7 @@ data class SmartDosingElevation(
 
 /**
  * SmartDosing 设计系统 - 扩展语义色
- * Material3 基础色板不足以覆盖工控语义，此处额外定义
+ * Material3 基础色板不足以覆盖实验室语义，此处额外定义
  */
 data class SmartDosingExtendedColors(
     val success: Color,
@@ -70,11 +84,11 @@ internal val LocalRadius = staticCompositionLocalOf { SmartDosingRadius() }
 internal val LocalElevation = staticCompositionLocalOf { SmartDosingElevation() }
 internal val LocalExtendedColors = staticCompositionLocalOf {
     SmartDosingExtendedColors(
-        success = IndustrialGreen,
-        warning = IndustrialOrange,
-        danger = IndustrialRed,
-        info = IndustrialBlue,
-        neutral = TextSecondary,
+        success = LabGreen,
+        warning = LabOrange,
+        danger = LabRed,
+        info = LabBlue,
+        neutral = Color(0xFF757575), // TextSecondary
         border = Color(0xFFE0E0E0)
     )
 }

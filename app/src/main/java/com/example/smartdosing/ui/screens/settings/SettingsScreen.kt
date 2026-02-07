@@ -1,5 +1,6 @@
 package com.example.smartdosing.ui.screens.settings
 
+import android.widget.Toast
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -39,7 +40,8 @@ import kotlinx.coroutines.launch
 @Composable
 fun SettingsScreen(
     modifier: Modifier = Modifier,
-    onNavigateToBluetoothSettings: () -> Unit = {}
+    onNavigateToBluetoothSettings: () -> Unit = {},
+    onNavigateToWirelessSettings: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val preferencesManager = remember { DosingPreferencesManager(context) }
@@ -75,6 +77,12 @@ fun SettingsScreen(
                     subtitle = "管理蓝牙电子秤连接和参数",
                     icon = Icons.Outlined.Bluetooth,
                     onClick = onNavigateToBluetoothSettings
+                ),
+                SettingsItem.Action(
+                    title = "无线传输服务",
+                    subtitle = "配置无线传输端口、自动启动与服务状态",
+                    icon = Icons.Outlined.Wifi,
+                    onClick = onNavigateToWirelessSettings
                 )
             )
         ),
@@ -113,21 +121,21 @@ fun SettingsScreen(
                     subtitle = "开启材料投料语音提示",
                     icon = Icons.Outlined.VolumeUp,
                     isChecked = true,
-                    onCheckedChange = { }
+                    onCheckedChange = { _ -> Toast.makeText(context, "该功能开发中", Toast.LENGTH_SHORT).show() }
                 ),
                 SettingsItem.Slider(
                     title = "语音速度",
                     subtitle = "调节语音播报速度",
                     icon = Icons.Outlined.Speed,
                     value = 0.8f,
-                    onValueChange = { }
+                    onValueChange = { _ -> Toast.makeText(context, "该功能开发中", Toast.LENGTH_SHORT).show() }
                 ),
                 SettingsItem.Slider(
                     title = "音量大小",
                     subtitle = "调节语音播报音量",
                     icon = Icons.Outlined.VolumeUp,
                     value = 0.75f,
-                    onValueChange = { }
+                    onValueChange = { _ -> Toast.makeText(context, "该功能开发中", Toast.LENGTH_SHORT).show() }
                 )
             )
         ),
@@ -140,7 +148,7 @@ fun SettingsScreen(
                     subtitle = "适合低光环境使用",
                     icon = Icons.Outlined.DarkMode,
                     isChecked = false,
-                    onCheckedChange = { }
+                    onCheckedChange = { _ -> Toast.makeText(context, "该功能开发中", Toast.LENGTH_SHORT).show() }
                 ),
                 SettingsItem.Selection(
                     title = "字体大小",
@@ -154,7 +162,7 @@ fun SettingsScreen(
                     subtitle = "按钮点击时震动",
                     icon = Icons.Outlined.Vibration,
                     isChecked = true,
-                    onCheckedChange = { }
+                    onCheckedChange = { _ -> Toast.makeText(context, "该功能开发中", Toast.LENGTH_SHORT).show() }
                 )
             )
         ),
@@ -167,7 +175,7 @@ fun SettingsScreen(
                     subtitle = "投料重量精度要求（%）",
                     icon = Icons.Outlined.Straighten,
                     value = 0.95f,
-                    onValueChange = { },
+                    onValueChange = { _ -> Toast.makeText(context, "该功能开发中", Toast.LENGTH_SHORT).show() },
                     valueRange = 0.85f..0.99f,
                     valueFormatter = { "${(it * 100).toInt()}%" }
                 ),
@@ -187,7 +195,7 @@ fun SettingsScreen(
                     subtitle = "输入重量后自动进入下一材料",
                     icon = Icons.Outlined.SkipNext,
                     isChecked = false,
-                    onCheckedChange = { }
+                    onCheckedChange = { _ -> Toast.makeText(context, "该功能开发中", Toast.LENGTH_SHORT).show() }
                 ),
                 SettingsItem.Selection(
                     title = "重量单位",
@@ -206,19 +214,19 @@ fun SettingsScreen(
                     title = "备份数据",
                     subtitle = "备份配方和投料记录",
                     icon = Icons.Outlined.CloudUpload,
-                    onClick = { }
+                    onClick = { Toast.makeText(context, "该功能开发中", Toast.LENGTH_SHORT).show() }
                 ),
                 SettingsItem.Action(
                     title = "恢复数据",
                     subtitle = "从备份文件恢复数据",
                     icon = Icons.Outlined.CloudDownload,
-                    onClick = { }
+                    onClick = { Toast.makeText(context, "该功能开发中", Toast.LENGTH_SHORT).show() }
                 ),
                 SettingsItem.Action(
                     title = "清除缓存",
                     subtitle = "清理应用缓存文件",
                     icon = Icons.Outlined.DeleteSweep,
-                    onClick = { },
+                    onClick = { Toast.makeText(context, "该功能开发中", Toast.LENGTH_SHORT).show() },
                     isDestructive = true
                 )
             )
@@ -236,13 +244,13 @@ fun SettingsScreen(
                     title = "使用帮助",
                     subtitle = "查看操作指南和常见问题",
                     icon = Icons.Outlined.Help,
-                    onClick = { }
+                    onClick = { Toast.makeText(context, "该功能开发中", Toast.LENGTH_SHORT).show() }
                 ),
                 SettingsItem.Action(
                     title = "反馈建议",
                     subtitle = "提交使用反馈和改进建议",
                     icon = Icons.Outlined.Feedback,
-                    onClick = { }
+                    onClick = { Toast.makeText(context, "该功能开发中", Toast.LENGTH_SHORT).show() }
                 )
             )
         )

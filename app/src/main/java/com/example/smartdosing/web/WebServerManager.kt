@@ -41,8 +41,8 @@ import com.example.smartdosing.web.transfer.LanTransferProposalAdapter
 import com.example.smartdosing.web.transfer.UnsupportedSchemaException
 
 /**
- * Web服务器管理类
- * 负责启动和管理Ktor web服务器
+ * 无线传输服务器管理类
+ * 负责启动和管理Ktor 无线传输服务器
  */
 class WebServerManager(private val context: Context) {
 
@@ -76,7 +76,7 @@ class WebServerManager(private val context: Context) {
     }
 
     /**
-     * 启动web服务器
+     * 启动无线传输服务器
      */
     fun startServer(port: Int = DEFAULT_PORT): Boolean {
         return try {
@@ -84,24 +84,24 @@ class WebServerManager(private val context: Context) {
                 configureServer()
             }
             server?.start(wait = false)
-            Log.i(TAG, "Web服务器启动成功，端口: $port")
+            Log.i(TAG, "无线传输服务器启动成功，端口: $port")
             true
         } catch (e: Exception) {
-            Log.e(TAG, "Web服务器启动失败", e)
+            Log.e(TAG, "无线传输服务器启动失败", e)
             false
         }
     }
 
     /**
-     * 停止web服务器
+     * 停止无线传输服务器
      */
     fun stopServer() {
         try {
             server?.stop(1000, 2000)
             server = null
-            Log.i(TAG, "Web服务器已停止")
+            Log.i(TAG, "无线传输服务器已停止")
         } catch (e: Exception) {
-            Log.e(TAG, "停止web服务器失败", e)
+            Log.e(TAG, "停止无线传输服务器失败", e)
         }
     }
 
@@ -177,73 +177,6 @@ class WebServerManager(private val context: Context) {
      * 配置静态路由（HTML页面）
      */
     private fun Route.configureStaticRoutes() {
-        get("/test-encoding") {
-            val testHtml = """
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>编码测试页面</title>
-    <style>
-        body { font-family: Arial, sans-serif; padding: 20px; }
-        .test-item { margin: 20px 0; padding: 15px; border: 1px solid #ddd; }
-        .success { background: #d4edda; }
-        .error { background: #f8d7da; }
-    </style>
-</head>
-<body>
-    <h1>SmartDosing 编码测试页面</h1>
-    <div class="test-item">
-        <h2>测试1: 中文显示测试</h2>
-        <p>如果你能看到下面这些字，说明编码正确：</p>
-        <p style="font-size: 20px; font-weight: bold;">智能投料系统 - 配方管理 - 数据库集成</p>
-        <p>测试字符：中文、English、数字123、符号！@#</p>
-    </div>
-    <div class="test-item">
-        <h2>测试2: 特殊字符测试</h2>
-        <p>常用中文：的了是在不我有人这个上们来他要说就那得能好也子知道得自己面前回事过因为多方后对想作种开手行实现长将成老么</p>
-    </div>
-    <div class="test-item">
-        <h2>测试3: 表格测试</h2>
-        <table border="1" style="border-collapse: collapse; width: 100%;">
-            <tr>
-                <th>配方编码</th>
-                <th>配方名称</th>
-                <th>分类</th>
-                <th>状态</th>
-            </tr>
-            <tr>
-                <td>RECIPE001</td>
-                <td>苹果香精</td>
-                <td>香精</td>
-                <td>已启用</td>
-            </tr>
-        </table>
-    </div>
-    <div class="test-item">
-        <h2>诊断信息</h2>
-        <p>请截图这个页面发给开发者</p>
-        <ul>
-            <li>当前URL: <span id="current-url"></span></li>
-            <li>浏览器: <span id="user-agent"></span></li>
-            <li>页面编码: <span id="charset"></span></li>
-        </ul>
-    </div>
-    <div class="test-item">
-        <a href="/" style="padding: 10px 20px; background: #007bff; color: white; text-decoration: none; border-radius: 5px;">返回首页</a>
-    </div>
-    <script>
-        document.getElementById('current-url').textContent = window.location.href;
-        document.getElementById('user-agent').textContent = navigator.userAgent;
-        document.getElementById('charset').textContent = document.characterSet || document.charset || '未知';
-    </script>
-</body>
-</html>
-            """.trimIndent()
-
-            call.respondText(testHtml, ContentType.Text.Html.withCharset(Charsets.UTF_8))
-        }
-
         suspend fun ApplicationCall.respondHtml(builder: HTML.() -> Unit) {
             val htmlContent = createHTML().html { builder() }
             // 在 </head> 前注入 API Key 脚本，让前端 fetch 自动携带认证头
@@ -268,12 +201,73 @@ class WebServerManager(private val context: Context) {
             respondText(injected, ContentType.Text.Html.withCharset(Charsets.UTF_8))
         }
 
-        get("/") { call.respondHtml { generateMainPage() } }
-        get("/task-center") { call.respondHtml { generateTaskCenterPage() } }
-        get("/recipes") { call.respondHtml { generateRecipesPage() } }
-        get("/import") { call.respondHtml { generateImportPage() } }
-        get("/stats") { call.respondHtml { generateStatsPage() } }
-        get("/templates") { call.respondHtml { generateTemplatePage() } }
+        suspend fun ApplicationCall.respondWebUiOffline(path: String) {
+            val offlineHtml = """
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>可视化页面已下线</title>
+    <style>
+        body {
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #f5f7fb;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', sans-serif;
+            color: #1f2937;
+        }
+        .card {
+            width: min(560px, 92vw);
+            background: #fff;
+            border-radius: 16px;
+            box-shadow: 0 12px 30px rgba(15, 23, 42, 0.12);
+            padding: 28px;
+        }
+        h1 {
+            margin: 0 0 12px;
+            font-size: 24px;
+        }
+        p {
+            margin: 8px 0;
+            line-height: 1.7;
+            color: #4b5563;
+        }
+        code {
+            background: #eef2ff;
+            border-radius: 6px;
+            padding: 2px 6px;
+            color: #3730a3;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>可视化页面已软下线</h1>
+        <p>当前路径：<code>${path}</code></p>
+        <p>系统已切换为“无线传输”模式，可视化页面不再提供访问。</p>
+        <p>任务收发与设备联通能力仍可通过 <code>/api/transfer</code> 与 <code>/api/device</code> 正常使用。</p>
+    </div>
+</body>
+</html>
+            """.trimIndent()
+            respondText(
+                text = offlineHtml,
+                contentType = ContentType.Text.Html.withCharset(Charsets.UTF_8),
+                status = HttpStatusCode.Gone
+            )
+        }
+
+        get("/") { call.respondWebUiOffline("/") }
+        get("/task-center") { call.respondWebUiOffline("/task-center") }
+        get("/recipes") { call.respondWebUiOffline("/recipes") }
+        get("/import") { call.respondWebUiOffline("/import") }
+        get("/stats") { call.respondWebUiOffline("/stats") }
+        get("/templates") { call.respondWebUiOffline("/templates") }
+        get("/test-encoding") { call.respondWebUiOffline("/test-encoding") }
     }
 
     private fun Route.configureApiRoutes() {
@@ -620,7 +614,7 @@ class WebServerManager(private val context: Context) {
                             )
                         }
 
-                        val operator = "Web任务中心"
+                        val operator = "无线传输服务"
                         val task = taskStore.createQuickTask(
                             recipe = recipe,
                             title = request.title,

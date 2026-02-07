@@ -7,7 +7,7 @@ data class DeviceIdentity(
     val uid: String,              // 本机唯一标识 (UUID)
     val deviceName: String,       // 设备名称（可自定义）
     val ipAddress: String?,       // 当前 IP 地址
-    val port: Int = 8080,         // Web 服务端口
+    val port: Int = 8080,         // 无线传输服务端口
     val appVersion: String = "",  // 应用版本
     val status: ReceiverStatus = ReceiverStatus.IDLE,  // 接收端状态
     val createdAt: Long = System.currentTimeMillis()   // UID 创建时间

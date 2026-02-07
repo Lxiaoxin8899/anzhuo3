@@ -42,7 +42,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Initialize Web Service
+        // 无线传输服务初始化（本机 API + 局域网传输）
         webService = WebService.getInstance(this)
 
         // 初始化小米TTS管理器
@@ -55,8 +55,10 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        // Start Web Service
-        startWebService()
+        // 启动无线传输服务
+        if (webService.isAutoStartEnabled()) {
+            startWebService()
+        }
     }
 
     /**
@@ -130,9 +132,10 @@ class MainActivity : ComponentActivity() {
 
     private fun startWebService() {
         lifecycleScope.launch {
-            when (val result = webService.startWebService()) {
+            val preferredPort = webService.getPreferredPort()
+            when (val result = webService.startWebService(preferredPort)) {
                 is WebServiceResult.Success -> {
-                    showToast("Web管理后台已启动: ${result.serverUrl}")
+                    showToast("无线传输服务已启动: ${result.serverUrl}")
                 }
                 is WebServiceResult.AlreadyRunning -> {
                     // Optionally show a toast, or just ignore
@@ -141,7 +144,7 @@ class MainActivity : ComponentActivity() {
                     showToast("网络错误: ${result.message}")
                 }
                 is WebServiceResult.StartFailed -> {
-                    showToast("Web服务启动失败: ${result.message}")
+                    showToast("无线传输服务启动失败: ${result.message}")
                 }
             }
         }

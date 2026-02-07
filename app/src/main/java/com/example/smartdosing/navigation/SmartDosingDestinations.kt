@@ -51,7 +51,7 @@ enum class SmartDosingDestination(
         route = SmartDosingRoutes.SETTINGS,
         title = "系统设置",
         icon = Icons.Default.Settings,
-        description = "网络、语音、Web 服务等设置"
+        description = "网络、语音、无线传输等设置"
     )
 }
 
@@ -80,6 +80,7 @@ object SmartDosingRoutes {
     const val SETTINGS = "settings"
     const val DEVICE_INFO = "device_info"
     const val BLUETOOTH_SCALE_SETTINGS = "bluetooth_scale_settings"
+    const val WEB_SERVICE_SETTINGS = "web_service_settings"
     const val MATERIAL_LIST = "material_list"
 
     fun materialConfiguration(

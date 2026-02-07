@@ -26,7 +26,7 @@ import com.example.smartdosing.ui.theme.getResponsiveDimensions
 
 /**
  * 实验室风格按钮 - Primary
- * 强调清晰、干练。高度比工业版略小 (40dp)，圆角更小。
+ * 强调清晰、干练。高度适中 (40dp)，圆角更小。
  */
 @Composable
 fun LabButton(

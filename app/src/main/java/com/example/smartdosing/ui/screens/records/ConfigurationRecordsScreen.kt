@@ -85,7 +85,7 @@ fun ConfigurationRecordsScreen(
                     status = selectedStatus,
                     sortAscending = sortAscending
                 )
-                // ?IO????????????????????
+                // 在 IO 线程拉取记录，避免阻塞主线程
                 val result = withContext(Dispatchers.IO) {
                     repository.fetchRecords(filter)
                 }
@@ -514,3 +514,4 @@ private fun ConfigurationRecordsScreenPreview() {
         ConfigurationRecordsScreen()
     }
 }
+

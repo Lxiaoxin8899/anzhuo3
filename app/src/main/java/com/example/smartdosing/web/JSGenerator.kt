@@ -207,7 +207,7 @@ function renderDeviceList(devices) {
     if (!devices.length) {
         const empty = document.createElement('div');
         empty.className = 'empty-placeholder';
-        empty.textContent = '未检测到本机设备，请检查 Web 服务。';
+        empty.textContent = '未检测到本机设备，请检查无线传输服务。';
         container.appendChild(empty);
         return;
     }

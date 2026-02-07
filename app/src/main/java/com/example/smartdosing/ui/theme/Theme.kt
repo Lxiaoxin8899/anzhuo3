@@ -30,9 +30,9 @@ val LabTeal = Color(0xFF00897B)
 val LabTealLight = Color(0xFFE0F2F1)
 
 // 背景色 - 纯净白/冷灰
-val LabBackground = Color(0xFFF8F9FA) // 极淡的冷灰，减少眩光
-val LabSurface = Color(0xFFFFFFFF)
-val LabSurfaceVariant = Color(0xFFF0F2F5)
+private val AppLabBackground = Color(0xFFF8F9FA) // 极淡的冷灰，减少眩光
+private val AppLabSurface = Color(0xFFFFFFFF)
+private val AppLabSurfaceVariant = Color(0xFFF0F2F5)
 
 // 语义色
 val LabSuccess = Color(0xFF2E7D32) // Keep standard green
@@ -55,12 +55,12 @@ private val LightColorScheme = lightColorScheme(
 
     tertiary = LabWarning, // Using Warning color as Tertiary for accents
 
-    background = LabBackground,
+    background = AppLabBackground,
     onBackground = TextPrimary,
 
-    surface = LabSurface,
+    surface = AppLabSurface,
     onSurface = TextPrimary,
-    surfaceVariant = LabSurfaceVariant,
+    surfaceVariant = AppLabSurfaceVariant,
     onSurfaceVariant = TextSecondary,
 
     error = LabError,
@@ -169,7 +169,15 @@ fun SmartDosingTheme(
     // Lab scaling might be more subtle than industrial
     val spacingScale = if (windowSize.widthClass == SmartDosingWindowWidthClass.Compact) 0.8f else 1.0f
 
-    val adaptiveSpacing = DefaultSpacing // For now, keep spacing consistent, maybe scale later
+    // 自动缩放间距
+    val adaptiveSpacing = DefaultSpacing.scaled(spacingScale)
+
+    // 根据屏幕选择字体系统
+    val typography = if (windowSize.widthClass == SmartDosingWindowWidthClass.Compact) {
+        CompactTypography
+    } else {
+        ExpandedTypography
+    }
 
     CompositionLocalProvider(
         LocalSpacing provides adaptiveSpacing,
@@ -180,7 +188,7 @@ fun SmartDosingTheme(
     ) {
         MaterialTheme(
             colorScheme = colorScheme,
-            typography = Typography,
+            typography = typography,
             content = content
         )
     }

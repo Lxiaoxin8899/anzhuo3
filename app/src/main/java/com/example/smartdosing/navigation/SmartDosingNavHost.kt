@@ -32,6 +32,7 @@ import com.example.smartdosing.ui.screens.records.ConfigurationRecordsScreen
 import com.example.smartdosing.ui.screens.recipes.RecipesScreen
 import com.example.smartdosing.ui.screens.settings.SettingsScreen
 import com.example.smartdosing.ui.screens.settings.BluetoothScaleSettingsScreen
+import com.example.smartdosing.ui.screens.settings.WebServiceSettingsScreen
 import com.example.smartdosing.ui.screens.tasks.TaskCenterScreen
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -214,6 +215,9 @@ fun SmartDosingNavHost(
             SettingsScreen(
                 onNavigateToBluetoothSettings = {
                     navController.navigate(SmartDosingRoutes.BLUETOOTH_SCALE_SETTINGS)
+                },
+                onNavigateToWirelessSettings = {
+                    navController.navigate(SmartDosingRoutes.WEB_SERVICE_SETTINGS)
                 }
             )
         }
@@ -222,6 +226,10 @@ fun SmartDosingNavHost(
             BluetoothScaleSettingsScreen(
                 onNavigateBack = { navController.popBackStack() }
             )
+        }
+
+        composable(SmartDosingRoutes.WEB_SERVICE_SETTINGS) {
+            WebServiceSettingsScreen()
         }
 
         composable(SmartDosingRoutes.DEVICE_INFO) {

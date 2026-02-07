@@ -1,6 +1,7 @@
-
 package com.example.smartdosing.data.repository
 
+import android.content.Context
+import com.example.smartdosing.SmartDosingApplication
 import com.example.smartdosing.data.ApiResponse
 import com.example.smartdosing.data.ConfigurationRecord
 import com.example.smartdosing.data.ConfigurationMaterialRecord
@@ -15,6 +16,7 @@ import java.util.Locale
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.delay
+import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
@@ -27,6 +29,9 @@ import retrofit2.http.Path
 import retrofit2.http.Query
 
 private const val DEFAULT_BASE_URL = "http://127.0.0.1:8080/api/"
+private const val WEB_SERVER_PREFS_NAME = "web_server_prefs"
+private const val WEB_SERVER_API_KEY = "api_key"
+private const val API_KEY_HEADER = "X-API-Key"
 
 /** DTO ?? */
 data class ConfigurationTaskDto(
@@ -132,10 +137,30 @@ interface ConfigurationRecordApi {
 }
 
 /** Retrofit ?? */
+private fun resolveLocalApiKey(): String? {
+    return runCatching {
+        val context = SmartDosingApplication.getInstance().applicationContext
+        context
+            .getSharedPreferences(WEB_SERVER_PREFS_NAME, Context.MODE_PRIVATE)
+            .getString(WEB_SERVER_API_KEY, null)
+            ?.takeIf { it.isNotBlank() }
+    }.getOrNull()
+}
+
+private fun apiKeyInterceptor(): Interceptor = Interceptor { chain ->
+    val original = chain.request()
+    val builder = original.newBuilder()
+    resolveLocalApiKey()?.let { apiKey ->
+        builder.header(API_KEY_HEADER, apiKey)
+    }
+    chain.proceed(builder.build())
+}
+
 private fun loggingInterceptor(): HttpLoggingInterceptor =
     HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.BASIC }
 
 private fun defaultHttpClient(): OkHttpClient = OkHttpClient.Builder()
+    .addInterceptor(apiKeyInterceptor())
     .addInterceptor(loggingInterceptor())
     .callTimeout(15, TimeUnit.SECONDS)
     .connectTimeout(10, TimeUnit.SECONDS)

@@ -337,9 +337,9 @@ private fun DeviceInfoTab(
                             .padding(if (isCompact) 12.dp else 16.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Text("接收地址", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text("无线传输接收地址", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         Text(
-                            text = "发送端可直接访问该地址进行任务下发",
+                            text = "发送端可通过该地址进行无线任务下发（局域网）",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -388,9 +388,10 @@ private fun DeviceInfoTab(
                         Text("使用说明", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     }
                     Text(
-                        text = "1. 确保发送端与本机在同一网络\n" +
+                        text = "1. 确保发送端与本机在同一网络（WiFi/有线）\n" +
                                 "2. 发送端输入 UID 或扫描二维码完成绑定\n" +
                                 "3. 绑定成功后即可推送任务\n" +
+                                "（提示：可视化页面已软下线，仅保留无线传输能力）\n" +
                                 "4. 收到任务后可在“接收任务”中处理",
                         lineHeight = 20.sp
                     )

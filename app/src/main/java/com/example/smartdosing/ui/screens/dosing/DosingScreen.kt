@@ -396,6 +396,7 @@ private fun ChecklistActionBar(
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.secondary
                 )
+                @Suppress("DEPRECATION")
                 Text(
                     text = "需完成全部 $totalCount 项确认后才能开始投料。",
                     fontSize = 14.sp,
@@ -479,7 +480,7 @@ fun DosingScreenPreview() {
         DosingChecklistContent(
             recipe = RecipeChecklistInfo(
                 id = "preview",
-                name = "工业配方 A1",
+                name = "实验室配方 A1",
                 code = "REC-2024-001",
                 totalWeight = 125.5,
                 weightUnit = "kg"

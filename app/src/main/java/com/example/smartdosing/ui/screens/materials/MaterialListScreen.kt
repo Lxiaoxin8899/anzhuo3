@@ -22,12 +22,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalContext
 import com.example.smartdosing.data.ConfigurationTask
+import com.example.smartdosing.data.DatabaseRecipeRepository
 import com.example.smartdosing.data.Material
 import com.example.smartdosing.data.Recipe
 import com.example.smartdosing.data.TaskStatus
 import com.example.smartdosing.data.repository.ConfigurationRepositoryProvider
-import com.example.smartdosing.data.RecipeRepository
 import kotlinx.coroutines.launch
 
 /**
@@ -40,8 +41,9 @@ fun MaterialListScreen(
     modifier: Modifier = Modifier,
     onNavigateBack: () -> Unit = {}
 ) {
+    val context = LocalContext.current
     val taskRepository = remember { ConfigurationRepositoryProvider.taskRepository }
-    val recipeRepository = remember { RecipeRepository.getInstance() }
+    val recipeRepository = remember { DatabaseRecipeRepository.getInstance(context) }
     val scope = rememberCoroutineScope()
     
     // 状态
@@ -54,9 +56,12 @@ fun MaterialListScreen(
     
     // 物料确认状态 - 使用物料ID作为key
     var confirmedMaterials by remember { mutableStateOf<Set<String>>(emptySet()) }
-    
+
     // 任务下拉菜单状态
     var showTaskDropdown by remember { mutableStateOf(false) }
+
+    // 任务搜索状态
+    var taskSearchQuery by remember { mutableStateOf("") }
     
     // 加载任务列表
     LaunchedEffect(Unit) {
@@ -128,9 +133,12 @@ fun MaterialListScreen(
                 onTaskSelected = { task ->
                     selectedTask = task
                     showTaskDropdown = false
+                    taskSearchQuery = ""
                 },
                 confirmedCount = confirmedMaterials.size,
-                totalCount = recipe?.materials?.size ?: 0
+                totalCount = recipe?.materials?.size ?: 0,
+                searchQuery = taskSearchQuery,
+                onSearchQueryChange = { taskSearchQuery = it }
             )
             
             when {
@@ -182,6 +190,9 @@ fun MaterialListScreen(
                     MaterialListContent(
                         materials = recipe!!.materials,
                         recipeName = recipe!!.name,
+                        recipeTotal = recipe!!.totalWeight,
+                        taskQuantity = selectedTask!!.quantity,
+                        taskUnit = selectedTask!!.unit,
                         confirmedMaterials = confirmedMaterials,
                         onToggleConfirm = { materialId ->
                             confirmedMaterials = if (materialId in confirmedMaterials) {
@@ -208,8 +219,23 @@ private fun TaskSelectorWithProgress(
     onDropdownToggle: () -> Unit,
     onTaskSelected: (ConfigurationTask) -> Unit,
     confirmedCount: Int,
-    totalCount: Int
+    totalCount: Int,
+    searchQuery: String,
+    onSearchQueryChange: (String) -> Unit
 ) {
+    // 根据搜索词过滤任务
+    val filteredTasks = remember(tasks, searchQuery) {
+        if (searchQuery.isEmpty()) {
+            tasks
+        } else {
+            tasks.filter { task ->
+                task.recipeName.contains(searchQuery, ignoreCase = true) ||
+                task.recipeCode.contains(searchQuery, ignoreCase = true) ||
+                task.customer.contains(searchQuery, ignoreCase = true)
+            }
+        }
+    }
+
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -238,7 +264,7 @@ private fun TaskSelectorWithProgress(
                         )
                         if (selectedTask != null) {
                             Text(
-                                text = "编码: ${selectedTask.recipeCode}",
+                                text = "编码: ${selectedTask.recipeCode} | ${selectedTask.quantity}${selectedTask.unit}",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -250,20 +276,66 @@ private fun TaskSelectorWithProgress(
                     )
                 }
             }
-            
+
             DropdownMenu(
                 expanded = showDropdown,
-                onDismissRequest = { onDropdownToggle() },
-                modifier = Modifier.fillMaxWidth(0.9f)
+                onDismissRequest = {
+                    onDropdownToggle()
+                    onSearchQueryChange("")
+                },
+                modifier = Modifier
+                    .fillMaxWidth(0.9f)
+                    .heightIn(max = 400.dp)
             ) {
-                if (tasks.isEmpty()) {
+                // 搜索框
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = onSearchQueryChange,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    placeholder = { Text("搜索配方名称、编码...") },
+                    leadingIcon = {
+                        Icon(
+                            Icons.Default.Search,
+                            contentDescription = "搜索",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    },
+                    trailingIcon = {
+                        if (searchQuery.isNotEmpty()) {
+                            IconButton(onClick = { onSearchQueryChange("") }) {
+                                Icon(
+                                    Icons.Default.Clear,
+                                    contentDescription = "清除",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    },
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                    )
+                )
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+                if (filteredTasks.isEmpty()) {
                     DropdownMenuItem(
-                        text = { Text("暂无可用任务") },
+                        text = {
+                            Text(
+                                if (searchQuery.isEmpty()) "暂无可用任务"
+                                else "未找到匹配的任务"
+                            )
+                        },
                         onClick = { },
                         enabled = false
                     )
                 } else {
-                    tasks.forEach { task ->
+                    filteredTasks.forEach { task ->
                         DropdownMenuItem(
                             text = {
                                 Column {
@@ -293,19 +365,16 @@ private fun TaskSelectorWithProgress(
                 }
             }
         }
-        
+
         Spacer(modifier = Modifier.width(12.dp))
-        
+
         // 进度显示
         if (totalCount > 0) {
-            val progress = confirmedCount.toFloat() / totalCount
-            val progressPercent = (progress * 100).toInt()
-            
             Card(
                 colors = CardDefaults.cardColors(
-                    containerColor = if (confirmedCount == totalCount) 
-                        MaterialTheme.colorScheme.primaryContainer 
-                    else 
+                    containerColor = if (confirmedCount == totalCount)
+                        MaterialTheme.colorScheme.primaryContainer
+                    else
                         MaterialTheme.colorScheme.surfaceVariant
                 )
             ) {
@@ -317,9 +386,9 @@ private fun TaskSelectorWithProgress(
                     Icon(
                         imageVector = if (confirmedCount == totalCount) Icons.Default.CheckCircle else Icons.Default.Checklist,
                         contentDescription = null,
-                        tint = if (confirmedCount == totalCount) 
-                            MaterialTheme.colorScheme.primary 
-                        else 
+                        tint = if (confirmedCount == totalCount)
+                            MaterialTheme.colorScheme.primary
+                        else
                             MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(20.dp)
                     )
@@ -327,11 +396,6 @@ private fun TaskSelectorWithProgress(
                         text = "$confirmedCount/$totalCount",
                         fontWeight = FontWeight.Bold,
                         fontSize = 16.sp
-                    )
-                    Text(
-                        text = "($progressPercent%)",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
@@ -375,6 +439,9 @@ private fun BatchOperationRow(
 private fun MaterialListContent(
     materials: List<Material>,
     recipeName: String,
+    recipeTotal: Double,
+    taskQuantity: Double,
+    taskUnit: String,
     confirmedMaterials: Set<String>,
     onToggleConfirm: (String) -> Unit
 ) {
@@ -383,20 +450,40 @@ private fun MaterialListContent(
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         item {
-            Text(
-                text = "配方：$recipeName",
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(vertical = 4.dp)
-            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "配方：$recipeName",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    text = "任务量：$taskQuantity $taskUnit",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.secondary
+                )
+            }
         }
-        
+
         itemsIndexed(materials, key = { _, m -> m.id }) { index, material ->
             val isConfirmed = material.id in confirmedMaterials
-            
+            val (actualWeight, displayUnit) = calculateActualWeight(
+                materialWeight = material.weight,
+                recipeTotal = recipeTotal,
+                taskQuantity = taskQuantity,
+                taskUnit = taskUnit
+            )
+
             MaterialItemCard(
                 index = index + 1,
                 material = material,
+                actualWeight = actualWeight,
+                displayUnit = displayUnit,
                 isConfirmed = isConfirmed,
                 onToggle = { onToggleConfirm(material.id) }
             )
@@ -411,6 +498,8 @@ private fun MaterialListContent(
 private fun MaterialItemCard(
     index: Int,
     material: Material,
+    actualWeight: Double,
+    displayUnit: String,
     isConfirmed: Boolean,
     onToggle: () -> Unit
 ) {
@@ -419,7 +508,7 @@ private fun MaterialItemCard(
     } else {
         MaterialTheme.colorScheme.surface
     }
-    
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -442,16 +531,16 @@ private fun MaterialItemCard(
                     checkedColor = MaterialTheme.colorScheme.primary
                 )
             )
-            
+
             // 序号
             Box(
                 modifier = Modifier
                     .size(32.dp)
                     .clip(CircleShape)
                     .background(
-                        if (isConfirmed) 
-                            MaterialTheme.colorScheme.primary 
-                        else 
+                        if (isConfirmed)
+                            MaterialTheme.colorScheme.primary
+                        else
                             MaterialTheme.colorScheme.surfaceVariant
                     ),
                 contentAlignment = Alignment.Center
@@ -459,14 +548,14 @@ private fun MaterialItemCard(
                 Text(
                     text = "$index",
                     style = MaterialTheme.typography.labelMedium,
-                    color = if (isConfirmed) 
-                        MaterialTheme.colorScheme.onPrimary 
-                    else 
+                    color = if (isConfirmed)
+                        MaterialTheme.colorScheme.onPrimary
+                    else
                         MaterialTheme.colorScheme.onSurfaceVariant,
                     fontWeight = FontWeight.Bold
                 )
             }
-            
+
             // 物料信息
             Column(modifier = Modifier.weight(1f)) {
                 Text(
@@ -475,9 +564,9 @@ private fun MaterialItemCard(
                     fontWeight = FontWeight.Medium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    textDecoration = if (isConfirmed) 
-                        androidx.compose.ui.text.style.TextDecoration.LineThrough 
-                    else 
+                    textDecoration = if (isConfirmed)
+                        androidx.compose.ui.text.style.TextDecoration.LineThrough
+                    else
                         null
                 )
                 if (material.code.isNotBlank()) {
@@ -488,22 +577,29 @@ private fun MaterialItemCard(
                     )
                 }
             }
-            
-            // 重量
+
+            // 重量显示
             Column(horizontalAlignment = Alignment.End) {
+                // 实际需要量（主要显示）
                 Text(
-                    text = "${material.weight}",
+                    text = formatWeight(actualWeight),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary
                 )
                 Text(
-                    text = material.unit,
+                    text = displayUnit,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                // 配方原始重量（次要显示）
+                Text(
+                    text = "(配方: ${material.weight}${material.unit})",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.outline
+                )
             }
-            
+
             // 确认状态图标
             if (isConfirmed) {
                 Icon(
@@ -609,5 +705,52 @@ private fun EmptyState(message: String) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
+    }
+}
+
+/**
+ * 计算物料的实际需要重量
+ * @param materialWeight 物料在配方中的重量（克）
+ * @param recipeTotal 配方总重量（克）
+ * @param taskQuantity 任务总量
+ * @param taskUnit 任务单位（kg/g）
+ * @return Pair<Double, String> 实际重量和显示单位
+ */
+private fun calculateActualWeight(
+    materialWeight: Double,
+    recipeTotal: Double,
+    taskQuantity: Double,
+    taskUnit: String
+): Pair<Double, String> {
+    if (recipeTotal <= 0) return Pair(materialWeight, "g")
+
+    // 将任务总量转换为克
+    val taskQuantityInGrams = when (taskUnit.lowercase()) {
+        "kg" -> taskQuantity * 1000
+        "g" -> taskQuantity
+        else -> taskQuantity * 1000  // 默认按 kg 处理
+    }
+
+    // 计算实际重量（克）
+    val actualWeightInGrams = materialWeight * (taskQuantityInGrams / recipeTotal)
+
+    // 智能选择显示单位
+    return if (actualWeightInGrams >= 1000) {
+        Pair(actualWeightInGrams / 1000, "kg")
+    } else {
+        Pair(actualWeightInGrams, "g")
+    }
+}
+
+/**
+ * 格式化重量显示
+ */
+private fun formatWeight(weight: Double): String {
+    return if (weight >= 100) {
+        "%.1f".format(weight)
+    } else if (weight >= 10) {
+        "%.2f".format(weight)
+    } else {
+        "%.3f".format(weight)
     }
 }
