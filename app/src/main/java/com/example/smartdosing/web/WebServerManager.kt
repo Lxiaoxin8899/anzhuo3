@@ -9,6 +9,9 @@ import com.example.smartdosing.data.transfer.RecipeSyncResult
 import com.example.smartdosing.data.transfer.toImportRequest
 import com.example.smartdosing.data.transfer.IncomingTaskRequest
 import com.example.smartdosing.data.transfer.TaskReceiveResponse
+import com.example.smartdosing.data.transfer.TaskReceiver
+import com.example.smartdosing.data.device.PairingRequestStore
+import com.example.smartdosing.data.device.PairingStatus
 import com.example.smartdosing.data.repository.ConfigurationRecordPayload
 import com.example.smartdosing.database.entities.AuthorizedSenderEntity
 import com.google.gson.Gson
@@ -19,7 +22,6 @@ import io.ktor.http.content.*
 import io.ktor.serialization.gson.*
 import io.ktor.server.application.*
 import io.ktor.server.engine.*
-import io.ktor.server.html.*
 import io.ktor.server.netty.*
 import io.ktor.server.plugins.contentnegotiation.*
 import io.ktor.server.plugins.cors.routing.*
@@ -27,8 +29,6 @@ import io.ktor.server.plugins.statuspages.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
-import kotlinx.html.*
-import kotlinx.html.stream.createHTML
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -151,19 +151,50 @@ class WebServerManager(private val context: Context) {
         }
 
         // API Key 认证拦截器：/api 路径下的请求需要携带有效的 API Key
+        // 已配对发送端 API Key 内存缓存（带过期时间，避免撤销后仍可访问）
+        val senderApiKeyCache = java.util.concurrent.ConcurrentHashMap<String, Long>()
+        val cacheValidityMs = 5 * 60_000L // 缓存有效期 5 分钟
+
         intercept(ApplicationCallPipeline.Plugins) {
             val path = call.request.path()
             // 静态页面和根路径不需要认证
             if (!path.startsWith("/api")) return@intercept
-            val requestKey = call.request.headers[API_KEY_HEADER]
-                ?: call.request.queryParameters["api_key"]
-            if (requestKey != apiKey) {
-                call.respond(
-                    HttpStatusCode.Unauthorized,
-                    ApiResponse<Unit>(success = false, message = "未授权：请提供有效的 API Key")
-                )
-                finish()
+
+            // 配对接口：仅放行发送端发起配对（POST）和轮询配对结果（GET + pairingId 格式）
+            // approve / reject / pending 仍需认证（仅设备端 Web UI 可调用）
+            if (path == "/api/device/pair" && call.request.httpMethod == HttpMethod.Post) return@intercept
+            if (path.matches(Regex("^/api/device/pair/PAIR-[^/]+$"))) {
+                // GET /api/device/pair/{pairingId} — 发送端轮询，放行（pairingId 以 PAIR- 开头）
+                if (call.request.httpMethod == HttpMethod.Get) return@intercept
             }
+
+            val requestKey = call.request.headers[API_KEY_HEADER]
+
+            // 检查全局 API Key（Web UI）
+            if (requestKey == apiKey) return@intercept
+
+            // 检查已配对发送端的专属 API Key（优先查缓存，带过期时间）
+            if (requestKey != null) {
+                val cachedAt = senderApiKeyCache[requestKey]
+                val now = System.currentTimeMillis()
+                if (cachedAt != null && now - cachedAt < cacheValidityMs) return@intercept
+
+                val database = com.example.smartdosing.database.SmartDosingDatabase.getDatabase(appContext)
+                val sender = database.deviceDao().getSenderByApiKey(requestKey)
+                if (sender != null) {
+                    senderApiKeyCache[requestKey] = now
+                    return@intercept
+                } else {
+                    // Key 已被撤销，清除缓存
+                    senderApiKeyCache.remove(requestKey)
+                }
+            }
+
+            call.respond(
+                HttpStatusCode.Unauthorized,
+                ApiResponse<Unit>(success = false, message = "未授权：请提供有效的 API Key")
+            )
+            finish()
         }
 
         // 配置路由
@@ -177,30 +208,6 @@ class WebServerManager(private val context: Context) {
      * 配置静态路由（HTML页面）
      */
     private fun Route.configureStaticRoutes() {
-        suspend fun ApplicationCall.respondHtml(builder: HTML.() -> Unit) {
-            val htmlContent = createHTML().html { builder() }
-            // 在 </head> 前注入 API Key 脚本，让前端 fetch 自动携带认证头
-            val apiKeyScript = """
-<script>
-(function() {
-    const API_KEY = '${apiKey}';
-    const _fetch = window.fetch;
-    window.fetch = function(url, opts) {
-        opts = opts || {};
-        opts.headers = opts.headers || {};
-        if (opts.headers instanceof Headers) {
-            opts.headers.set('X-API-Key', API_KEY);
-        } else {
-            opts.headers['X-API-Key'] = API_KEY;
-        }
-        return _fetch.call(this, url, opts);
-    };
-})();
-</script>"""
-            val injected = htmlContent.replace("</head>", "$apiKeyScript\n</head>")
-            respondText(injected, ContentType.Text.Html.withCharset(Charsets.UTF_8))
-        }
-
         suspend fun ApplicationCall.respondWebUiOffline(path: String) {
             val offlineHtml = """
 <!DOCTYPE html>
@@ -759,6 +766,9 @@ class WebServerManager(private val context: Context) {
                 get("/info") {
                     try {
                         val deviceIdentity = com.example.smartdosing.data.device.DeviceUIDManager.getDeviceIdentity(appContext)
+                        val taskReceiver = com.example.smartdosing.data.transfer.TaskReceiver.getInstance(appContext)
+                        val executingTask = taskReceiver.getExecutingTask()
+                        val actualStatus = if (executingTask != null) "BUSY" else "IDLE"
                         call.respond(ApiResponse(
                             success = true,
                             data = mapOf(
@@ -767,7 +777,7 @@ class WebServerManager(private val context: Context) {
                                 "ipAddress" to deviceIdentity.ipAddress,
                                 "port" to deviceIdentity.port,
                                 "appVersion" to deviceIdentity.appVersion,
-                                "status" to deviceIdentity.status.name
+                                "status" to actualStatus
                             )
                         ))
                     } catch (e: Exception) {
@@ -779,19 +789,34 @@ class WebServerManager(private val context: Context) {
                     }
                 }
 
-                // 心跳检测
+                // 心跳检测（扩展：携带当前任务信息）
                 post("/ping") {
                     try {
                         val deviceIdentity = com.example.smartdosing.data.device.DeviceUIDManager.getDeviceIdentity(appContext)
+                        val taskReceiver = com.example.smartdosing.data.transfer.TaskReceiver.getInstance(appContext)
+                        val executingTask = taskReceiver.getExecutingTask()
+
+                        val data = mutableMapOf<String, Any?>(
+                            "uid" to deviceIdentity.uid,
+                            "deviceName" to deviceIdentity.deviceName,
+                            "status" to if (executingTask != null) "BUSY" else "IDLE",
+                            "timestamp" to System.currentTimeMillis()
+                        )
+
+                        if (executingTask != null) {
+                            data["currentTask"] = mapOf(
+                                "transferId" to executingTask.transferId,
+                                "status" to executingTask.execStatus,
+                                "progress" to executingTask.progress,
+                                "currentStep" to executingTask.currentStep,
+                                "totalSteps" to executingTask.totalSteps
+                            )
+                        }
+
                         call.respond(ApiResponse(
                             success = true,
                             message = "pong",
-                            data = mapOf(
-                                "uid" to deviceIdentity.uid,
-                                "deviceName" to deviceIdentity.deviceName,
-                                "status" to deviceIdentity.status.name,
-                                "timestamp" to System.currentTimeMillis()
-                            )
+                            data = data
                         ))
                     } catch (e: Exception) {
                         call.respond(
@@ -804,7 +829,6 @@ class WebServerManager(private val context: Context) {
                 // 获取已授权的发送端列表
                 get("/senders") {
                     try {
-                        val taskReceiver = com.example.smartdosing.data.transfer.TaskReceiver.getInstance(appContext)
                         val database = com.example.smartdosing.database.SmartDosingDatabase.getDatabase(appContext)
                         val senders = database.deviceDao().getActiveSenders()
                         call.respond(ApiResponse(success = true, data = senders))
@@ -813,6 +837,224 @@ class WebServerManager(private val context: Context) {
                         call.respond(
                             HttpStatusCode.InternalServerError,
                             ApiResponse<Unit>(success = false, message = "获取发送端列表失败")
+                        )
+                    }
+                }
+
+                // ========== 配对接口（无需认证） ==========
+
+                // 发送端发起配对请求
+                post("/pair") {
+                    try {
+                        val request = call.receive<PairRequest>()
+                        if (request.senderUID.isBlank() || request.senderName.isBlank()) {
+                            return@post call.respond(
+                                HttpStatusCode.BadRequest,
+                                ApiResponse<Unit>(success = false, message = "senderUID 和 senderName 不能为空")
+                            )
+                        }
+                        if (request.callbackBaseUrl.isBlank()) {
+                            return@post call.respond(
+                                HttpStatusCode.BadRequest,
+                                ApiResponse<Unit>(success = false, message = "callbackBaseUrl 不能为空")
+                            )
+                        }
+
+                        val pairingId = PairingRequestStore.createRequest(
+                            senderUID = request.senderUID,
+                            senderName = request.senderName,
+                            senderIP = request.senderIP,
+                            senderPort = request.senderPort,
+                            callbackBaseUrl = request.callbackBaseUrl
+                        )
+
+                        if (pairingId == null) {
+                            call.respond(
+                                HttpStatusCode.TooManyRequests,
+                                ApiResponse<Unit>(success = false, message = "请求过于频繁，请稍后再试")
+                            )
+                        } else {
+                            call.respond(ApiResponse(
+                                success = true,
+                                message = "配对请求已发送，请在设备屏幕上确认",
+                                data = mapOf(
+                                    "pairingId" to pairingId,
+                                    "expiresIn" to 60
+                                )
+                            ))
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "处理配对请求失败", e)
+                        call.respond(
+                            HttpStatusCode.BadRequest,
+                            ApiResponse<Unit>(success = false, message = e.message ?: "配对请求失败")
+                        )
+                    }
+                }
+
+                // 发送端轮询配对结果
+                get("/pair/{pairingId}") {
+                    try {
+                        val pairingId = call.parameters["pairingId"]
+                            ?: return@get call.respond(
+                                HttpStatusCode.BadRequest,
+                                ApiResponse<Unit>(success = false, message = "pairingId 不能为空")
+                            )
+
+                        val session = PairingRequestStore.getSession(pairingId)
+                        if (session == null) {
+                            call.respond(ApiResponse(
+                                success = true,
+                                data = mapOf("status" to "EXPIRED", "message" to "配对请求已过期或不存在")
+                            ))
+                            return@get
+                        }
+
+                        when (session.status) {
+                            PairingStatus.WAITING -> {
+                                call.respond(ApiResponse(
+                                    success = true,
+                                    data = mapOf("status" to "WAITING", "message" to "等待设备确认")
+                                ))
+                            }
+                            PairingStatus.APPROVED -> {
+                                val deviceIdentity = com.example.smartdosing.data.device.DeviceUIDManager.getDeviceIdentity(appContext)
+                                call.respond(ApiResponse(
+                                    success = true,
+                                    data = mapOf(
+                                        "status" to "APPROVED",
+                                        "message" to "配对成功",
+                                        "apiKey" to session.generatedApiKey,
+                                        "deviceUID" to deviceIdentity.uid,
+                                        "deviceName" to deviceIdentity.deviceName,
+                                        "deviceIP" to deviceIdentity.ipAddress,
+                                        "devicePort" to deviceIdentity.port
+                                    )
+                                ))
+                            }
+                            PairingStatus.REJECTED -> {
+                                call.respond(ApiResponse(
+                                    success = true,
+                                    data = mapOf("status" to "REJECTED", "message" to "设备拒绝了配对请求")
+                                ))
+                            }
+                            PairingStatus.EXPIRED -> {
+                                call.respond(ApiResponse(
+                                    success = true,
+                                    data = mapOf("status" to "EXPIRED", "message" to "配对请求已过期")
+                                ))
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "查询配对结果失败", e)
+                        call.respond(
+                            HttpStatusCode.InternalServerError,
+                            ApiResponse<Unit>(success = false, message = "查询配对结果失败")
+                        )
+                    }
+                }
+
+                // 设备端确认配对（供 App 内部调用）
+                post("/pair/{pairingId}/approve") {
+                    try {
+                        val pairingId = call.parameters["pairingId"]
+                            ?: return@post call.respond(
+                                HttpStatusCode.BadRequest,
+                                ApiResponse<Unit>(success = false, message = "pairingId 不能为空")
+                            )
+
+                        val generatedApiKey = PairingRequestStore.approve(pairingId)
+                        if (generatedApiKey == null) {
+                            call.respond(
+                                HttpStatusCode.BadRequest,
+                                ApiResponse<Unit>(success = false, message = "配对请求不存在或已过期")
+                            )
+                            return@post
+                        }
+
+                        // 将配对信息持久化到数据库
+                        val session = PairingRequestStore.getSession(pairingId)
+                        if (session == null) {
+                            call.respond(
+                                HttpStatusCode.InternalServerError,
+                                ApiResponse<Unit>(success = false, message = "配对会话异常丢失")
+                            )
+                            return@post
+                        }
+                        val database = com.example.smartdosing.database.SmartDosingDatabase.getDatabase(appContext)
+                        val deviceDao = database.deviceDao()
+                        val now = System.currentTimeMillis()
+
+                        val sender = AuthorizedSenderEntity(
+                            uid = session.senderUID,
+                            name = session.senderName,
+                            ipAddress = session.senderIP,
+                            authorizedAt = now,
+                            isActive = true,
+                            senderPort = session.senderPort,
+                            callbackBaseUrl = session.callbackBaseUrl,
+                            senderApiKey = generatedApiKey
+                        )
+                        deviceDao.upsertSender(sender)
+
+                        call.respond(ApiResponse<Unit>(success = true, message = "配对已确认"))
+                    } catch (e: Exception) {
+                        Log.e(TAG, "确认配对失败", e)
+                        call.respond(
+                            HttpStatusCode.InternalServerError,
+                            ApiResponse<Unit>(success = false, message = "确认配对失败")
+                        )
+                    }
+                }
+
+                // 设备端拒绝配对（供 App 内部调用）
+                post("/pair/{pairingId}/reject") {
+                    try {
+                        val pairingId = call.parameters["pairingId"]
+                            ?: return@post call.respond(
+                                HttpStatusCode.BadRequest,
+                                ApiResponse<Unit>(success = false, message = "pairingId 不能为空")
+                            )
+
+                        val success = PairingRequestStore.reject(pairingId)
+                        if (success) {
+                            call.respond(ApiResponse<Unit>(success = true, message = "配对已拒绝"))
+                        } else {
+                            call.respond(
+                                HttpStatusCode.BadRequest,
+                                ApiResponse<Unit>(success = false, message = "配对请求不存在或已处理")
+                            )
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "拒绝配对失败", e)
+                        call.respond(
+                            HttpStatusCode.InternalServerError,
+                            ApiResponse<Unit>(success = false, message = "拒绝配对失败")
+                        )
+                    }
+                }
+
+                // 获取待确认的配对请求列表（供 App UI 弹窗使用）
+                get("/pair/pending") {
+                    try {
+                        val waitingRequests = PairingRequestStore.getWaitingRequests()
+                        call.respond(ApiResponse(
+                            success = true,
+                            data = waitingRequests.map { session ->
+                                mapOf(
+                                    "pairingId" to session.pairingId,
+                                    "senderName" to session.senderName,
+                                    "senderIP" to session.senderIP,
+                                    "createdAt" to session.createdAt,
+                                    "expiresAt" to session.expiresAt
+                                )
+                            }
+                        ))
+                    } catch (e: Exception) {
+                        Log.e(TAG, "获取待确认配对请求失败", e)
+                        call.respond(
+                            HttpStatusCode.InternalServerError,
+                            ApiResponse<Unit>(success = false, message = "获取待确认配对请求失败")
                         )
                     }
                 }
@@ -1014,7 +1256,7 @@ class WebServerManager(private val context: Context) {
                 get("/pending") {
                     try {
                         val database = com.example.smartdosing.database.SmartDosingDatabase.getDatabase(appContext)
-                        val pendingTasks = database.deviceDao().getReceivedTasksPaged(status = "PENDING", limit = 50, offset = 0)
+                        val pendingTasks = database.deviceDao().getReceivedTasksPaged(status = TaskReceiver.TaskStatus.PENDING, limit = 50, offset = 0)
                         call.respond(ApiResponse(success = true, data = pendingTasks))
                     } catch (e: Exception) {
                         Log.e(TAG, "获取待处理任务失败", e)
@@ -1082,6 +1324,86 @@ class WebServerManager(private val context: Context) {
                         call.respond(
                             HttpStatusCode.InternalServerError,
                             ApiResponse<Unit>(success = false, message = "获取任务历史失败")
+                        )
+                    }
+                }
+
+                // ========== 进度查询接口 ==========
+
+                // 查询单个任务进度
+                get("/progress/{transferId}") {
+                    try {
+                        val transferId = call.parameters["transferId"]
+                            ?: return@get call.respond(
+                                HttpStatusCode.BadRequest,
+                                ApiResponse<Unit>(success = false, message = "transferId 不能为空")
+                            )
+
+                        val database = com.example.smartdosing.database.SmartDosingDatabase.getDatabase(appContext)
+                        val task = database.deviceDao().getTaskByTransferId(transferId)
+
+                        if (task == null) {
+                            call.respond(ApiResponse<Unit>(success = false, message = "传输记录不存在"))
+                            return@get
+                        }
+
+                        call.respond(ApiResponse(
+                            success = true,
+                            data = mapOf(
+                                "transferId" to task.transferId,
+                                "taskId" to task.id,
+                                "status" to task.execStatus,
+                                "progress" to task.progress,
+                                "currentStep" to task.currentStep,
+                                "totalSteps" to task.totalSteps,
+                                "currentMaterial" to task.currentMaterial,
+                                "message" to task.execMessage,
+                                "updatedAt" to task.execUpdatedAt
+                            )
+                        ))
+                    } catch (e: Exception) {
+                        Log.e(TAG, "查询任务进度失败", e)
+                        call.respond(
+                            HttpStatusCode.InternalServerError,
+                            ApiResponse<Unit>(success = false, message = "查询任务进度失败")
+                        )
+                    }
+                }
+
+                // 批量查询任务进度
+                post("/progress/batch") {
+                    try {
+                        val request = call.receive<BatchProgressRequest>()
+                        if (request.transferIds.isEmpty()) {
+                            return@post call.respond(
+                                HttpStatusCode.BadRequest,
+                                ApiResponse<Unit>(success = false, message = "transferIds 不能为空")
+                            )
+                        }
+
+                        val database = com.example.smartdosing.database.SmartDosingDatabase.getDatabase(appContext)
+                        val tasks = database.deviceDao().getTasksByTransferIds(request.transferIds)
+
+                        val result = tasks.map { task ->
+                            mapOf(
+                                "transferId" to task.transferId,
+                                "taskId" to task.id,
+                                "status" to task.execStatus,
+                                "progress" to task.progress,
+                                "currentStep" to task.currentStep,
+                                "totalSteps" to task.totalSteps,
+                                "currentMaterial" to task.currentMaterial,
+                                "message" to task.execMessage,
+                                "updatedAt" to task.execUpdatedAt
+                            )
+                        }
+
+                        call.respond(ApiResponse(success = true, data = result))
+                    } catch (e: Exception) {
+                        Log.e(TAG, "批量查询任务进度失败", e)
+                        call.respond(
+                            HttpStatusCode.InternalServerError,
+                            ApiResponse<Unit>(success = false, message = "批量查询任务进度失败")
                         )
                     }
                 }
@@ -1568,4 +1890,17 @@ private data class QuickPublishRequest(
 private data class RecordStatusUpdateRequest(
     val status: ConfigurationRecordStatus,
     val note: String? = null
+)
+
+private data class PairRequest(
+    val senderUID: String = "",
+    val senderName: String = "",
+    val senderIP: String = "",
+    val senderPort: Int = 0,
+    val callbackBaseUrl: String = "",
+    val timestamp: Long = 0
+)
+
+private data class BatchProgressRequest(
+    val transferIds: List<String> = emptyList()
 )

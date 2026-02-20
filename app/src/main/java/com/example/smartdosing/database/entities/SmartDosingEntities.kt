@@ -252,7 +252,7 @@ data class RecipeWithMaterials(
 
 
 /**
- * 鎶曟枡璁板綍瀹炰綋
+ * 投料记录实体
  */
 @Entity(
     tableName = "dosing_records",
@@ -306,7 +306,7 @@ data class DosingRecordEntity(
 )
 
 /**
- * 鎶曟枡璁板綍鏄庣粏瀹炰綋
+ * 投料记录明细实体
  */
 @Entity(
     tableName = "dosing_record_details",
@@ -346,7 +346,7 @@ data class DosingRecordDetailEntity(
 )
 
 /**
- * 鎶曟枡璁板綍鍜屾壒寰佹暟鎹叧鑱?
+ * 投料记录和明细数据关联
  */
 data class DosingRecordWithDetails(
     @Embedded
@@ -391,7 +391,17 @@ data class AuthorizedSenderEntity(
     val isActive: Boolean = true,                   // 是否启用
 
     @ColumnInfo(name = "app_version")
-    val appVersion: String? = null                  // 发送端应用版本
+    val appVersion: String? = null,                 // 发送端应用版本
+
+    // === v6 新增：配对协议扩展字段 ===
+    @ColumnInfo(name = "sender_port")
+    val senderPort: Int? = null,                    // 发送端服务端口
+
+    @ColumnInfo(name = "callback_base_url")
+    val callbackBaseUrl: String? = null,            // 发送端回调基础地址
+
+    @ColumnInfo(name = "sender_api_key")
+    val senderApiKey: String? = null                // 为该发送端生成的专属 API Key
 )
 
 /**
@@ -403,7 +413,8 @@ data class AuthorizedSenderEntity(
         Index(value = ["transfer_id"], unique = true),
         Index(value = ["sender_uid"]),
         Index(value = ["received_at"]),
-        Index(value = ["status"])
+        Index(value = ["status"]),
+        Index(value = ["exec_status"])
     ]
 )
 data class ReceivedTaskEntity(
@@ -452,5 +463,27 @@ data class ReceivedTaskEntity(
     @ColumnInfo(name = "accepted_at")
     val acceptedAt: Long? = null,                   // 确认接收时间
 
-    val status: String = "PENDING"                  // 状态：PENDING, ACCEPTED, REJECTED, COMPLETED
+    val status: String = "PENDING",                 // 状态：PENDING, ACCEPTED, REJECTED, COMPLETED
+
+    // === v6 新增：执行进度字段 ===
+    @ColumnInfo(name = "exec_status")
+    val execStatus: String = "PENDING",             // 执行状态：PENDING/ACCEPTED/REJECTED/EXECUTING/COMPLETED/EXEC_FAILED
+
+    @ColumnInfo(name = "progress")
+    val progress: Int = 0,                          // 进度百分比 0-100
+
+    @ColumnInfo(name = "current_step")
+    val currentStep: Int = 0,                       // 当前步骤序号
+
+    @ColumnInfo(name = "total_steps")
+    val totalSteps: Int = 0,                        // 总步骤数
+
+    @ColumnInfo(name = "current_material")
+    val currentMaterial: String? = null,            // 当前材料名称
+
+    @ColumnInfo(name = "exec_message")
+    val execMessage: String? = null,                // 执行消息
+
+    @ColumnInfo(name = "exec_updated_at")
+    val execUpdatedAt: Long? = null                 // 执行状态最后更新时间
 )

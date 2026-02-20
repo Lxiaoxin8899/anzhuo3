@@ -3,6 +3,7 @@ package com.example.smartdosing.web
 import android.content.Context
 import android.net.wifi.WifiManager
 import android.util.Log
+import com.example.smartdosing.data.transfer.TaskProgressCallbackManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -90,6 +91,7 @@ class WebService(private val context: Context) {
     fun stopWebService(): Boolean {
         return try {
             webServerManager.stopServer()
+            TaskProgressCallbackManager.getInstance(context).destroy()
             serviceScope?.cancel()
             serviceScope = null
             Log.i(TAG, "无线传输服务已停止")

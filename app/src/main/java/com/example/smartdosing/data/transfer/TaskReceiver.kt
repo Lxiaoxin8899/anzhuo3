@@ -34,9 +34,32 @@ class TaskReceiver(private val context: Context) {
         }
     }
 
+    /**
+     * 任务状态常量（对应 received_tasks.status）
+     */
+    object TaskStatus {
+        const val PENDING = "PENDING"
+        const val ACCEPTED = "ACCEPTED"
+        const val REJECTED = "REJECTED"
+        const val COMPLETED = "COMPLETED"
+    }
+
+    /**
+     * 执行状态常量（对应 received_tasks.exec_status）
+     */
+    object ExecStatus {
+        const val PENDING = "PENDING"
+        const val ACCEPTED = "ACCEPTED"
+        const val REJECTED = "REJECTED"
+        const val EXECUTING = "EXECUTING"
+        const val COMPLETED = "COMPLETED"
+        const val EXEC_FAILED = "EXEC_FAILED"
+    }
+
     private val database = SmartDosingDatabase.getDatabase(context)
     private val deviceDao = database.deviceDao()
     private val recipeRepository = DatabaseRecipeRepository.getInstance(context)
+    private val callbackManager = TaskProgressCallbackManager.getInstance(context)
     private val supportedSchemaVersions = setOf("1.0")
 
     // 新任务通知
@@ -119,22 +142,19 @@ class TaskReceiver(private val context: Context) {
 
             val now = System.currentTimeMillis()
 
-            // 2. 检查发送端是否已授权
+            // 2. 检查发送端是否已授权（必须通过配对流程）
             val isAuthorized = deviceDao.isSenderAuthorized(request.senderUID)
             if (!isAuthorized) {
-                Log.w(TAG, "未授权的发送端: ${request.senderUID}")
-                // 自动授权新设备（可以根据需求改为需要手动确认）
-                val newSender = AuthorizedSenderEntity(
-                    uid = request.senderUID,
-                    name = request.senderName,
-                    ipAddress = request.senderIP,
-                    authorizedAt = now,
-                    lastTaskAt = now,
-                    isActive = true,
-                    appVersion = request.senderAppVersion
+                Log.w(TAG, "未授权的发送端: ${request.senderUID}，请先完成配对")
+                return TaskReceiveResponse(
+                    success = false,
+                    message = "发送端未授权，请先通过 /api/device/pair 完成配对",
+                    transferId = request.transferId,
+                    receiverUID = deviceIdentity.uid,
+                    receiverName = deviceIdentity.deviceName,
+                    schemaVersion = request.schemaVersion,
+                    errorCode = "UNAUTHORIZED_SENDER"
                 )
-                deviceDao.upsertSender(newSender)
-                Log.i(TAG, "已自动授权新设备: ${request.senderName}")
             }
 
             // 3. 生成本地任务 ID
@@ -191,7 +211,7 @@ class TaskReceiver(private val context: Context) {
                 note = request.task.note,
                 localRecipeId = linkedRecipeId,
                 receivedAt = now,
-                status = "PENDING"
+                status = TaskStatus.PENDING
             )
 
             deviceDao.insertReceivedTask(receivedTask)
@@ -236,12 +256,25 @@ class TaskReceiver(private val context: Context) {
     }
 
     /**
-     * 接受任务
+     * 接受任务（触发 ACCEPTED 回调）
      */
     suspend fun acceptTask(taskId: String): Boolean {
         return try {
-            deviceDao.updateTaskStatus(taskId, "ACCEPTED", System.currentTimeMillis())
+            val now = System.currentTimeMillis()
+            deviceDao.updateTaskStatus(taskId, TaskStatus.ACCEPTED, now)
+            deviceDao.updateTaskExecStatus(taskId, ExecStatus.ACCEPTED, TaskStatus.ACCEPTED, 0, "任务已接收，等待执行", now)
             updatePendingCount()
+
+            // 触发回调
+            val task = deviceDao.getReceivedTaskById(taskId)
+            task?.let {
+                callbackManager.sendCallback(
+                    senderUID = it.senderUID,
+                    transferId = it.transferId,
+                    status = ExecStatus.ACCEPTED,
+                    message = "任务已接收，等待执行"
+                )
+            }
             true
         } catch (e: Exception) {
             Log.e(TAG, "接受任务失败", e)
@@ -250,16 +283,151 @@ class TaskReceiver(private val context: Context) {
     }
 
     /**
-     * 拒绝任务
+     * 拒绝任务（触发 REJECTED 回调）
      */
     suspend fun rejectTask(taskId: String): Boolean {
         return try {
-            deviceDao.updateTaskStatus(taskId, "REJECTED", System.currentTimeMillis())
+            val now = System.currentTimeMillis()
+            deviceDao.updateTaskStatus(taskId, TaskStatus.REJECTED, now)
+            deviceDao.updateTaskExecStatus(taskId, ExecStatus.REJECTED, TaskStatus.REJECTED, 0, "任务已拒绝", now)
             updatePendingCount()
+
+            // 触发回调
+            val task = deviceDao.getReceivedTaskById(taskId)
+            task?.let {
+                callbackManager.sendCallback(
+                    senderUID = it.senderUID,
+                    transferId = it.transferId,
+                    status = ExecStatus.REJECTED,
+                    message = "任务已拒绝"
+                )
+            }
             true
         } catch (e: Exception) {
             Log.e(TAG, "拒绝任务失败", e)
             false
+        }
+    }
+
+    /**
+     * 开始执行任务（触发 EXECUTING 回调）
+     */
+    suspend fun startExecuting(taskId: String, totalSteps: Int = 0, message: String? = null): Boolean {
+        return try {
+            val now = System.currentTimeMillis()
+            deviceDao.updateTaskExecStatus(taskId, ExecStatus.EXECUTING, TaskStatus.ACCEPTED, 0, message ?: "开始执行配方任务", now)
+            if (totalSteps > 0) {
+                deviceDao.updateTaskProgress(taskId, 0, 1, totalSteps, null, message, now)
+            }
+
+            val task = deviceDao.getReceivedTaskById(taskId)
+            task?.let {
+                callbackManager.sendCallback(
+                    senderUID = it.senderUID,
+                    transferId = it.transferId,
+                    status = ExecStatus.EXECUTING,
+                    progress = 0,
+                    currentStep = if (totalSteps > 0) 1 else 0,
+                    totalSteps = totalSteps,
+                    message = message ?: "开始执行配方任务"
+                )
+            }
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "开始执行任务失败", e)
+            false
+        }
+    }
+
+    /**
+     * 更新执行进度（不触发回调，仅更新本地数据供轮询）
+     */
+    suspend fun updateProgress(
+        taskId: String,
+        progress: Int,
+        currentStep: Int,
+        totalSteps: Int,
+        currentMaterial: String? = null,
+        message: String? = null
+    ): Boolean {
+        return try {
+            deviceDao.updateTaskProgress(
+                taskId, progress, currentStep, totalSteps,
+                currentMaterial, message, System.currentTimeMillis()
+            )
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "更新任务进度失败", e)
+            false
+        }
+    }
+
+    /**
+     * 任务完成（触发 COMPLETED 回调）
+     */
+    suspend fun completeTask(taskId: String, message: String? = null): Boolean {
+        return try {
+            val now = System.currentTimeMillis()
+            deviceDao.updateTaskExecStatus(taskId, ExecStatus.COMPLETED, TaskStatus.COMPLETED, 100, message ?: "配方执行完成", now)
+
+            val task = deviceDao.getReceivedTaskById(taskId)
+            task?.let {
+                callbackManager.sendCallback(
+                    senderUID = it.senderUID,
+                    transferId = it.transferId,
+                    status = ExecStatus.COMPLETED,
+                    progress = 100,
+                    currentStep = it.totalSteps,
+                    totalSteps = it.totalSteps,
+                    message = message ?: "配方执行完成"
+                )
+            }
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "完成任务失败", e)
+            false
+        }
+    }
+
+    /**
+     * 任务执行失败（触发 EXEC_FAILED 回调）
+     */
+    suspend fun failTask(taskId: String, errorMessage: String): Boolean {
+        return try {
+            val now = System.currentTimeMillis()
+            // 先查询当前进度，失败时保留进度信息而非重置为 0
+            val task = deviceDao.getReceivedTaskById(taskId)
+            val currentProgress = task?.progress ?: 0
+            deviceDao.updateTaskExecStatus(taskId, ExecStatus.EXEC_FAILED, TaskStatus.COMPLETED, currentProgress, errorMessage, now)
+
+            task?.let {
+                callbackManager.sendCallback(
+                    senderUID = it.senderUID,
+                    transferId = it.transferId,
+                    status = ExecStatus.EXEC_FAILED,
+                    progress = it.progress,
+                    currentStep = it.currentStep,
+                    totalSteps = it.totalSteps,
+                    currentMaterial = it.currentMaterial,
+                    message = errorMessage
+                )
+            }
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "标记任务失败失败", e)
+            false
+        }
+    }
+
+    /**
+     * 获取当前正在执行的任务
+     */
+    suspend fun getExecutingTask(): ReceivedTaskEntity? {
+        return try {
+            deviceDao.getExecutingTask()
+        } catch (e: Exception) {
+            Log.e(TAG, "获取执行中任务失败", e)
+            null
         }
     }
 

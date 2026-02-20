@@ -2,6 +2,7 @@ package com.example.smartdosing.database
 
 import android.content.Context
 import androidx.room.*
+import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -16,7 +17,7 @@ import com.example.smartdosing.database.converters.DatabaseConverters
 /**
  * SmartDosing应用的Room数据库主类
  *
- * 版本: 5
+ * 版本: 6
  * 包含表: recipes, materials, recipe_tags, templates, template_fields,
  *         import_logs, dosing_records, dosing_record_details,
  *         authorized_senders, received_tasks
@@ -37,7 +38,7 @@ import com.example.smartdosing.database.converters.DatabaseConverters
         AuthorizedSenderEntity::class,
         ReceivedTaskEntity::class
     ],
-    version = 5,
+    version = 6,
     exportSchema = true
 )
 @TypeConverters(DatabaseConverters::class)
@@ -75,8 +76,7 @@ abstract class SmartDosingDatabase : RoomDatabase() {
                 .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
                 // 仅允许从历史版本（v1-v4）破坏性升级到 v5
                 .fallbackToDestructiveMigrationFrom(1, 2, 3, 4)
-                // 未来新增版本时在此添加 Migration，例如：
-                // .addMigrations(MIGRATION_5_6)
+                .addMigrations(MIGRATION_5_6)
                 .build()
 
                 INSTANCE = instance
@@ -85,12 +85,26 @@ abstract class SmartDosingDatabase : RoomDatabase() {
         }
 
         // === 迁移定义区 ===
-        // 未来版本升级时在此添加 Migration 对象，示例：
-        // val MIGRATION_5_6 = object : Migration(5, 6) {
-        //     override fun migrate(db: SupportSQLiteDatabase) {
-        //         db.execSQL("ALTER TABLE recipes ADD COLUMN new_field TEXT DEFAULT ''")
-        //     }
-        // }
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // authorized_senders 表新增配对协议字段
+                db.execSQL("ALTER TABLE authorized_senders ADD COLUMN sender_port INTEGER DEFAULT NULL")
+                db.execSQL("ALTER TABLE authorized_senders ADD COLUMN callback_base_url TEXT DEFAULT NULL")
+                db.execSQL("ALTER TABLE authorized_senders ADD COLUMN sender_api_key TEXT DEFAULT NULL")
+
+                // received_tasks 表新增执行进度字段
+                db.execSQL("ALTER TABLE received_tasks ADD COLUMN exec_status TEXT NOT NULL DEFAULT 'PENDING'")
+                db.execSQL("ALTER TABLE received_tasks ADD COLUMN progress INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE received_tasks ADD COLUMN current_step INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE received_tasks ADD COLUMN total_steps INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE received_tasks ADD COLUMN current_material TEXT DEFAULT NULL")
+                db.execSQL("ALTER TABLE received_tasks ADD COLUMN exec_message TEXT DEFAULT NULL")
+                db.execSQL("ALTER TABLE received_tasks ADD COLUMN exec_updated_at INTEGER DEFAULT NULL")
+
+                // exec_status 索引，加速按执行状态查询
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_received_tasks_exec_status ON received_tasks(exec_status)")
+            }
+        }
 
         /**
          * 清除数据库实例（用于测试）
@@ -105,19 +119,13 @@ abstract class SmartDosingDatabase : RoomDatabase() {
      */
     private class DatabaseCallback(private val context: Context) : Callback() {
 
+        @Volatile
+        private var isNewlyCreated = false
+
         override fun onCreate(db: SupportSQLiteDatabase) {
             super.onCreate(db)
-
-            // 在后台线程初始化数据
-            CoroutineScope(Dispatchers.IO).launch {
-                INSTANCE?.let { database ->
-                    try {
-                        populateInitialData(database)
-                    } catch (e: Exception) {
-                        android.util.Log.e("SmartDosingDB", "初始化数据失败", e)
-                    }
-                }
-            }
+            // 标记为新创建，实际初始化延迟到 onOpen（此时 INSTANCE 已赋值）
+            isNewlyCreated = true
         }
 
         override fun onOpen(db: SupportSQLiteDatabase) {
@@ -125,6 +133,20 @@ abstract class SmartDosingDatabase : RoomDatabase() {
 
             // 启用外键约束
             db.execSQL("PRAGMA foreign_keys = ON")
+
+            // 仅在首次创建时初始化默认数据（此时 INSTANCE 已可用）
+            if (isNewlyCreated) {
+                isNewlyCreated = false
+                CoroutineScope(Dispatchers.IO).launch {
+                    INSTANCE?.let { database ->
+                        try {
+                            populateInitialData(database)
+                        } catch (e: Exception) {
+                            android.util.Log.e("SmartDosingDB", "初始化数据失败", e)
+                        }
+                    }
+                }
+            }
         }
 
         /**
