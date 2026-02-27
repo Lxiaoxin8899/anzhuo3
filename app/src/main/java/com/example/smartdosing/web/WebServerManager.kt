@@ -150,52 +150,8 @@ class WebServerManager(private val context: Context) {
             }
         }
 
-        // API Key 认证拦截器：/api 路径下的请求需要携带有效的 API Key
-        // 已配对发送端 API Key 内存缓存（带过期时间，避免撤销后仍可访问）
-        val senderApiKeyCache = java.util.concurrent.ConcurrentHashMap<String, Long>()
-        val cacheValidityMs = 5 * 60_000L // 缓存有效期 5 分钟
-
-        intercept(ApplicationCallPipeline.Plugins) {
-            val path = call.request.path()
-            // 静态页面和根路径不需要认证
-            if (!path.startsWith("/api")) return@intercept
-
-            // 配对接口：仅放行发送端发起配对（POST）和轮询配对结果（GET + pairingId 格式）
-            // approve / reject / pending 仍需认证（仅设备端 Web UI 可调用）
-            if (path == "/api/device/pair" && call.request.httpMethod == HttpMethod.Post) return@intercept
-            if (path.matches(Regex("^/api/device/pair/PAIR-[^/]+$"))) {
-                // GET /api/device/pair/{pairingId} — 发送端轮询，放行（pairingId 以 PAIR- 开头）
-                if (call.request.httpMethod == HttpMethod.Get) return@intercept
-            }
-
-            val requestKey = call.request.headers[API_KEY_HEADER]
-
-            // 检查全局 API Key（Web UI）
-            if (requestKey == apiKey) return@intercept
-
-            // 检查已配对发送端的专属 API Key（优先查缓存，带过期时间）
-            if (requestKey != null) {
-                val cachedAt = senderApiKeyCache[requestKey]
-                val now = System.currentTimeMillis()
-                if (cachedAt != null && now - cachedAt < cacheValidityMs) return@intercept
-
-                val database = com.example.smartdosing.database.SmartDosingDatabase.getDatabase(appContext)
-                val sender = database.deviceDao().getSenderByApiKey(requestKey)
-                if (sender != null) {
-                    senderApiKeyCache[requestKey] = now
-                    return@intercept
-                } else {
-                    // Key 已被撤销，清除缓存
-                    senderApiKeyCache.remove(requestKey)
-                }
-            }
-
-            call.respond(
-                HttpStatusCode.Unauthorized,
-                ApiResponse<Unit>(success = false, message = "未授权：请提供有效的 API Key")
-            )
-            finish()
-        }
+        // API Key 认证已临时禁用，方便后台系统对接
+        // TODO: 生产环境建议启用认证机制以提高安全性
 
         // 配置路由
         routing {

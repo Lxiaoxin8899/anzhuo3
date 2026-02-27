@@ -142,19 +142,20 @@ class TaskReceiver(private val context: Context) {
 
             val now = System.currentTimeMillis()
 
-            // 2. 检查发送端是否已授权（必须通过配对流程）
+            // 自动授权发送端（认证拦截器已临时禁用，此处自动注册未知发送端）
             val isAuthorized = deviceDao.isSenderAuthorized(request.senderUID)
             if (!isAuthorized) {
-                Log.w(TAG, "未授权的发送端: ${request.senderUID}，请先完成配对")
-                return TaskReceiveResponse(
-                    success = false,
-                    message = "发送端未授权，请先通过 /api/device/pair 完成配对",
-                    transferId = request.transferId,
-                    receiverUID = deviceIdentity.uid,
-                    receiverName = deviceIdentity.deviceName,
-                    schemaVersion = request.schemaVersion,
-                    errorCode = "UNAUTHORIZED_SENDER"
+                Log.i(TAG, "自动授权发送端: ${request.senderUID} (${request.senderName})")
+                val newSender = com.example.smartdosing.database.entities.AuthorizedSenderEntity(
+                    uid = request.senderUID,
+                    name = request.senderName,
+                    ipAddress = request.senderIP,
+                    authorizedAt = now,
+                    lastTaskAt = now,
+                    taskCount = 0,
+                    isActive = true
                 )
+                deviceDao.upsertSender(newSender)
             }
 
             // 3. 生成本地任务 ID
