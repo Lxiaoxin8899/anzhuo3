@@ -34,6 +34,9 @@ import com.example.smartdosing.data.Material
 import com.example.smartdosing.data.Recipe
 import com.example.smartdosing.data.TaskStatus
 import com.example.smartdosing.data.repository.ConfigurationRepositoryProvider
+import com.example.smartdosing.data.settings.DosingPreferencesManager
+import com.example.smartdosing.data.settings.DosingPreferencesState
+import com.example.smartdosing.data.settings.WeightUnit
 import kotlinx.coroutines.launch
 
 /**
@@ -48,6 +51,8 @@ fun MaterialListScreen(
     val context = LocalContext.current
     val taskRepository = remember { ConfigurationRepositoryProvider.taskRepository }
     val recipeRepository = remember { DatabaseRecipeRepository.getInstance(context) }
+    val preferencesManager = remember { DosingPreferencesManager(context) }
+    val preferencesState by preferencesManager.preferencesFlow.collectAsState(initial = DosingPreferencesState())
     val scope = rememberCoroutineScope()
     
     var tasks by remember { mutableStateOf<List<ConfigurationTask>>(emptyList()) }
@@ -152,6 +157,7 @@ fun MaterialListScreen(
                             recipeTotal = recipe!!.totalWeight,
                             taskQuantity = selectedTask!!.quantity,
                             taskUnit = selectedTask!!.unit,
+                            displayUnit = preferencesState.weightUnit.symbol,
                             confirmedMaterials = confirmedMaterials,
                             onToggleConfirm = { id ->
                                 confirmedMaterials = if (id in confirmedMaterials) confirmedMaterials - id else confirmedMaterials + id
@@ -243,19 +249,20 @@ private fun MaterialListContent(
     recipeTotal: Double,
     taskQuantity: Double,
     taskUnit: String,
+    displayUnit: String,
     confirmedMaterials: Set<String>,
     onToggleConfirm: (String) -> Unit
 ) {
     LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         itemsIndexed(materials) { index, material ->
-            val (actualWeight, displayUnit) = calculateActualWeight(material.weight, recipeTotal, taskQuantity, taskUnit)
+            val (actualWeight, unit) = calculateActualWeight(material.weight, recipeTotal, taskQuantity, taskUnit, displayUnit)
             val isConfirmed = material.id in confirmedMaterials
-            
+
             MaterialPrepCard(
                 index = index + 1,
                 material = material,
                 weight = actualWeight,
-                unit = displayUnit,
+                unit = unit,
                 isConfirmed = isConfirmed,
                 onToggle = { onToggleConfirm(material.id) }
             )
@@ -833,22 +840,23 @@ private fun calculateActualWeight(
     materialWeight: Double,
     recipeTotal: Double,
     taskQuantity: Double,
-    taskUnit: String
+    taskUnit: String,
+    displayUnit: String = "g"
 ): Pair<Double, String> {
-    if (recipeTotal <= 0) return Pair(materialWeight, "g")
+    if (recipeTotal <= 0) return Pair(materialWeight, displayUnit)
 
     // 将任务总量转换为克
     val taskQuantityInGrams = when (taskUnit.lowercase()) {
         "kg" -> taskQuantity * 1000
         "g" -> taskQuantity
-        else -> taskQuantity * 1000  // 默认按 kg 处理
+        else -> taskQuantity  // 默认按 g 处理
     }
 
     // 计算实际重量（克）
     val actualWeightInGrams = materialWeight * (taskQuantityInGrams / recipeTotal)
 
-    // 智能选择显示单位
-    return if (actualWeightInGrams >= 1000) {
+    // 按用户设置的单位输出
+    return if (displayUnit.lowercase() == "kg") {
         Pair(actualWeightInGrams / 1000, "kg")
     } else {
         Pair(actualWeightInGrams, "g")

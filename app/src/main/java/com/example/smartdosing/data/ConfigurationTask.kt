@@ -10,7 +10,7 @@ data class ConfigurationTask(
     val recipeName: String,
     val recipeCode: String,
     val quantity: Double,
-    val unit: String = "kg",
+    val unit: String = "g",
     val priority: TaskPriority = TaskPriority.NORMAL,
     val requestedBy: String = "",
     val perfumer: String = "",

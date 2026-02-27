@@ -20,11 +20,20 @@ enum class DosingMode(val displayName: String) {
     BLUETOOTH("蓝牙电子秤")
 }
 
+/**
+ * 重量单位枚举
+ */
+enum class WeightUnit(val symbol: String, val displayName: String) {
+    GRAM("g", "克 (g)"),
+    KILOGRAM("kg", "千克 (kg)")
+}
+
 data class DosingPreferencesState(
     val voiceRepeatEnabled: Boolean = false,
     val voiceRepeatCount: Int = 1,
     val overLimitTolerancePercent: Float = 3f,
-    val dosingMode: DosingMode = DosingMode.MANUAL
+    val dosingMode: DosingMode = DosingMode.MANUAL,
+    val weightUnit: WeightUnit = WeightUnit.GRAM
 ) {
     val repeatCountForPlayback: Int
         get() = if (voiceRepeatEnabled) {
@@ -49,7 +58,8 @@ class DosingPreferencesManager(context: Context) {
             voiceRepeatEnabled = prefs[VOICE_REPEAT_ENABLED] ?: true,
             voiceRepeatCount = prefs[VOICE_REPEAT_COUNT] ?: DEFAULT_REPEAT_COUNT,
             overLimitTolerancePercent = prefs[OVER_LIMIT_TOLERANCE] ?: DEFAULT_TOLERANCE,
-            dosingMode = DosingMode.entries.find { it.name == prefs[DOSING_MODE] } ?: DosingMode.MANUAL
+            dosingMode = DosingMode.entries.find { it.name == prefs[DOSING_MODE] } ?: DosingMode.MANUAL,
+            weightUnit = WeightUnit.entries.find { it.name == prefs[WEIGHT_UNIT] } ?: WeightUnit.GRAM
         )
     }
 
@@ -79,6 +89,12 @@ class DosingPreferencesManager(context: Context) {
         }
     }
 
+    suspend fun setWeightUnit(unit: WeightUnit) {
+        dataStore.edit { prefs ->
+            prefs[WEIGHT_UNIT] = unit.name
+        }
+    }
+
     companion object {
         const val MIN_REPEAT_COUNT = 1
         const val MAX_REPEAT_COUNT = 5
@@ -91,5 +107,6 @@ class DosingPreferencesManager(context: Context) {
         private val VOICE_REPEAT_COUNT = intPreferencesKey("voice_repeat_count")
         private val OVER_LIMIT_TOLERANCE = floatPreferencesKey("over_limit_tolerance")
         private val DOSING_MODE = stringPreferencesKey("dosing_mode")
+        private val WEIGHT_UNIT = stringPreferencesKey("weight_unit")
     }
 }

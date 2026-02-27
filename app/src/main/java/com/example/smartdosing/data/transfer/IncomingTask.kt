@@ -28,7 +28,7 @@ data class TaskPayload(
     val recipeCode: String,           // 配方编码
     val recipeName: String,           // 配方名称
     val quantity: Double,             // 数量
-    val unit: String = "kg",          // 单位
+    val unit: String = "g",           // 单位
     val priority: String = "NORMAL",  // 优先级: LOW, NORMAL, HIGH, URGENT
     val deadline: String? = null,     // 截止时间
     val customer: String? = null,     // 客户

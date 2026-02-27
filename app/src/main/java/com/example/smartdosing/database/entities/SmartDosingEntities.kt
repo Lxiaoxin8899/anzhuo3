@@ -446,7 +446,7 @@ data class ReceivedTaskEntity(
     @ColumnInfo(name = "recipe_name")
     val recipeName: String,                         // 配方名称
     val quantity: Double,                           // 数量
-    val unit: String = "kg",                        // 单位
+    val unit: String = "g",                         // 单位
     val priority: String = "NORMAL",                // 优先级
     val deadline: String? = null,                   // 截止时间
     val customer: String? = null,                   // 客户

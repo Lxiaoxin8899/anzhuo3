@@ -201,8 +201,14 @@ fun SettingsScreen(
                     title = "重量单位",
                     subtitle = "实验配置重量显示单位",
                     icon = Icons.Outlined.Balance,
-                    selectedValue = "公斤",
-                    options = listOf("克", "公斤", "磅")
+                    selectedValue = preferencesState.weightUnit.displayName,
+                    options = com.example.smartdosing.data.settings.WeightUnit.entries.map { it.displayName },
+                    onSelectionChange = { selectedName ->
+                        val unit = com.example.smartdosing.data.settings.WeightUnit.entries.find { it.displayName == selectedName }
+                        if (unit != null) {
+                            scope.launch { preferencesManager.setWeightUnit(unit) }
+                        }
+                    }
                 )
             )
         ),

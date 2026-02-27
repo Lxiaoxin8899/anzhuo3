@@ -448,7 +448,7 @@ private fun formatWeight(weight: Double, unit: String): String {
  * 将完整配方转换为检查清单所需信息
  */
 private fun Recipe.toChecklistInfo(): RecipeChecklistInfo {
-    val unit = materials.firstOrNull()?.unit ?: "kg"
+    val unit = materials.firstOrNull()?.unit ?: "g"
     return RecipeChecklistInfo(
         id = id,
         name = name,

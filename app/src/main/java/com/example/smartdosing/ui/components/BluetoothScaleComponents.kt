@@ -495,7 +495,7 @@ fun BluetoothWeightDisplayBox(
         manualWeight.ifBlank { "0.0" }
     }
     
-    val unit = if (isBluetoothConnected && bluetoothWeight != null) bluetoothWeight.unit else "KG"
+    val unit = if (isBluetoothConnected && bluetoothWeight != null) bluetoothWeight.unit else "g"
 
     val statusColor = if (isBluetoothConnected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
 
