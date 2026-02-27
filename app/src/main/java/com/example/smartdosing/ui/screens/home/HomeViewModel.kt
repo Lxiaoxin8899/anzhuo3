@@ -12,7 +12,6 @@ import com.example.smartdosing.data.TaskStatus
 import com.example.smartdosing.data.repository.ConfigurationRepositoryProvider
 import com.example.smartdosing.data.repository.ConfigurationRecordFilter
 import com.example.smartdosing.data.DatabaseRecipeRepository
-import com.example.smartdosing.tts.TTSManagerFactory
 import com.example.smartdosing.web.WebService
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -108,18 +107,12 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             while (true) {
                 val deviceInfo = webService.getDeviceInfo()
-                val ttsAvailable = TTSManagerFactory.isTTSAvailable()
-                val ttsTypeLabel = when (TTSManagerFactory.getCurrentTTSType()) {
-                    TTSManagerFactory.TTSType.XIAOMI_TTS -> "小米 TTS"
-                    TTSManagerFactory.TTSType.FALLBACK_TTS -> "系统 TTS"
-                    TTSManagerFactory.TTSType.NONE -> "未启用 TTS"
-                }
 
                 _runtimeStatus.value = HomeRuntimeStatus(
                     isWirelessRunning = deviceInfo.isServerRunning,
                     wirelessAddress = deviceInfo.serverUrl ?: "未连接网络",
-                    ttsStatus = if (ttsAvailable) "$ttsTypeLabel · 可用" else "语音服务不可用",
-                    ttsHint = if (ttsAvailable) "可在设置页执行语音自检" else "请检查语音组件安装与权限"
+                    ttsStatus = "语音服务已下线",
+                    ttsHint = "语音播报功能暂时关闭"
                 )
                 delay(3000)
             }

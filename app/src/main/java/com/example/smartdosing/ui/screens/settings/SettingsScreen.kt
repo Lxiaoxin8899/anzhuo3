@@ -12,7 +12,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -86,59 +85,7 @@ fun SettingsScreen(
                 )
             )
         ),
-        SettingsSection(
-            title = "语音播报设置",
-            icon = Icons.AutoMirrored.Filled.VolumeUp,
-            items = listOf(
-                SettingsItem.Switch(
-                    title = "启用语音重复播报",
-                    subtitle = "按步骤自动重复当前材料",
-                    icon = Icons.Outlined.RecordVoiceOver,
-                    isChecked = preferencesState.voiceRepeatEnabled,
-                    onCheckedChange = { enabled ->
-                        scope.launch { preferencesManager.setVoiceRepeatEnabled(enabled) }
-                    }
-                ),
-                SettingsItem.Slider(
-                    title = "重复次数",
-                    subtitle = "设置每个材料的播报次数",
-                    icon = Icons.Outlined.Repeat,
-                    value = preferencesState.voiceRepeatCount.toFloat(),
-                    onValueChange = { value ->
-                        scope.launch { preferencesManager.setVoiceRepeatCount(value.roundToInt()) }
-                    },
-                    valueRange = DosingPreferencesManager.MIN_REPEAT_COUNT.toFloat()..DosingPreferencesManager.MAX_REPEAT_COUNT.toFloat(),
-                    valueFormatter = { "${it.roundToInt()} 次" }
-                )
-            )
-        ),
-        SettingsSection(
-            title = "系统语音",
-            icon = Icons.Outlined.Campaign,
-            items = listOf(
-                SettingsItem.Switch(
-                    title = "启用语音播报",
-                    subtitle = "开启材料配置语音提示",
-                    icon = Icons.Outlined.VolumeUp,
-                    isChecked = true,
-                    onCheckedChange = { _ -> Toast.makeText(context, "该功能开发中", Toast.LENGTH_SHORT).show() }
-                ),
-                SettingsItem.Slider(
-                    title = "语音速度",
-                    subtitle = "调节语音播报速度",
-                    icon = Icons.Outlined.Speed,
-                    value = 0.8f,
-                    onValueChange = { _ -> Toast.makeText(context, "该功能开发中", Toast.LENGTH_SHORT).show() }
-                ),
-                SettingsItem.Slider(
-                    title = "音量大小",
-                    subtitle = "调节语音播报音量",
-                    icon = Icons.Outlined.VolumeUp,
-                    value = 0.75f,
-                    onValueChange = { _ -> Toast.makeText(context, "该功能开发中", Toast.LENGTH_SHORT).show() }
-                )
-            )
-        ),
+        // TTS 语音播报设置已软下线
         SettingsSection(
             title = "界面偏好",
             icon = Icons.Outlined.Palette,

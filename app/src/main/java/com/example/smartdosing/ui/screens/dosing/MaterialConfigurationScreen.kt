@@ -45,7 +45,6 @@ import com.example.smartdosing.bluetooth.model.WeightData
 import com.example.smartdosing.data.*
 import com.example.smartdosing.data.Material as DataMaterial
 import com.example.smartdosing.data.repository.ConfigurationRepositoryProvider
-import com.example.smartdosing.tts.TTSManagerFactory
 import com.example.smartdosing.ui.components.DosingBluetoothStatusBar
 import com.example.smartdosing.ui.theme.LocalWindowSize
 import com.example.smartdosing.ui.theme.SmartDosingTheme
@@ -104,11 +103,9 @@ fun MaterialConfigurationScreen(
     var isLoading by rememberSaveable { mutableStateOf(true) }
     var loadError by rememberSaveable { mutableStateOf<String?>(null) }
     
-    // 语音播报逻辑
+    // 语音播报逻辑（TTS 已软下线）
     fun announceMaterial(index: Int) {
-        val state = materialStates.getOrNull(index) ?: return
-        val text = "请添加 ${state.material.name}，目标重量 ${state.material.weight} 克"
-        TTSManagerFactory.speak(text)
+        // TTS 已软下线，暂不播报
     }
 
     // 加载数据
@@ -212,9 +209,10 @@ fun MaterialConfigurationScreen(
                 val state = this[index]
                 this[index] = state.copy(isConfirmed = true)
             }
-            
-            TTSManagerFactory.speak("完成 ${materialStates[index].material.name}")
-            
+
+            // TTS 已软下线
+            // TTSManagerFactory.speak("完成 ${materialStates[index].material.name}")
+
             // 跳到下一行
             val next = materialStates.indexOfFirst { !it.isConfirmed }
             if (next >= 0) {

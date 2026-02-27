@@ -22,8 +22,6 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.smartdosing.navigation.SmartDosingNavHost
-import com.example.smartdosing.tts.TTSManagerFactory
-import com.example.smartdosing.tts.XiaomiTTSSettingsHelper
 import com.example.smartdosing.ui.components.SmartDosingBottomNavigationBar
 import com.example.smartdosing.ui.components.SmartDosingNavigationRail
 import com.example.smartdosing.ui.theme.SmartDosingTheme
@@ -37,7 +35,6 @@ import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     private lateinit var webService: WebService
-    private lateinit var ttsSettingsHelper: XiaomiTTSSettingsHelper
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -45,8 +42,8 @@ class MainActivity : ComponentActivity() {
         // 无线传输服务初始化（本机 API + 局域网传输）
         webService = WebService.getInstance(this)
 
-        // 初始化小米TTS管理器
-        initializeXiaomiTTS()
+        // TTS 语音系统已软下线，如需恢复请取消注释
+        // initializeXiaomiTTS()
 
         enableEdgeToEdge()
         setContent {
@@ -59,75 +56,6 @@ class MainActivity : ComponentActivity() {
         if (webService.isAutoStartEnabled()) {
             startWebService()
         }
-    }
-
-    /**
-     * 初始化TTS管理器
-     */
-    private fun initializeXiaomiTTS() {
-        Log.d("TTS", "=== 开始初始化TTS管理器工厂 ===")
-        
-        try {
-            // 初始化TTS设置助手
-            ttsSettingsHelper = XiaomiTTSSettingsHelper(this)
-            
-            // 检查TTS可用性
-            val ttsStatus = ttsSettingsHelper.checkTTSAvailability()
-            Log.d("TTS", "TTS状态检查结果: $ttsStatus")
-            
-            // 如果TTS不可用，显示设置对话框
-            if (!ttsStatus.canUseTTS) {
-                Log.w("TTS", "TTS不可用，显示设置对话框")
-                showTTSSettingsDialog()
-            }
-            
-            // 使用TTS管理器工厂初始化
-            if (TTSManagerFactory.initialize(this)) {
-                val ttsType = TTSManagerFactory.getCurrentTTSType()
-                Log.d("TTS", "✅ TTS管理器工厂初始化成功，类型: $ttsType")
-                showToast("TTS语音功能已就绪 ($ttsType)")
-            } else {
-                Log.w("TTS", "⚠️ TTS管理器工厂初始化失败")
-                // 启动阶段只记录日志，避免反复弹窗打扰用户
-            }
-
-        } catch (e: Exception) {
-            Log.e("TTS", "❌ TTS管理器工厂初始化异常", e)
-            // 保持静默失败，后续可在设置页主动检测
-        }
-    }
-    
-    /**
-     * 显示TTS设置对话框
-     */
-    private fun showTTSSettingsDialog() {
-        try {
-            ttsSettingsHelper.showTTSSettingsOptions(this)
-        } catch (e: Exception) {
-            Log.e("TTS", "显示TTS设置对话框失败", e)
-            showToast("请手动检查TTS设置")
-        }
-    }
-    
-    /**
-     * 获取TTS设置助手实例（供其他组件使用）
-     */
-    fun getTTSSettingsHelper(): XiaomiTTSSettingsHelper? {
-        return if (::ttsSettingsHelper.isInitialized) ttsSettingsHelper else null
-    }
-
-    /**
-     * 播放TTS语音（供其他组件使用）
-     */
-    fun speakTTS(text: String) {
-        TTSManagerFactory.speak(text)
-    }
-
-    /**
-     * 停止TTS语音（供其他组件使用）
-     */
-    fun stopTTS() {
-        TTSManagerFactory.stopSpeaking()
     }
 
     private fun startWebService() {
@@ -153,7 +81,6 @@ class MainActivity : ComponentActivity() {
     override fun onDestroy() {
         super.onDestroy()
         webService.stopWebService()
-        TTSManagerFactory.release()
     }
 
     private fun showToast(message: String) {
