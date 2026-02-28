@@ -26,6 +26,9 @@ class BluetoothScaleManager(private val context: Context) {
         private const val TAG = "BluetoothScaleManager"
         private const val MAX_RETRY_COUNT = 3
         private const val RETRY_DELAY_MS = 2000L
+        private const val HEARTBEAT_INTERVAL_MS = 10000L // 10秒心跳间隔
+        private const val DATA_TIMEOUT_MS = 5000L // 5秒无数据视为连续打印失效
+        private const val AUTO_RECONNECT_DELAY_MS = 3000L // 断开后3秒自动重连
     }
 
     private val _connectionState = MutableStateFlow(ConnectionState.DISCONNECTED)
@@ -49,6 +52,28 @@ class BluetoothScaleManager(private val context: Context) {
     private val parser = OhausDataParser()
     private val handler = Handler(Looper.getMainLooper())
     private val deviceMap = mutableMapOf<String, ScaleDevice>()
+
+    // 自动重连相关
+    private var autoReconnectEnabled = false
+    private var lastConnectedMac: String? = null
+    @Volatile
+    private var lastDataReceivedTime = 0L
+
+    private val heartbeatRunnable = object : Runnable {
+        override fun run() {
+            if (isConnected()) {
+                val silentMs = System.currentTimeMillis() - lastDataReceivedTime
+                if (silentMs > DATA_TIMEOUT_MS) {
+                    // 超过5秒没收到数据，连续打印可能失效了，重发 CP
+                    Log.w(TAG, "已 ${silentMs}ms 无数据，重发 CP 恢复连续打印")
+                    sendCommand("CP")
+                } else {
+                    Log.d(TAG, "心跳检查正常，距上次数据 ${silentMs}ms")
+                }
+                handler.postDelayed(this, HEARTBEAT_INTERVAL_MS)
+            }
+        }
+    }
 
     private val enumResult = object : EnumResult {
         override fun onResult(device: BluetoothDevice?, rssi: Int, broadcastRecord: ByteArray?) {
@@ -78,6 +103,7 @@ class BluetoothScaleManager(private val context: Context) {
     private val connectCallback = object : ConnectStatus {
         override fun onSerialReadData(data: ByteArray?) {
             data?.let {
+                lastDataReceivedTime = System.currentTimeMillis()
                 Log.d(TAG, "收到数据: ${String(it, Charsets.UTF_8).trim()}")
                 parser.parse(it)?.let { weight ->
                     Log.d(TAG, "解析重量: ${weight.value} ${weight.unit}, 稳定: ${weight.isStable}")
@@ -90,8 +116,10 @@ class BluetoothScaleManager(private val context: Context) {
             mac?.let {
                 Log.i(TAG, "连接成功: $it")
                 connectedMac = it
+                lastConnectedMac = it
                 pendingConnectMac = null
                 retryCount = 0
+                autoReconnectEnabled = true
                 _connectedDeviceName.value = deviceMap[it]?.name ?: it
                 _connectionState.value = ConnectionState.CONNECTED
                 _errorMessage.value = null
@@ -99,6 +127,8 @@ class BluetoothScaleManager(private val context: Context) {
                 handler.postDelayed({
                     configureForOhaus()
                 }, 500)
+                // 启动心跳保活
+                startHeartbeat()
             }
         }
 
@@ -109,11 +139,25 @@ class BluetoothScaleManager(private val context: Context) {
 
         override fun OnDisconnect(mac: String?, status: Int) {
             Log.i(TAG, "设备断开: $mac, status: $status")
+            stopHeartbeat()
             _connectionState.value = ConnectionState.DISCONNECTED
             _currentWeight.value = null
             _connectedDeviceName.value = null
             connectedMac = null
             parser.clear()
+            // 非主动断开时自动重连
+            val reconnectMac = mac ?: lastConnectedMac
+            if (autoReconnectEnabled && reconnectMac != null) {
+                Log.i(TAG, "将在 ${AUTO_RECONNECT_DELAY_MS}ms 后自动重连: $reconnectMac")
+                _errorMessage.value = "连接断开，正在自动重连..."
+                retryCount = 0
+                handler.postDelayed({
+                    if (_connectionState.value == ConnectionState.DISCONNECTED && autoReconnectEnabled) {
+                        pendingConnectMac = reconnectMac
+                        connectInternal(reconnectMac)
+                    }
+                }, AUTO_RECONNECT_DELAY_MS)
+            }
         }
 
         override fun OnConnectTimeout(mac: String?) {
@@ -239,7 +283,9 @@ class BluetoothScaleManager(private val context: Context) {
     }
 
     fun disconnect() {
-        Log.d(TAG, "断开连接")
+        Log.d(TAG, "主动断开连接")
+        autoReconnectEnabled = false // 主动断开时禁用自动重连
+        stopHeartbeat()
         handler.removeCallbacksAndMessages(null)
         pendingConnectMac = null
         retryCount = 0
@@ -316,8 +362,20 @@ class BluetoothScaleManager(private val context: Context) {
         _errorMessage.value = null
     }
 
+    private fun startHeartbeat() {
+        stopHeartbeat()
+        Log.d(TAG, "启动心跳保活，间隔: ${HEARTBEAT_INTERVAL_MS}ms")
+        handler.postDelayed(heartbeatRunnable, HEARTBEAT_INTERVAL_MS)
+    }
+
+    private fun stopHeartbeat() {
+        handler.removeCallbacks(heartbeatRunnable)
+    }
+
     fun destroy() {
         Log.d(TAG, "销毁 BluetoothScaleManager")
+        autoReconnectEnabled = false
+        stopHeartbeat()
         handler.removeCallbacksAndMessages(null)
         disconnect()
         stopScan()

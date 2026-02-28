@@ -85,6 +85,12 @@ interface DeviceDao {
     fun getAllReceivedTasksFlow(): Flow<List<ReceivedTaskEntity>>
 
     /**
+     * 获取所有接收的任务（一次性查询，供任务同步使用）
+     */
+    @Query("SELECT * FROM received_tasks ORDER BY received_at DESC")
+    suspend fun getAllReceivedTasks(): List<ReceivedTaskEntity>
+
+    /**
      * 获取待处理的接收任务
      */
     @Query("SELECT * FROM received_tasks WHERE status = 'PENDING' ORDER BY received_at DESC")

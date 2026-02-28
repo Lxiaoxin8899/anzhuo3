@@ -4,6 +4,8 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Assignment
@@ -16,6 +18,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
@@ -33,7 +36,8 @@ import com.example.smartdosing.ui.theme.*
 fun LabCenterScreen(
     onNavigateBack: () -> Unit = {},
     onStartTask: (ConfigurationTask) -> Unit = {},
-    onNavigateToMaterialConfiguration: (String) -> Unit = {},
+    onNavigateToMaterialConfiguration: (String, Boolean) -> Unit = { _, _ -> },
+    onNavigateToMaterialConfigurationWithWeight: (String, Double) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
@@ -41,6 +45,10 @@ fun LabCenterScreen(
         LabTabItem("研发任务", Icons.Default.Assignment),
         LabTabItem("配方库", Icons.Default.List)
     )
+
+    // 配方库启动实验：重量输入对话框状态
+    var showWeightInputDialog by remember { mutableStateOf(false) }
+    var selectedRecipeIdForExperiment by remember { mutableStateOf("") }
 
     val visible = remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible.value = true }
@@ -154,14 +162,19 @@ fun LabCenterScreen(
                             TaskCenterScreen(
                                 onNavigateBack = onNavigateBack,
                                 onStartTask = onStartTask,
-                                onConfigureTask = { task -> 
-                                    onNavigateToMaterialConfiguration(task.recipeId.ifBlank { "quick_start" })
+                                onConfigureTask = { task ->
+                                    // 查看配方：只读模式
+                                    onNavigateToMaterialConfiguration(task.recipeId.ifBlank { "quick_start" }, true)
                                 }
                             )
                         }
                         1 -> {
                             RecipesScreen(
-                                onNavigateToMaterialConfiguration = onNavigateToMaterialConfiguration
+                                onNavigateToMaterialConfiguration = { recipeId ->
+                                    // 配方库启动实验：弹出重量输入对话框
+                                    selectedRecipeIdForExperiment = recipeId
+                                    showWeightInputDialog = true
+                                }
                             )
                         }
                     }
@@ -169,6 +182,84 @@ fun LabCenterScreen(
             }
         }
     }
+
+    // 配方库启动实验：重量输入对话框
+    if (showWeightInputDialog) {
+        WeightInputDialog(
+            onConfirm = { totalWeight ->
+                showWeightInputDialog = false
+                onNavigateToMaterialConfigurationWithWeight(selectedRecipeIdForExperiment, totalWeight)
+            },
+            onDismiss = { showWeightInputDialog = false },
+            onViewOnly = {
+                showWeightInputDialog = false
+                onNavigateToMaterialConfiguration(selectedRecipeIdForExperiment, true)
+            }
+        )
+    }
+}
+
+/**
+ * 配方库启动实验时的重量输入对话框
+ */
+@Composable
+private fun WeightInputDialog(
+    onConfirm: (Double) -> Unit,
+    onDismiss: () -> Unit,
+    onViewOnly: () -> Unit
+) {
+    var weightInput by remember { mutableStateOf("") }
+    var inputError by remember { mutableStateOf<String?>(null) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text("设置配置总量", fontWeight = FontWeight.Bold)
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    "请输入本次实验需要配置的总重量，系统将按配方比例自动计算每种材料的目标重量。",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                OutlinedTextField(
+                    value = weightInput,
+                    onValueChange = {
+                        weightInput = it
+                        inputError = null
+                    },
+                    label = { Text("总重量 (g)") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    isError = inputError != null,
+                    supportingText = inputError?.let { err -> { Text(err) } },
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                TextButton(onClick = onViewOnly) {
+                    Text("仅查看配方详情")
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = {
+                val weight = weightInput.toDoubleOrNull()
+                if (weight == null || weight <= 0) {
+                    inputError = "请输入有效的正数"
+                } else {
+                    onConfirm(weight)
+                }
+            }) {
+                Text("开始实验")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消")
+            }
+        }
+    )
 }
 
 private data class LabTabItem(

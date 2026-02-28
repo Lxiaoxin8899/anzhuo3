@@ -60,7 +60,7 @@ object SmartDosingRoutes {
     const val HOME = "home"
     const val LAB_CENTER = "lab_center"
     const val RECIPES = "recipes"
-    const val MATERIAL_CONFIGURATION = "material_configuration/{recipeId}?taskId={taskId}&recordId={recordId}"
+    const val MATERIAL_CONFIGURATION = "material_configuration/{recipeId}?taskId={taskId}&recordId={recordId}&viewOnly={viewOnly}&targetTotalWeight={targetTotalWeight}"
     const val TASK_CENTER = "task_center"
     const val CONFIGURATION_RECORDS = "configuration_records"
     const val CONFIGURATION_RECORD_DETAIL = "configuration_record_detail/{recordId}"
@@ -73,12 +73,16 @@ object SmartDosingRoutes {
     fun materialConfiguration(
         recipeId: String,
         taskId: String? = null,
-        recordId: String? = null
+        recordId: String? = null,
+        viewOnly: Boolean = false,
+        targetTotalWeight: Double? = null
     ): String {
         val normalizedId = recipeId.ifBlank { "quick_start" }
         val params = buildList {
             taskId?.takeIf { it.isNotBlank() }?.let { add("taskId=$it") }
             recordId?.takeIf { it.isNotBlank() }?.let { add("recordId=$it") }
+            if (viewOnly) add("viewOnly=true")
+            targetTotalWeight?.let { add("targetTotalWeight=$it") }
         }
         val query = if (params.isNotEmpty()) "?${params.joinToString("&")}" else ""
         return "material_configuration/$normalizedId$query"

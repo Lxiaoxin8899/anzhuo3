@@ -241,9 +241,9 @@ private fun MaterialAnalysisRow(material: ConfigurationMaterialRecord) {
         
         Column(horizontalAlignment = Alignment.End) {
             Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("${material.actualWeight}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                Text("${com.example.smartdosing.utils.FormatUtils.formatWeight(material.actualWeight)}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
                 Text("/", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
-                Text("${material.targetWeight} g", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                Text("${com.example.smartdosing.utils.FormatUtils.formatWeight(material.targetWeight)} g", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
             }
             val devPercent = (material.deviation / material.targetWeight * 100)
             Text(

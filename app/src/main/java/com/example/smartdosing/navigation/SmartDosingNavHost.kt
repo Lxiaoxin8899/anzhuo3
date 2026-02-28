@@ -21,6 +21,7 @@ import com.example.smartdosing.data.ConfigurationMaterialRecord
 import com.example.smartdosing.data.ConfigurationRecord
 import com.example.smartdosing.data.ConfigurationRecordStatus
 import com.example.smartdosing.data.TaskStatus
+import com.example.smartdosing.data.transfer.TaskReceiver
 import com.example.smartdosing.data.repository.ConfigurationRepositoryProvider
 import com.example.smartdosing.ui.screens.device.DeviceInfoScreen
 import com.example.smartdosing.ui.screens.dosing.MaterialConfigurationData
@@ -47,6 +48,8 @@ import java.util.UUID
 private const val RECIPE_ID_ARG = "recipeId"
 private const val TASK_ID_ARG = "taskId"
 private const val RECORD_ID_ARG = "recordId"
+private const val VIEW_ONLY_ARG = "viewOnly"
+private const val TARGET_TOTAL_WEIGHT_ARG = "targetTotalWeight"
 
 /**
  * SmartDosing 导航主机，统一维护研发配置闭环的所有入口。
@@ -97,13 +100,33 @@ fun SmartDosingNavHost(
             LabCenterScreen(
                 onNavigateBack = { navController.popBackStack() },
                 onStartTask = { task ->
+                    // 记录开始配置时间
+                    scope.launch {
+                        val now = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
+                        val taskRepository = ConfigurationRepositoryProvider.taskRepository
+                        taskRepository.reportTaskProgress(
+                            taskId = task.id,
+                            status = TaskStatus.IN_PROGRESS,
+                            startedAt = now
+                        )
+                    }
+                    // 任务模式：使用任务指定的总重量进行材料缩放
                     navController.navigateToMaterialConfiguration(
                         recipeId = task.recipeId.ifBlank { "quick_start" },
-                        taskId = task.id
+                        taskId = task.id,
+                        targetTotalWeight = task.quantity
                     )
                 },
-                onNavigateToMaterialConfiguration = { recipeId ->
-                    navController.navigateToMaterialConfiguration(recipeId)
+                onNavigateToMaterialConfiguration = { recipeId, viewOnly ->
+                    navController.navigateToMaterialConfiguration(recipeId, viewOnly = viewOnly)
+                },
+                onNavigateToMaterialConfigurationWithWeight = { recipeId, totalWeight ->
+                    // 配方库模式：用户输入的总重量进行材料缩放
+                    navController.navigateToMaterialConfiguration(
+                        recipeId = recipeId,
+                        viewOnly = false,
+                        targetTotalWeight = totalWeight
+                    )
                 }
             )
         }
@@ -163,17 +186,30 @@ fun SmartDosingNavHost(
                     type = NavType.StringType
                     nullable = true
                     defaultValue = ""
+                },
+                navArgument(VIEW_ONLY_ARG) {
+                    type = NavType.BoolType
+                    defaultValue = false
+                },
+                navArgument(TARGET_TOTAL_WEIGHT_ARG) {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
                 }
             )
         ) { backStackEntry ->
             val recipeId = backStackEntry.arguments?.getString(RECIPE_ID_ARG).orEmpty()
             val taskId = backStackEntry.arguments?.getString(TASK_ID_ARG).orEmpty()
             val recordId = backStackEntry.arguments?.getString(RECORD_ID_ARG).orEmpty()
+            val viewOnly = backStackEntry.arguments?.getBoolean(VIEW_ONLY_ARG) ?: false
+            val targetTotalWeight = backStackEntry.arguments?.getString(TARGET_TOTAL_WEIGHT_ARG)?.toDoubleOrNull()
 
             MaterialConfigurationScreen(
                 recipeId = recipeId,
                 taskId = taskId,
                 recordId = recordId,
+                isViewOnly = viewOnly,
+                targetTotalWeight = targetTotalWeight,
                 onNavigateBack = { navController.popBackStack() },
                 onNavigateToTaskCenter = {
                     navController.navigate(SmartDosingRoutes.LAB_CENTER)
@@ -237,12 +273,16 @@ fun SmartDosingNavHost(
 fun NavController.navigateToMaterialConfiguration(
     recipeId: String,
     taskId: String? = null,
-    recordId: String? = null
+    recordId: String? = null,
+    viewOnly: Boolean = false,
+    targetTotalWeight: Double? = null
 ) {
     val route = SmartDosingRoutes.materialConfiguration(
         recipeId = recipeId,
         taskId = taskId,
-        recordId = recordId
+        recordId = recordId,
+        viewOnly = viewOnly,
+        targetTotalWeight = targetTotalWeight
     )
     navigate(route) {
         launchSingleTop = true
@@ -275,7 +315,21 @@ private suspend fun saveMaterialConfiguration(
     runCatching {
         recordRepository.createRecord(configData.toConfigurationRecord(tolerancePermille)).also {
             if (configData.taskId.isNotBlank()) {
-                taskRepository.updateTaskStatus(configData.taskId, TaskStatus.COMPLETED)
+                if (configData.taskId.startsWith("RT-")) {
+                    // 局域网接收的任务，通过 TaskReceiver 标记完成
+                    val taskReceiver = TaskReceiver.getInstance(context)
+                    taskReceiver.completeTask(configData.taskId, "配置完成并入库")
+                } else {
+                    // 后端下发的任务
+                    taskRepository.updateTaskStatus(configData.taskId, TaskStatus.COMPLETED)
+                    val now = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
+                    taskRepository.reportTaskProgress(
+                        taskId = configData.taskId,
+                        status = TaskStatus.COMPLETED,
+                        completedAt = now,
+                        note = "配置完成并入库"
+                    )
+                }
             }
         }
     }.onSuccess {

@@ -161,7 +161,7 @@ class TaskReceiver(private val context: Context) {
             // 3. 生成本地任务 ID
             val localTaskId = "RT-${UUID.randomUUID().toString().take(8).uppercase()}"
 
-            // 4. 若包含配方则先落库
+            // 4. 若包含配方则先落库（已存在则复用）
             var linkedRecipeId: String? = null
             request.recipe?.let { recipePayload ->
                 val importRequest = recipePayload.toImportRequest()
@@ -178,18 +178,13 @@ class TaskReceiver(private val context: Context) {
                 }
                 val existingRecipe = recipeRepository.getRecipeByCode(importRequest.code)
                 if (existingRecipe != null) {
-                    return TaskReceiveResponse(
-                        success = false,
-                        message = "配方编码已存在，如需覆盖请人工确认",
-                        transferId = request.transferId,
-                        receiverUID = deviceIdentity.uid,
-                        receiverName = deviceIdentity.deviceName,
-                        schemaVersion = request.schemaVersion,
-                        errorCode = "RECIPE_EXISTS"
-                    )
+                    // 配方已存在，直接复用，不同数量的任务共享同一配方
+                    Log.i(TAG, "配方 ${importRequest.code} 已存在(id=${existingRecipe.id})，复用已有配方")
+                    linkedRecipeId = existingRecipe.id
+                } else {
+                    val createdRecipe = recipeRepository.addRecipe(importRequest)
+                    linkedRecipeId = createdRecipe.id
                 }
-                val createdRecipe = recipeRepository.addRecipe(importRequest)
-                linkedRecipeId = createdRecipe.id
             }
 
             // 4. 保存接收任务

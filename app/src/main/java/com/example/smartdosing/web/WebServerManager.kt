@@ -14,6 +14,8 @@ import com.example.smartdosing.data.device.PairingRequestStore
 import com.example.smartdosing.data.device.PairingStatus
 import com.example.smartdosing.data.repository.ConfigurationRecordPayload
 import com.example.smartdosing.database.entities.AuthorizedSenderEntity
+import com.example.smartdosing.database.entities.ReceivedTaskEntity
+import com.example.smartdosing.database.SmartDosingDatabase
 import com.google.gson.Gson
 import com.google.gson.JsonSyntaxException
 import com.google.gson.reflect.TypeToken
@@ -52,7 +54,7 @@ class WebServerManager(private val context: Context) {
     private val importManager = DatabaseRecipeImportManager.getInstance(context, recipeRepository)
     private val gson = Gson()
     private val lanAdapter = LanTransferProposalAdapter(gson)
-    private val taskStore = ConfigurationTaskStore(recipeRepository)
+    private val taskStore = ConfigurationTaskStore(recipeRepository, context)
     private val recordStore = ConfigurationRecordStore(context, gson)
     private val deviceStore = TaskDeviceStore()
 
@@ -1452,8 +1454,10 @@ class WebServerManager(private val context: Context) {
  * 研发任务内存仓库：负责任务列表、快速发布及日志统计
  */
 private class ConfigurationTaskStore(
-    private val recipeRepository: DatabaseRecipeRepository
+    private val recipeRepository: DatabaseRecipeRepository,
+    private val context: Context
 ) {
+    private val deviceDao = SmartDosingDatabase.getDatabase(context).deviceDao()
     private val mutex = Mutex()
     private val tasks = mutableListOf<ConfigurationTask>()
     private val publishLogs = TaskPublishLogSampleData.recent().toMutableList()
@@ -1464,7 +1468,12 @@ private class ConfigurationTaskStore(
     suspend fun getTasks(status: TaskStatus?, search: String?): List<ConfigurationTask> = mutex.withLock {
         syncDatabaseTasks()
         var result = tasks.toList()
-        status?.let { target -> result = result.filter { it.status == target } }
+        if (status != null) {
+            result = result.filter { it.status == status }
+        } else {
+            // 默认排除已完成和已取消的任务
+            result = result.filter { it.status != TaskStatus.COMPLETED && it.status != TaskStatus.CANCELLED }
+        }
         search?.takeIf { it.isNotBlank() }?.let { keyword ->
             val query = keyword.lowercase(Locale.getDefault())
             result = result.filter { task ->
@@ -1496,10 +1505,18 @@ private class ConfigurationTaskStore(
             statusUpdatedAt = now
         )
         tasks[index] = updated
+
+        // RT- 前缀的局域网任务，同步更新 received_tasks 表
+        if (taskId.startsWith("RT-") && status == TaskStatus.COMPLETED) {
+            val taskReceiver = TaskReceiver.getInstance(context)
+            taskReceiver.completeTask(taskId, "通过 Web API 标记完成")
+        }
+
         updated
     }
 
     private suspend fun syncDatabaseTasks() {
+        // === 从 recipes 表同步 ===
         val recipes = recipeRepository.getAllRecipes()
         val dbIds = recipes.map { dbTaskPrefix + it.id }.toSet()
         tasks.removeAll { it.id.startsWith(dbTaskPrefix) && it.id !in dbIds }
@@ -1507,6 +1524,21 @@ private class ConfigurationTaskStore(
             val taskId = dbTaskPrefix + recipe.id
             val newTask = recipe.toTask(taskId)
             val index = tasks.indexOfFirst { it.id == taskId }
+            if (index >= 0) {
+                tasks[index] = newTask
+            } else {
+                tasks.add(newTask)
+            }
+        }
+
+        // === 从 received_tasks 表同步 ===
+        val receivedTasks = deviceDao.getAllReceivedTasks()
+        val rtIds = receivedTasks.map { it.id }.toSet()
+        // 清理已删除的接收任务（RT- 前缀）
+        tasks.removeAll { it.id.startsWith("RT-") && it.id !in rtIds }
+        receivedTasks.forEach { rt ->
+            val newTask = rt.toConfigurationTask()
+            val index = tasks.indexOfFirst { it.id == rt.id }
             if (index >= 0) {
                 tasks[index] = newTask
             } else {
@@ -1624,6 +1656,44 @@ private fun Recipe.toTask(taskId: String): ConfigurationTask {
         targetDevices = listOf("本机投料设备"),
         note = description,
         tags = if (tags.isEmpty()) listOf("标准模板") else tags
+    )
+}
+
+private fun ReceivedTaskEntity.toConfigurationTask(): ConfigurationTask {
+    val fmt = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+    val timeStr = fmt.format(Date(receivedAt))
+    return ConfigurationTask(
+        id = id,
+        title = title.ifBlank { recipeName },
+        recipeId = localRecipeId ?: recipeCode,
+        recipeName = recipeName,
+        recipeCode = recipeCode,
+        quantity = quantity,
+        unit = unit,
+        priority = when (priority) {
+            "URGENT" -> TaskPriority.URGENT
+            "HIGH" -> TaskPriority.HIGH
+            "LOW" -> TaskPriority.LOW
+            else -> TaskPriority.NORMAL
+        },
+        requestedBy = senderName,
+        perfumer = "",
+        customer = customer.orEmpty(),
+        salesOwner = "",
+        status = when (status) {
+            "PENDING" -> TaskStatus.READY
+            "ACCEPTED" -> TaskStatus.IN_PROGRESS
+            "REJECTED" -> TaskStatus.CANCELLED
+            "COMPLETED" -> TaskStatus.COMPLETED
+            else -> TaskStatus.READY
+        },
+        deadline = deadline.orEmpty(),
+        createdAt = timeStr,
+        publishedAt = timeStr,
+        statusUpdatedAt = timeStr,
+        targetDevices = listOf("本机"),
+        note = note.orEmpty(),
+        tags = listOf("局域网传输")
     )
 }
 

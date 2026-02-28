@@ -59,6 +59,7 @@ fun TaskCenterScreen(
     val repository = remember { ConfigurationRepositoryProvider.taskRepository }
     val windowSize = LocalWindowSize.current
     val isCompactWidth = windowSize.widthClass == SmartDosingWindowWidthClass.Compact
+    var allTasks by remember { mutableStateOf<List<ConfigurationTask>>(emptyList()) }
     var tasks by remember { mutableStateOf<List<ConfigurationTask>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var loadError by remember { mutableStateOf<String?>(null) }
@@ -83,7 +84,11 @@ fun TaskCenterScreen(
             try {
                 isLoading = true
                 loadError = null
-                tasks = repository.fetchTasks()
+                allTasks = repository.fetchTasks()
+                // 默认只显示活跃任务（排除已完成、已取消）
+                tasks = allTasks.filter {
+                    it.status != TaskStatus.COMPLETED && it.status != TaskStatus.CANCELLED
+                }
             } catch (e: Exception) {
                 loadError = "加载任务失败：${e.message ?: "未知错误"}"
             } finally {
@@ -102,10 +107,10 @@ fun TaskCenterScreen(
         }
     }
 
-    val displayedTasks = remember(selectedStatus, tasks) {
+    val displayedTasks = remember(selectedStatus, tasks, allTasks) {
         selectedStatus?.let { status ->
-            tasks.filter { it.status == status }
-        } ?: tasks
+            allTasks.filter { it.status == status }  // 用户主动筛选时从全量数据中过滤
+        } ?: tasks  // 默认显示活跃任务
     }
 
     val content = @Composable { paddingValues: PaddingValues ->
@@ -116,7 +121,7 @@ fun TaskCenterScreen(
                 .padding(horizontal = if (isCompactWidth) 16.dp else 24.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
-            TaskSummarySection(tasks = tasks, isCompact = isCompactWidth)
+            TaskSummarySection(tasks = allTasks, isCompact = isCompactWidth)
             
             TaskStatusFilterRow(
                 selected = selectedStatus,
@@ -207,6 +212,8 @@ fun TaskCenterScreen(
                         showSnackbar = true
                         tasks = tasks.map { if (it.id == acceptedTask!!.id) acceptedTask!! else it }
                         onAcceptTask(acceptedTask!!)
+                        // 领用后自动跳转到配置界面
+                        onStartTask(acceptedTask!!)
                         showAcceptDialog = false
                         taskToAccept = null
                     }
@@ -373,7 +380,7 @@ private fun TaskCard(
             ) {
                 Row(modifier = Modifier.fillMaxWidth()) {
                     InfoItem(Modifier.weight(1f), "配方编码", task.recipeCode)
-                    InfoItem(Modifier.weight(1f), "配置数量", "${task.quantity} ${task.unit}")
+                    InfoItem(Modifier.weight(1f), "配置数量", "${com.example.smartdosing.utils.FormatUtils.formatWeight(task.quantity)} ${task.unit}")
                 }
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                 Row(modifier = Modifier.fillMaxWidth()) {
@@ -387,12 +394,7 @@ private fun TaskCard(
                 horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                if (task.status == TaskStatus.DRAFT || task.status == TaskStatus.READY) {
-                    TextButton(onClick = onAccept) { Text("确认领用") }
-                }
-                
-                Spacer(Modifier.width(8.dp))
-                
+                // 所有状态都显示"查看配方"
                 OutlinedButton(
                     onClick = onConfigure,
                     shape = RoundedCornerShape(12.dp),
@@ -400,17 +402,36 @@ private fun TaskCard(
                 ) {
                     Text("查看配方")
                 }
-                
+
                 Spacer(Modifier.width(8.dp))
-                
-                Button(
-                    onClick = onStart,
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                ) {
-                    Icon(Icons.Default.PlayArrow, null, Modifier.size(18.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text(if (task.status == TaskStatus.IN_PROGRESS) "继续实验" else "开始实验")
+
+                when (task.status) {
+                    // 未领用：只显示"确认领用"
+                    TaskStatus.DRAFT, TaskStatus.READY -> {
+                        Button(
+                            onClick = onAccept,
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                        ) {
+                            Icon(Icons.Default.AssignmentInd, null, Modifier.size(18.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("确认领用")
+                        }
+                    }
+                    // 已领用/进行中：显示"开始实验/继续实验"
+                    TaskStatus.PUBLISHED, TaskStatus.IN_PROGRESS -> {
+                        Button(
+                            onClick = onStart,
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                        ) {
+                            Icon(Icons.Default.PlayArrow, null, Modifier.size(18.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text(if (task.status == TaskStatus.IN_PROGRESS) "继续实验" else "开始实验")
+                        }
+                    }
+                    // COMPLETED / CANCELLED：不显示操作按钮
+                    else -> {}
                 }
             }
         }
@@ -515,7 +536,7 @@ private fun AcceptTaskConfirmDialog(task: ConfigurationTask, onConfirm: () -> Un
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))) {
                     Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text("配方编码: ${task.recipeCode}", style = MaterialTheme.typography.labelMedium)
-                        Text("预期数量: ${task.quantity} ${task.unit}", style = MaterialTheme.typography.labelMedium)
+                        Text("预期数量: ${com.example.smartdosing.utils.FormatUtils.formatWeight(task.quantity)} ${task.unit}", style = MaterialTheme.typography.labelMedium)
                     }
                 }
             }

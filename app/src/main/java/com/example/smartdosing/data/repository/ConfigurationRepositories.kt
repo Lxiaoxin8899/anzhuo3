@@ -74,9 +74,13 @@ class InMemoryConfigurationTaskRepository : ConfigurationTaskRepository {
         return mutex.withLock {
             val index = tasks.indexOfFirst { it.id == taskId }
             if (index < 0) return@withLock null
+            val now = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
             val updated = tasks[index].copy(
                 priority = tasks[index].priority.takeIf { it != TaskPriority.URGENT } ?: TaskPriority.URGENT,
-                status = status
+                status = status,
+                statusUpdatedAt = now,
+                // 如果状态是 COMPLETED，记录完成时间
+                completedAt = if (status == TaskStatus.COMPLETED) now else tasks[index].completedAt
             )
             tasks[index] = updated
             updated

@@ -45,6 +45,10 @@ fun SettingsScreen(
     val context = LocalContext.current
     val preferencesManager = remember { DosingPreferencesManager(context) }
     val preferencesState by preferencesManager.preferencesFlow.collectAsState(initial = DosingPreferencesState())
+    val bluetoothPreferencesManager = remember { com.example.smartdosing.bluetooth.BluetoothScalePreferencesManager(context) }
+    val bluetoothPreferences by bluetoothPreferencesManager.preferencesFlow.collectAsState(
+        initial = com.example.smartdosing.bluetooth.BluetoothScalePreferencesManager.BluetoothScalePreferencesState()
+    )
     val scope = rememberCoroutineScope()
 
     var headerVisible by remember { mutableStateOf(false) }
@@ -139,10 +143,12 @@ fun SettingsScreen(
                 ),
                 SettingsItem.Switch(
                     title = "自动进入下一步",
-                    subtitle = "输入重量后自动进入下一材料",
+                    subtitle = "读数稳定且在误差范围内后自动确认并进入下一材料",
                     icon = Icons.Outlined.SkipNext,
-                    isChecked = false,
-                    onCheckedChange = { _ -> Toast.makeText(context, "该功能开发中", Toast.LENGTH_SHORT).show() }
+                    isChecked = bluetoothPreferences.autoConfirmOnStable,
+                    onCheckedChange = { enabled ->
+                        scope.launch { bluetoothPreferencesManager.setAutoConfirmOnStable(enabled) }
+                    }
                 ),
                 SettingsItem.Selection(
                     title = "重量单位",

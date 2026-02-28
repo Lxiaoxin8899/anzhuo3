@@ -267,7 +267,7 @@ private fun ArchiveRecordCard(record: ConfigurationRecord, onClick: () -> Unit) 
                 }
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("产出重", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text("${record.actualQuantity} g", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                    Text("${com.example.smartdosing.utils.FormatUtils.formatWeight(record.actualQuantity)} g", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
                 }
                 Column(horizontalAlignment = Alignment.End) {
                     Text("日期", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -532,7 +532,7 @@ private fun ConfigurationRecordCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "${record.recipeCode} | ${record.quantity} ${record.unit}",
+                    text = "${record.recipeCode} | ${com.example.smartdosing.utils.FormatUtils.formatWeight(record.quantity)} ${record.unit}",
                     style = MaterialTheme.typography.bodyMedium
                 )
                 Text(
@@ -586,7 +586,7 @@ private fun ConfigurationRecordCard(
                 )
             }
             Text(
-                text = "实际产出: ${record.actualQuantity} ${record.unit}",
+                text = "实际产出: ${com.example.smartdosing.utils.FormatUtils.formatWeight(record.actualQuantity)} ${record.unit}",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.Bold

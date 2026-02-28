@@ -796,7 +796,7 @@ private fun RecentOperationRow(record: ConfigurationRecord) {
         
         Column(horizontalAlignment = Alignment.End) {
             Text(
-                "${record.actualQuantity} ${record.unit}",
+                "${com.example.smartdosing.utils.FormatUtils.formatWeight(record.actualQuantity)} ${record.unit}",
                 style = MaterialTheme.typography.bodySmall,
                 fontWeight = FontWeight.Bold,
                 fontFamily = FontFamily.Monospace

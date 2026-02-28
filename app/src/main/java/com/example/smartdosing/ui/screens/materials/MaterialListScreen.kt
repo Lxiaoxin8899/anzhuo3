@@ -196,7 +196,7 @@ private fun TaskSelectorCard(
                 }
                 Column(modifier = Modifier.weight(1f)) {
                     Text(selectedTask?.recipeName ?: "选择研发任务", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Text(selectedTask?.let { "编码: ${it.recipeCode} | 目标: ${it.quantity}${it.unit}" } ?: "点击选择需要备料的任务", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(selectedTask?.let { "编码: ${it.recipeCode} | 目标: ${com.example.smartdosing.utils.FormatUtils.formatWeight(it.quantity)}${it.unit}" } ?: "点击选择需要备料的任务", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Icon(if (showDropdown) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown, null)
             }
@@ -384,7 +384,7 @@ private fun TaskSelectorWithProgress(
                         )
                         if (selectedTask != null) {
                             Text(
-                                text = "编码: ${selectedTask.recipeCode} | ${selectedTask.quantity}${selectedTask.unit}",
+                                text = "编码: ${selectedTask.recipeCode} | ${com.example.smartdosing.utils.FormatUtils.formatWeight(selectedTask.quantity)}${selectedTask.unit}",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -464,7 +464,7 @@ private fun TaskSelectorWithProgress(
                                         fontWeight = FontWeight.Medium
                                     )
                                     Text(
-                                        text = "编码: ${task.recipeCode} | ${task.quantity}${task.unit}",
+                                        text = "编码: ${task.recipeCode} | ${com.example.smartdosing.utils.FormatUtils.formatWeight(task.quantity)}${task.unit}",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -714,7 +714,7 @@ private fun MaterialItemCard(
                 )
                 // 配方原始重量（次要显示）
                 Text(
-                    text = "(配方: ${material.weight}${material.unit})",
+                    text = "(配方: ${com.example.smartdosing.utils.FormatUtils.formatWeight(material.weight)}${material.unit})",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.outline
                 )

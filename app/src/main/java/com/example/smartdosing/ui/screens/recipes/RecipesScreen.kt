@@ -1232,7 +1232,7 @@ fun RecipeTableRow(
                 if (recipe.customer.isNotEmpty()) {
                     Text("客户：${recipe.customer}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                Text("用量：${recipe.totalWeight}g", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("基准量：${com.example.smartdosing.utils.FormatUtils.formatWeight(recipe.totalWeight)}g", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 StatusPill(
@@ -1360,8 +1360,8 @@ fun DosingRecipeCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column {
-                    Text("总设计重", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text("${recipe.totalWeight} g", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                    Text("基准量", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("${com.example.smartdosing.utils.FormatUtils.formatWeight(recipe.totalWeight)} g", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
                 }
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("组分", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)

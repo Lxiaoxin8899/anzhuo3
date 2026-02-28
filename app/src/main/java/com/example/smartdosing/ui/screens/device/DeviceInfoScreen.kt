@@ -635,7 +635,7 @@ private fun ReceivedTaskCard(
             }
 
             Text("${task.recipeCode} - ${task.recipeName}")
-            Text("数量: ${task.quantity} ${task.unit}")
+            Text("数量: ${com.example.smartdosing.utils.FormatUtils.formatWeight(task.quantity)} ${task.unit}")
 
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
