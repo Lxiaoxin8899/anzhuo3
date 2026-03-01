@@ -96,6 +96,9 @@ fun SmartDosingNavHost(
                 },
                 onNavigateToDeviceInfo = {
                     navController.navigate(SmartDosingRoutes.DEVICE_INFO)
+                },
+                onNavigateToRecipes = {
+                    navController.navigate(SmartDosingRoutes.RECIPES)
                 }
             )
         }
@@ -266,6 +269,20 @@ fun SmartDosingNavHost(
         composable(SmartDosingRoutes.MATERIAL_LIST) {
             MaterialListScreen(
                 onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(SmartDosingRoutes.RECIPES) {
+            RecipesScreen(
+                onNavigateToRecipeDetail = { recipeId ->
+                    navController.navigateToMaterialConfiguration(
+                        recipeId = recipeId,
+                        viewOnly = true
+                    )
+                },
+                onNavigateToMaterialConfiguration = { recipeId ->
+                    navController.navigateToMaterialConfiguration(recipeId = recipeId)
+                }
             )
         }
     }
