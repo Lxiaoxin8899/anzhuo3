@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.example.smartdosing.audio.BeepMode
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -28,12 +29,25 @@ enum class WeightUnit(val symbol: String, val displayName: String) {
     KILOGRAM("kg", "千克 (kg)")
 }
 
+/**
+ * 主题模式枚举
+ */
+enum class ThemeMode(val displayName: String) {
+    SYSTEM("跟随系统"),
+    LIGHT("浅色模式"),
+    DARK("深色模式")
+}
+
 data class DosingPreferencesState(
     val voiceRepeatEnabled: Boolean = false,
     val voiceRepeatCount: Int = 1,
     val overLimitTolerancePercent: Float = 3f,
     val dosingMode: DosingMode = DosingMode.MANUAL,
-    val weightUnit: WeightUnit = WeightUnit.GRAM
+    val weightUnit: WeightUnit = WeightUnit.GRAM,
+    val themeMode: ThemeMode = ThemeMode.LIGHT,
+    val beepMode: BeepMode = BeepMode.OFF,
+    val beepThresholdPercent: Int = 90,
+    val beepThresholdContinuous: Boolean = true
 ) {
     val repeatCountForPlayback: Int
         get() = if (voiceRepeatEnabled) {
@@ -59,7 +73,11 @@ class DosingPreferencesManager(context: Context) {
             voiceRepeatCount = prefs[VOICE_REPEAT_COUNT] ?: DEFAULT_REPEAT_COUNT,
             overLimitTolerancePercent = prefs[OVER_LIMIT_TOLERANCE] ?: DEFAULT_TOLERANCE,
             dosingMode = DosingMode.entries.find { it.name == prefs[DOSING_MODE] } ?: DosingMode.MANUAL,
-            weightUnit = WeightUnit.entries.find { it.name == prefs[WEIGHT_UNIT] } ?: WeightUnit.GRAM
+            weightUnit = WeightUnit.entries.find { it.name == prefs[WEIGHT_UNIT] } ?: WeightUnit.GRAM,
+            themeMode = ThemeMode.entries.find { it.name == prefs[THEME_MODE] } ?: ThemeMode.LIGHT,
+            beepMode = BeepMode.entries.find { it.name == prefs[BEEP_MODE] } ?: BeepMode.OFF,
+            beepThresholdPercent = prefs[BEEP_THRESHOLD_PERCENT] ?: 90,
+            beepThresholdContinuous = prefs[BEEP_THRESHOLD_CONTINUOUS] ?: true
         )
     }
 
@@ -95,6 +113,30 @@ class DosingPreferencesManager(context: Context) {
         }
     }
 
+    suspend fun setThemeMode(mode: ThemeMode) {
+        dataStore.edit { prefs ->
+            prefs[THEME_MODE] = mode.name
+        }
+    }
+
+    suspend fun setBeepMode(mode: BeepMode) {
+        dataStore.edit { prefs ->
+            prefs[BEEP_MODE] = mode.name
+        }
+    }
+
+    suspend fun setBeepThresholdPercent(percent: Int) {
+        dataStore.edit { prefs ->
+            prefs[BEEP_THRESHOLD_PERCENT] = percent.coerceIn(50, 99)
+        }
+    }
+
+    suspend fun setBeepThresholdContinuous(continuous: Boolean) {
+        dataStore.edit { prefs ->
+            prefs[BEEP_THRESHOLD_CONTINUOUS] = continuous
+        }
+    }
+
     companion object {
         const val MIN_REPEAT_COUNT = 1
         const val MAX_REPEAT_COUNT = 5
@@ -108,5 +150,9 @@ class DosingPreferencesManager(context: Context) {
         private val OVER_LIMIT_TOLERANCE = floatPreferencesKey("over_limit_tolerance")
         private val DOSING_MODE = stringPreferencesKey("dosing_mode")
         private val WEIGHT_UNIT = stringPreferencesKey("weight_unit")
+        private val THEME_MODE = stringPreferencesKey("theme_mode")
+        private val BEEP_MODE = stringPreferencesKey("beep_mode")
+        private val BEEP_THRESHOLD_PERCENT = intPreferencesKey("beep_threshold_percent")
+        private val BEEP_THRESHOLD_CONTINUOUS = booleanPreferencesKey("beep_threshold_continuous")
     }
 }

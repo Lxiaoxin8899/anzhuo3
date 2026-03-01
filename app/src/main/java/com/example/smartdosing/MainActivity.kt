@@ -14,13 +14,18 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.example.smartdosing.data.settings.DosingPreferencesManager
+import com.example.smartdosing.data.settings.DosingPreferencesState
 import com.example.smartdosing.navigation.SmartDosingNavHost
 import com.example.smartdosing.ui.components.SmartDosingBottomNavigationBar
 import com.example.smartdosing.ui.components.SmartDosingNavigationRail
@@ -47,7 +52,11 @@ class MainActivity : ComponentActivity() {
 
         enableEdgeToEdge()
         setContent {
-            SmartDosingTheme {
+            val context = LocalContext.current
+            val preferencesManager = remember { DosingPreferencesManager(context) }
+            val preferencesState by preferencesManager.preferencesFlow.collectAsState(initial = DosingPreferencesState())
+
+            SmartDosingTheme(themeMode = preferencesState.themeMode) {
                 SmartDosingApp()
             }
         }

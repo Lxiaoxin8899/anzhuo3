@@ -38,6 +38,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.*
 import com.example.smartdosing.SmartDosingApplication
+import com.example.smartdosing.audio.BeepMode
+import com.example.smartdosing.audio.DosingBeepManager
 import com.example.smartdosing.bluetooth.BluetoothScaleManager
 import com.example.smartdosing.bluetooth.BluetoothScalePreferencesManager
 import com.example.smartdosing.bluetooth.model.ConnectionState
@@ -45,6 +47,8 @@ import com.example.smartdosing.bluetooth.model.WeightData
 import com.example.smartdosing.data.*
 import com.example.smartdosing.data.Material as DataMaterial
 import com.example.smartdosing.data.repository.ConfigurationRepositoryProvider
+import com.example.smartdosing.data.settings.DosingPreferencesManager
+import com.example.smartdosing.data.settings.DosingPreferencesState
 import com.example.smartdosing.ui.components.DosingBluetoothStatusBar
 import com.example.smartdosing.ui.theme.LocalWindowSize
 import com.example.smartdosing.ui.theme.SmartDosingTheme
@@ -114,6 +118,22 @@ fun MaterialConfigurationScreen(
         // TTS 已软下线，暂不播报
     }
 
+    // 提示音管理器
+    val dosingPreferencesManager = remember { DosingPreferencesManager(context) }
+    val dosingPreferences by dosingPreferencesManager.preferencesFlow.collectAsState(
+        initial = DosingPreferencesState()
+    )
+    val beepManager = remember {
+        DosingBeepManager().also { it.initialize() }
+    }
+
+    // 页面退出时释放提示音资源
+    DisposableEffect(Unit) {
+        onDispose {
+            beepManager.release()
+        }
+    }
+
     // 构建保存数据的辅助函数
     fun buildConfigurationData(): MaterialConfigurationData? {
         val r = recipe ?: return null
@@ -144,7 +164,7 @@ fun MaterialConfigurationScreen(
         if (materialStates.isNotEmpty()) {
             if (recipe == null) {
                 recipeId?.takeIf { it.isNotBlank() && it != "quick_start" }?.let {
-                    recipe = repository.getRecipeById(it)
+                    recipe = repository.getRecipeById(it) ?: repository.getRecipeByCode(it)
                 }
             }
             isLoading = false
@@ -154,10 +174,17 @@ fun MaterialConfigurationScreen(
         isLoading = true
         try {
             val normalizedId = recipeId?.takeIf { it.isNotBlank() && it != "quick_start" }
-            val loadedRecipe = normalizedId?.let { repository.getRecipeById(it) }
-                ?: taskId.takeIf { it.isNotBlank() }?.let { tid ->
-                    taskRepository.fetchTask(tid)?.let { repository.getRecipeById(it.recipeId) }
+            var loadedRecipe = normalizedId?.let { id ->
+                repository.getRecipeById(id) ?: repository.getRecipeByCode(id)
+            }
+            if (loadedRecipe == null && taskId.isNotBlank()) {
+                val task = taskRepository.fetchTask(taskId)
+                if (task != null) {
+                    loadedRecipe = repository.getRecipeById(task.recipeId)
+                        ?: repository.getRecipeByCode(task.recipeId)
+                        ?: repository.getRecipeByCode(task.recipeCode)
                 }
+            }
 
             if (loadedRecipe != null) {
                 recipe = loadedRecipe
@@ -208,6 +235,47 @@ fun MaterialConfigurationScreen(
                 }
             }
         }
+    }
+
+    // 提示音触发逻辑
+    LaunchedEffect(currentWeight?.value, activeRowIndex, dosingPreferences.beepMode) {
+        if (dosingPreferences.beepMode == BeepMode.OFF) {
+            beepManager.stopBeeping()
+            return@LaunchedEffect
+        }
+
+        if (!isBluetoothConnected || activeRowIndex >= materialStates.size || materialStates[activeRowIndex].isConfirmed) {
+            beepManager.stopBeeping()
+            return@LaunchedEffect
+        }
+
+        val target = materialStates[activeRowIndex].material.weight
+        val actual = currentWeight?.value ?: 0.0
+
+        when (dosingPreferences.beepMode) {
+            BeepMode.PROGRESSIVE -> {
+                beepManager.updateProgressive(
+                    actualWeight = actual,
+                    targetWeight = target,
+                    tolerancePermille = bluetoothPreferences.autoConfirmTolerancePermille
+                )
+            }
+            BeepMode.THRESHOLD -> {
+                beepManager.updateThreshold(
+                    actualWeight = actual,
+                    targetWeight = target,
+                    thresholdPercent = dosingPreferences.beepThresholdPercent,
+                    continuous = dosingPreferences.beepThresholdContinuous,
+                    tolerancePermille = bluetoothPreferences.autoConfirmTolerancePermille
+                )
+            }
+            BeepMode.OFF -> { /* 不会到这里 */ }
+        }
+    }
+
+    // 切换物料时重置提示音状态
+    LaunchedEffect(activeRowIndex) {
+        beepManager.resetThresholdState()
     }
 
     // 自动确认逻辑 (保持原有核心逻辑，仅作微调)

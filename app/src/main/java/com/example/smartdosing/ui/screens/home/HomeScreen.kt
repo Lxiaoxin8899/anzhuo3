@@ -54,6 +54,7 @@ import java.time.format.DateTimeFormatter
 fun HomeScreen(
     onNavigateToRecipes: () -> Unit = {},
     onNavigateToMaterialConfiguration: (String) -> Unit = {},
+    onContinueRecoveryTask: (ConfigurationTask) -> Unit = {},
     onNavigateToTaskCenter: () -> Unit = {},
     onNavigateToConfigurationRecords: () -> Unit = {},
     onNavigateToMaterialList: () -> Unit = {},
@@ -165,7 +166,7 @@ fun HomeScreen(
                     runtimeStatus = runtimeStatus,
                     recoveryTask = recoveryTask,
                     scaleConnectionState = scaleConnectionState,
-                    onContinueTask = { task -> onNavigateToMaterialConfiguration(task.id) }
+                    onContinueTask = { task -> onContinueRecoveryTask(task) }
                 )
             } else {
                 CompactHomeLayout(
@@ -180,7 +181,7 @@ fun HomeScreen(
                     runtimeStatus = runtimeStatus,
                     recoveryTask = recoveryTask,
                     scaleConnectionState = scaleConnectionState,
-                    onContinueTask = { task -> onNavigateToMaterialConfiguration(task.id) }
+                    onContinueTask = { task -> onContinueRecoveryTask(task) }
                 )
             }
         }

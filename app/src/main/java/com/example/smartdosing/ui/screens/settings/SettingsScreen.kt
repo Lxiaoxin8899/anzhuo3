@@ -26,6 +26,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.smartdosing.audio.BeepMode
 import com.example.smartdosing.data.settings.DosingPreferencesManager
 import com.example.smartdosing.data.settings.DosingPreferencesState
 import com.example.smartdosing.ui.theme.SmartDosingTheme
@@ -94,12 +95,18 @@ fun SettingsScreen(
             title = "界面偏好",
             icon = Icons.Outlined.Palette,
             items = listOf(
-                SettingsItem.Switch(
-                    title = "夜间模式",
-                    subtitle = "适合低光环境使用",
+                SettingsItem.Selection(
+                    title = "主题模式",
+                    subtitle = "选择应用外观主题",
                     icon = Icons.Outlined.DarkMode,
-                    isChecked = false,
-                    onCheckedChange = { _ -> Toast.makeText(context, "该功能开发中", Toast.LENGTH_SHORT).show() }
+                    selectedValue = preferencesState.themeMode.displayName,
+                    options = com.example.smartdosing.data.settings.ThemeMode.entries.map { it.displayName },
+                    onSelectionChange = { selectedName ->
+                        val mode = com.example.smartdosing.data.settings.ThemeMode.entries.find { it.displayName == selectedName }
+                        if (mode != null) {
+                            scope.launch { preferencesManager.setThemeMode(mode) }
+                        }
+                    }
                 ),
                 SettingsItem.Selection(
                     title = "字体大小",
@@ -164,6 +171,47 @@ fun SettingsScreen(
                     }
                 )
             )
+        ),
+        SettingsSection(
+            title = "提示音",
+            icon = Icons.Outlined.VolumeUp,
+            items = buildList {
+                add(SettingsItem.Selection(
+                    title = "提示音模式",
+                    subtitle = "配料过程中的声音提示方式",
+                    icon = Icons.Outlined.Notifications,
+                    selectedValue = preferencesState.beepMode.displayName,
+                    options = BeepMode.entries.map { it.displayName },
+                    onSelectionChange = { selectedName ->
+                        val mode = BeepMode.entries.find { it.displayName == selectedName }
+                        if (mode != null) {
+                            scope.launch { preferencesManager.setBeepMode(mode) }
+                        }
+                    }
+                ))
+                if (preferencesState.beepMode == BeepMode.THRESHOLD) {
+                    add(SettingsItem.Slider(
+                        title = "提示阈值",
+                        subtitle = "达到目标重量的百分比后开始提示",
+                        icon = Icons.Outlined.TrendingUp,
+                        value = preferencesState.beepThresholdPercent.toFloat(),
+                        onValueChange = { value ->
+                            scope.launch { preferencesManager.setBeepThresholdPercent(value.toInt()) }
+                        },
+                        valueRange = 50f..99f,
+                        valueFormatter = { "${it.toInt()}%" }
+                    ))
+                    add(SettingsItem.Switch(
+                        title = "连续提示",
+                        subtitle = "到达阈值后持续发出提示音，关闭则仅提示一次",
+                        icon = Icons.Outlined.RepeatOne,
+                        isChecked = preferencesState.beepThresholdContinuous,
+                        onCheckedChange = { enabled ->
+                            scope.launch { preferencesManager.setBeepThresholdContinuous(enabled) }
+                        }
+                    ))
+                }
+            }
         ),
         SettingsSection(
             title = "数据维护",

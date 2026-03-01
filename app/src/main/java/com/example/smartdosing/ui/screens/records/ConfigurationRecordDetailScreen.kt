@@ -306,7 +306,12 @@ private fun StatusPill(status: ConfigurationRecordStatus) {
         border = androidx.compose.foundation.BorderStroke(1.dp, color.copy(alpha = 0.2f))
     ) {
         Text(
-            text = status.name,
+            text = when(status) {
+                ConfigurationRecordStatus.IN_REVIEW -> "待评估"
+                ConfigurationRecordStatus.RUNNING -> "进行中"
+                ConfigurationRecordStatus.COMPLETED -> "已完成"
+                ConfigurationRecordStatus.ARCHIVED -> "已归档"
+            },
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
             style = MaterialTheme.typography.labelSmall,
             color = color,

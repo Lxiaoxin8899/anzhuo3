@@ -138,11 +138,17 @@ private val DarkExtendedColors = SmartDosingExtendedColors(
 
 @Composable
 fun SmartDosingTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    themeMode: com.example.smartdosing.data.settings.ThemeMode = com.example.smartdosing.data.settings.ThemeMode.LIGHT,
     // Dynamic color is available on Android 12+
     dynamicColor: Boolean = false, // Disable dynamic to enforce Lab theme
     content: @Composable () -> Unit
 ) {
+    val systemInDarkTheme = isSystemInDarkTheme()
+    val darkTheme = when (themeMode) {
+        com.example.smartdosing.data.settings.ThemeMode.SYSTEM -> systemInDarkTheme
+        com.example.smartdosing.data.settings.ThemeMode.LIGHT -> false
+        com.example.smartdosing.data.settings.ThemeMode.DARK -> true
+    }
     val windowSize = rememberSmartWindowSize()
     val colorScheme = when {
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {

@@ -491,7 +491,15 @@ private fun TaskStatusFilterRow(selected: TaskStatus?, onSelected: (TaskStatus?)
             FilterChip(
                 selected = isSelected,
                 onClick = { onSelected(status) },
-                label = { Text(status?.name ?: "全部任务") },
+                label = { Text(when(status) {
+                    null -> "全部任务"
+                    TaskStatus.DRAFT -> "草稿"
+                    TaskStatus.READY -> "待领用"
+                    TaskStatus.PUBLISHED -> "待执行"
+                    TaskStatus.IN_PROGRESS -> "进行中"
+                    TaskStatus.COMPLETED -> "已完成"
+                    TaskStatus.CANCELLED -> "已取消"
+                }) },
                 colors = FilterChipDefaults.filterChipColors(
                     selectedContainerColor = MaterialTheme.colorScheme.primary,
                     selectedLabelColor = MaterialTheme.colorScheme.onPrimary
