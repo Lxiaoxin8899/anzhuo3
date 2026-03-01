@@ -7,26 +7,18 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Router
 import androidx.compose.material.icons.filled.Smartphone
 import androidx.compose.material.icons.filled.Wifi
-import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Circle
-import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.DevicesOther
 import androidx.compose.material.icons.outlined.Fingerprint
-import androidx.compose.material.icons.outlined.Inbox
 import androidx.compose.material.icons.outlined.Lightbulb
 import androidx.compose.material.icons.outlined.PhoneAndroid
-import androidx.compose.material.icons.outlined.Send
-import androidx.compose.material.icons.outlined.Schedule
-import androidx.compose.material3.Badge
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -69,13 +61,9 @@ import com.example.smartdosing.data.device.DeviceUIDManager
 import com.example.smartdosing.data.device.ReceiverStatus
 import com.example.smartdosing.data.transfer.TaskReceiver
 import com.example.smartdosing.database.entities.AuthorizedSenderEntity
-import com.example.smartdosing.database.entities.ReceivedTaskEntity
 import com.example.smartdosing.ui.theme.LocalWindowSize
 import com.example.smartdosing.ui.theme.SmartDosingWindowWidthClass
 import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -94,10 +82,8 @@ fun DeviceInfoScreen(
     val taskReceiver = remember { TaskReceiver.getInstance(context) }
 
     val authorizedSenders by taskReceiver.getAuthorizedSendersFlow().collectAsState(initial = emptyList())
-    val pendingTasks by taskReceiver.getPendingTasksFlow().collectAsState(initial = emptyList())
-
     var selectedTabIndex by remember { mutableIntStateOf(0) }
-    val tabs = listOf("设备信息", "授权设备", "接收任务")
+    val tabs = listOf("设备信息", "授权设备")
 
     Scaffold(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
@@ -130,7 +116,6 @@ fun DeviceInfoScreen(
                     ) {
                         DeviceTabs(
                             tabs = tabs,
-                            pendingCount = pendingTasks.size,
                             selectedIndex = selectedTabIndex,
                             onSelect = { selectedTabIndex = it }
                         )
@@ -139,7 +124,6 @@ fun DeviceInfoScreen(
                     TabRow(selectedTabIndex = selectedTabIndex) {
                         DeviceTabs(
                             tabs = tabs,
-                            pendingCount = pendingTasks.size,
                             selectedIndex = selectedTabIndex,
                             onSelect = { selectedTabIndex = it }
                         )
@@ -175,24 +159,7 @@ fun DeviceInfoScreen(
                         }
                     }
                 )
-                2 -> ReceivedTasksTab(
-                    tasks = pendingTasks,
-                    isCompact = isCompact,
-                    onAcceptTask = { task ->
-                        scope.launch {
-                            if (taskReceiver.acceptTask(task.id)) {
-                                snackbarHostState.showSnackbar("已接收任务")
-                            }
-                        }
-                    },
-                    onRejectTask = { task ->
-                        scope.launch {
-                            if (taskReceiver.rejectTask(task.id)) {
-                                snackbarHostState.showSnackbar("已拒绝任务")
-                            }
-                        }
-                    }
-                )
+
             }
         }
     }
@@ -201,7 +168,6 @@ fun DeviceInfoScreen(
 @Composable
 private fun DeviceTabs(
     tabs: List<String>,
-    pendingCount: Int,
     selectedIndex: Int,
     onSelect: (Int) -> Unit
 ) {
@@ -209,15 +175,7 @@ private fun DeviceTabs(
         Tab(
             selected = selectedIndex == index,
             onClick = { onSelect(index) },
-            text = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(title, style = MaterialTheme.typography.bodyMedium)
-                    if (index == 2 && pendingCount > 0) {
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Badge { Text("$pendingCount") }
-                    }
-                }
-            }
+            text = { Text(title, style = MaterialTheme.typography.bodyMedium) }
         )
     }
 }
@@ -392,7 +350,7 @@ private fun DeviceInfoTab(
                                 "2. 发送端输入 UID 或扫描二维码完成绑定\n" +
                                 "3. 绑定成功后即可推送任务\n" +
                                 "（提示：可视化页面已软下线，仅保留无线传输能力）\n" +
-                                "4. 收到任务后可在“接收任务”中处理",
+                                "4. 收到任务后可在「任务中心」中处理",
                         lineHeight = 20.sp
                     )
                 }
@@ -547,157 +505,4 @@ private fun AuthorizedSenderCard(
     }
 }
 
-@Composable
-private fun ReceivedTasksTab(
-    tasks: List<ReceivedTaskEntity>,
-    isCompact: Boolean,
-    onAcceptTask: (ReceivedTaskEntity) -> Unit,
-    onRejectTask: (ReceivedTaskEntity) -> Unit
-) {
-    if (tasks.isEmpty()) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = if (isCompact) 24.dp else 0.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(Icons.Outlined.Inbox, contentDescription = null, tint = MaterialTheme.colorScheme.outline)
-                Spacer(modifier = Modifier.height(12.dp))
-                Text("暂无待处理任务", color = MaterialTheme.colorScheme.outline)
-                Text("等待其他设备发送任务即可显示", color = MaterialTheme.colorScheme.outline)
-            }
-        }
-    } else {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(
-                horizontal = if (isCompact) 12.dp else 16.dp,
-                vertical = 16.dp
-            ),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            items(tasks) { task ->
-                ReceivedTaskCard(
-                    task = task,
-                    isCompact = isCompact,
-                    onAccept = { onAcceptTask(task) },
-                    onReject = { onRejectTask(task) }
-                )
-            }
-        }
-    }
-}
 
-@Composable
-private fun ReceivedTaskCard(
-    task: ReceivedTaskEntity,
-    isCompact: Boolean,
-    onAccept: () -> Unit,
-    onReject: () -> Unit
-) {
-    val dateFormat = remember { SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()) }
-    val priorityColor = when (task.priority) {
-        "URGENT" -> Color(0xFFD32F2F)
-        "HIGH" -> Color(0xFFFF9800)
-        "NORMAL" -> MaterialTheme.colorScheme.primary
-        else -> MaterialTheme.colorScheme.outline
-    }
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(task.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Surface(
-                    shape = RoundedCornerShape(4.dp),
-                    color = priorityColor.copy(alpha = 0.1f)
-                ) {
-                    Text(
-                        text = when (task.priority) {
-                            "URGENT" -> "紧急"
-                            "HIGH" -> "高优先级"
-                            "NORMAL" -> "普通"
-                            else -> "低优先级"
-                        },
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = priorityColor
-                    )
-                }
-            }
-
-            Text("${task.recipeCode} - ${task.recipeName}")
-            Text("数量: ${com.example.smartdosing.utils.FormatUtils.formatWeight(task.quantity)} ${task.unit}")
-
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Outlined.Send, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("来自: ${task.senderName}", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Outlined.Schedule, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(dateFormat.format(Date(task.receivedAt)), color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
-
-            task.note?.takeIf { it.isNotBlank() }?.let {
-                Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-
-            if (isCompact) {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    OutlinedButton(
-                        onClick = onReject,
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Icon(Icons.Outlined.Close, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("拒绝")
-                    }
-                    Button(
-                        onClick = onAccept,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Icon(Icons.Outlined.Check, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("接收")
-                    }
-                }
-            } else {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    OutlinedButton(
-                        onClick = onReject,
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
-                    ) {
-                        Icon(Icons.Outlined.Close, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("拒绝")
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Button(onClick = onAccept) {
-                        Icon(Icons.Outlined.Check, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("接收")
-                    }
-                }
-            }
-        }
-    }
-}

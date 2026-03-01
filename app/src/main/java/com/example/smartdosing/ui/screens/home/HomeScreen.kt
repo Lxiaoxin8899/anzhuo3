@@ -53,7 +53,6 @@ import java.time.format.DateTimeFormatter
 @Composable
 fun HomeScreen(
     onNavigateToRecipes: () -> Unit = {},
-    onNavigateToMaterialConfiguration: (String) -> Unit = {},
     onContinueRecoveryTask: (ConfigurationTask) -> Unit = {},
     onNavigateToTaskCenter: () -> Unit = {},
     onNavigateToConfigurationRecords: () -> Unit = {},
@@ -77,20 +76,12 @@ fun HomeScreen(
 
     val actionCards = listOf(
         HomeAction(
-            title = "实验配置",
-            description = "选择配方，启动高精度配置作业",
+            title = "实验中心",
+            description = "任务领取、配方调阅与实验配置",
             icon = Icons.Outlined.Science,
             containerColor = MaterialTheme.colorScheme.primary,
             contentColor = MaterialTheme.colorScheme.onPrimary,
             emphasize = true,
-            onClick = { onNavigateToMaterialConfiguration("quick_start") }
-        ),
-        HomeAction(
-            title = "任务领取",
-            description = "查看研发计划并申领配置任务",
-            icon = Icons.Outlined.Assignment,
-            containerColor = MaterialTheme.colorScheme.surface,
-            contentColor = MaterialTheme.colorScheme.onSurface,
             badge = if (stats.pendingTasks > 0) stats.pendingTasks.toString() else null,
             onClick = onNavigateToTaskCenter
         ),

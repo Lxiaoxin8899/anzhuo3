@@ -33,6 +33,10 @@ import com.example.smartdosing.bluetooth.BluetoothScalePreferencesManager
 import com.example.smartdosing.bluetooth.BluetoothScalePreferencesManager.Companion.BAUD_RATE_OPTIONS
 import com.example.smartdosing.bluetooth.model.ConnectionState
 import com.example.smartdosing.bluetooth.model.ScaleDevice
+import com.example.smartdosing.data.settings.DosingPreferencesManager
+import com.example.smartdosing.data.settings.DosingPreferencesState
+import com.example.smartdosing.data.settings.AdminPreferencesManager
+import com.example.smartdosing.data.settings.WeightUnit
 import com.example.smartdosing.ui.components.BluetoothDeviceSelectDialog
 import kotlinx.coroutines.launch
 
@@ -52,6 +56,17 @@ fun BluetoothScaleSettingsScreen(
     // 使用全局管理器（确保整个应用共享同一个连接）
     val preferencesManager = application.bluetoothPreferencesManager
     val scaleManager = application.bluetoothScaleManager
+    val dosingPreferencesManager = remember { DosingPreferencesManager(context) }
+    val dosingPreferencesState by dosingPreferencesManager.preferencesFlow.collectAsState(
+        initial = DosingPreferencesState()
+    )
+
+    // 管理员权限
+    val adminManager = application.adminPreferencesManager
+    val adminSettings by adminManager.settingsFlow.collectAsState(
+        initial = AdminPreferencesManager.AdminSettingsState()
+    )
+    val isAdminLoggedIn by AdminPreferencesManager.isAdminLoggedIn.collectAsState()
 
     // 状态
     val preferencesState by preferencesManager.preferencesFlow.collectAsState(
@@ -68,6 +83,7 @@ fun BluetoothScaleSettingsScreen(
     var showProtocolDialog by remember { mutableStateOf(false) }
     var showAutoConfirmDelayDialog by remember { mutableStateOf(false) }
     var showAutoConfirmToleranceDialog by remember { mutableStateOf(false) }
+    var showWeightUnitDialog by remember { mutableStateOf(false) }
     var headerVisible by remember { mutableStateOf(false) }
 
     // 权限请求
@@ -411,6 +427,45 @@ fun BluetoothScaleSettingsScreen(
         )
     }
 
+    // 重量单位选择对话框
+    if (showWeightUnitDialog) {
+        AlertDialog(
+            onDismissRequest = { showWeightUnitDialog = false },
+            title = { Text("选择重量单位") },
+            text = {
+                Column {
+                    WeightUnit.entries.forEach { unit ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    scope.launch { dosingPreferencesManager.setWeightUnit(unit) }
+                                    showWeightUnitDialog = false
+                                }
+                                .padding(vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = dosingPreferencesState.weightUnit == unit,
+                                onClick = {
+                                    scope.launch { dosingPreferencesManager.setWeightUnit(unit) }
+                                    showWeightUnitDialog = false
+                                }
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(text = unit.displayName, style = MaterialTheme.typography.bodyLarge)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showWeightUnitDialog = false }) {
+                    Text("取消")
+                }
+            }
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -694,6 +749,23 @@ fun BluetoothScaleSettingsScreen(
                     title = "自动化配置",
                     icon = Icons.Outlined.Scale
                 ) {
+                    // 误差范围（独立设置，始终可见）
+                    SettingsRow(
+                        icon = Icons.Outlined.Tune,
+                        title = "误差范围",
+                        subtitle = "±${preferencesState.autoConfirmTolerancePermille}‰（用于超标判定、提示音和自动确认）" +
+                            if (adminSettings.passwordHash.isNotEmpty() && !isAdminLoggedIn) " \uD83D\uDD12" else "",
+                        onClick = {
+                            if (adminSettings.passwordHash.isNotEmpty() && !isAdminLoggedIn) {
+                                Toast.makeText(context, "需要管理员权限，请在系统设置中登录", Toast.LENGTH_SHORT).show()
+                                return@SettingsRow
+                            }
+                            showAutoConfirmToleranceDialog = true
+                        }
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
                     // 稳定后自动确认
                     SettingsToggleRow(
                         icon = Icons.Outlined.CheckCircle,
@@ -705,18 +777,8 @@ fun BluetoothScaleSettingsScreen(
                         }
                     )
 
-                    // 仅在启用自动确认时显示等待时间和误差范围设置
+                    // 仅在启用自动确认时显示等待时间
                     if (preferencesState.autoConfirmOnStable) {
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-
-                        // 自动确认误差范围（千分比）
-                        SettingsRow(
-                            icon = Icons.Outlined.Tune,
-                            title = "误差范围",
-                            subtitle = "±${preferencesState.autoConfirmTolerancePermille}‰（重量需在此范围内才开始计时）",
-                            onClick = { showAutoConfirmToleranceDialog = true }
-                        )
-
                         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
                         // 自动确认等待时间
@@ -739,6 +801,16 @@ fun BluetoothScaleSettingsScreen(
                         onCheckedChange = { enabled ->
                             scope.launch { preferencesManager.setAutoTareOnConfirm(enabled) }
                         }
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+                    // 重量单位
+                    SettingsRow(
+                        icon = Icons.Outlined.Balance,
+                        title = "重量单位",
+                        subtitle = "当前: ${dosingPreferencesState.weightUnit.displayName}",
+                        onClick = { showWeightUnitDialog = true }
                     )
                 }
             }

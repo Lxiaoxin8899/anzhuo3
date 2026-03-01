@@ -4,6 +4,7 @@ import android.media.AudioManager
 import android.media.ToneGenerator
 import android.util.Log
 import kotlinx.coroutines.*
+import kotlin.math.pow
 
 /**
  * 配料提示音管理器
@@ -13,19 +14,6 @@ class DosingBeepManager {
 
     companion object {
         private const val TAG = "DosingBeepManager"
-
-        // 渐进模式参数
-        const val PROGRESSIVE_MAX_INTERVAL_MS = 1500L  // 最慢间隔（距离目标远）
-        const val PROGRESSIVE_MIN_INTERVAL_MS = 100L   // 最快间隔（接近目标）
-        const val PROGRESSIVE_START_RATIO = 0.5        // 开始提示的比例（达到目标50%时开始）
-
-        // 阈值模式参数
-        const val DEFAULT_THRESHOLD_PERCENT = 90        // 默认阈值：目标的90%
-
-        // 音调
-        const val TONE_DURATION_MS = 80                 // 单次提示音时长
-        const val TONE_TYPE = ToneGenerator.TONE_PROP_BEEP // 提示音类型
-        const val TONE_TYPE_ARRIVED = ToneGenerator.TONE_PROP_ACK // 到达目标音
     }
 
     private var toneGenerator: ToneGenerator? = null
@@ -58,44 +46,56 @@ class DosingBeepManager {
      *
      * 算法：
      * ratio = actual / target (0.0 ~ 1.0+)
-     * 当 ratio < PROGRESSIVE_START_RATIO 时不发声
-     * 当 ratio >= PROGRESSIVE_START_RATIO 时：
+     * 当 ratio < startRatio 时不发声
+     * 当 ratio >= startRatio 时：
      *   normalizedProgress = (ratio - startRatio) / (1.0 - startRatio)  → 0.0~1.0
-     *   interval = MAX_INTERVAL - (MAX_INTERVAL - MIN_INTERVAL) * normalizedProgress^2
-     *   使用平方曲线让接近目标时加速更明显
+     *   interval = maxInterval - (maxInterval - minInterval) * normalizedProgress^curveExponent
      * 当 ratio >= 1.0（到达目标）时播放到达音并停止
      */
     fun updateProgressive(
         actualWeight: Double,
         targetWeight: Double,
-        tolerancePermille: Int = 10
+        tolerancePermille: Int = 10,
+        startPercent: Int = 50,
+        maxIntervalMs: Long = 1500L,
+        minIntervalMs: Long = 100L,
+        curveExponent: Float = 2.0f,
+        toneDurationMs: Int = 80,
+        toneType: Int = ToneGenerator.TONE_PROP_BEEP,
+        arrivedToneType: Int = ToneGenerator.TONE_PROP_ACK,
+        arrivedDurationMs: Int = 200
     ) {
         if (targetWeight <= 0) return
 
         val ratio = actualWeight / targetWeight
         val tolerance = targetWeight * tolerancePermille / 1000.0
         val inTolerance = actualWeight in (targetWeight - tolerance)..(targetWeight + tolerance)
+        val startRatio = startPercent / 100.0
 
         if (inTolerance) {
             // 到达目标范围，播放到达音并停止循环
             stopBeeping()
-            playTone(TONE_TYPE_ARRIVED, 200)
+            playTone(arrivedToneType, arrivedDurationMs)
             return
         }
 
-        if (ratio < PROGRESSIVE_START_RATIO || ratio > 1.0 + tolerancePermille / 1000.0) {
+        if (ratio < startRatio || ratio > 1.0 + tolerancePermille / 1000.0) {
             // 还没到开始比例，或已超标，停止
             stopBeeping()
             return
         }
 
         // 计算间隔
-        val normalizedProgress = ((ratio - PROGRESSIVE_START_RATIO) / (1.0 - PROGRESSIVE_START_RATIO))
+        val normalizedProgress = ((ratio - startRatio) / (1.0 - startRatio))
             .coerceIn(0.0, 1.0)
-        val intervalMs = PROGRESSIVE_MAX_INTERVAL_MS -
-            ((PROGRESSIVE_MAX_INTERVAL_MS - PROGRESSIVE_MIN_INTERVAL_MS) * normalizedProgress * normalizedProgress).toLong()
+        val intervalMs = maxIntervalMs -
+            ((maxIntervalMs - minIntervalMs) * normalizedProgress.pow(curveExponent.toDouble())).toLong()
 
-        startBeepLoop(intervalMs.coerceIn(PROGRESSIVE_MIN_INTERVAL_MS, PROGRESSIVE_MAX_INTERVAL_MS))
+        startBeepLoop(
+            intervalMs.coerceIn(minIntervalMs, maxIntervalMs),
+            toneType = toneType,
+            toneDurationMs = toneDurationMs
+        )
     }
 
     /**
@@ -108,7 +108,12 @@ class DosingBeepManager {
         targetWeight: Double,
         thresholdPercent: Int,
         continuous: Boolean,
-        tolerancePermille: Int = 10
+        tolerancePermille: Int = 10,
+        intervalMs: Long = 300L,
+        toneDurationMs: Int = 80,
+        toneType: Int = ToneGenerator.TONE_PROP_BEEP,
+        arrivedToneType: Int = ToneGenerator.TONE_PROP_ACK,
+        arrivedDurationMs: Int = 200
     ) {
         if (targetWeight <= 0) return
 
@@ -120,7 +125,7 @@ class DosingBeepManager {
         if (inTolerance) {
             // 到达目标，播放到达音
             stopBeeping()
-            playTone(TONE_TYPE_ARRIVED, 200)
+            playTone(arrivedToneType, arrivedDurationMs)
             thresholdTriggered = false // 重置，为下一个物料准备
             return
         }
@@ -128,12 +133,12 @@ class DosingBeepManager {
         if (ratio >= thresholdRatio && ratio < 1.0 + tolerancePermille / 1000.0) {
             if (continuous) {
                 // 连续提示：固定间隔 beep
-                startBeepLoop(300L)
+                startBeepLoop(intervalMs, toneType = toneType, toneDurationMs = toneDurationMs)
             } else {
                 // 仅提示一次
                 if (!thresholdTriggered) {
                     thresholdTriggered = true
-                    playTone(TONE_TYPE, TONE_DURATION_MS)
+                    playTone(toneType, toneDurationMs)
                 }
             }
         } else {
@@ -153,18 +158,35 @@ class DosingBeepManager {
     }
 
     /**
+     * 播放自动确认倒计时提示音（单次）
+     */
+    fun playAutoConfirmCountdownBeep(toneType: Int, durationMs: Int) {
+        playTone(toneType, durationMs)
+    }
+
+    /**
+     * 播放自动确认完成音（单次）
+     */
+    fun playAutoConfirmCompleteBeep(toneType: Int, durationMs: Int) {
+        playTone(toneType, durationMs)
+    }
+
+    /**
      * 启动循环 beep
      */
-    private fun startBeepLoop(intervalMs: Long) {
-        // 如果已经在以相同间隔播放，不重启
+    private fun startBeepLoop(
+        intervalMs: Long,
+        toneType: Int = ToneGenerator.TONE_PROP_BEEP,
+        toneDurationMs: Int = 80
+    ) {
+        // 如果已经在播放，取消旧的，启动新的
         if (isPlaying) {
-            // 更新间隔：取消旧的，启动新的
             beepJob?.cancel()
         }
         isPlaying = true
         beepJob = scope.launch {
             while (isActive) {
-                playTone(TONE_TYPE, TONE_DURATION_MS)
+                playTone(toneType, toneDurationMs)
                 delay(intervalMs)
             }
         }

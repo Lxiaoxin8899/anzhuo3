@@ -49,6 +49,7 @@ import com.example.smartdosing.data.Material as DataMaterial
 import com.example.smartdosing.data.repository.ConfigurationRepositoryProvider
 import com.example.smartdosing.data.settings.DosingPreferencesManager
 import com.example.smartdosing.data.settings.DosingPreferencesState
+import com.example.smartdosing.data.settings.AdminPreferencesManager
 import com.example.smartdosing.ui.components.DosingBluetoothStatusBar
 import com.example.smartdosing.ui.theme.LocalWindowSize
 import com.example.smartdosing.ui.theme.SmartDosingTheme
@@ -88,6 +89,12 @@ fun MaterialConfigurationScreen(
         initial = BluetoothScalePreferencesManager.BluetoothScalePreferencesState()
     )
 
+    // 管理员权限 - 控制手动输入
+    val adminManager = application.adminPreferencesManager
+    val adminSettings by adminManager.settingsFlow.collectAsState(
+        initial = AdminPreferencesManager.AdminSettingsState()
+    )
+
     // 演示模式状态
     val isDemoMode = bluetoothPreferences.demoModeEnabled
     val demoActive by demoManager.isActive.collectAsState()
@@ -98,6 +105,9 @@ fun MaterialConfigurationScreen(
     val bluetoothWeight by scaleManager.currentWeight.collectAsState()
     val currentWeight = if (isDemoMode && demoActive) demoWeight else bluetoothWeight
     val isBluetoothConnected = if (isDemoMode) demoActive else connectionState == ConnectionState.CONNECTED
+
+    // 蓝牙模式下管理员禁用手动输入时，禁用手动输入框
+    val isManualInputDisabled = !adminSettings.manualInputEnabled && isBluetoothConnected
 
     // 活动行状态
     var activeRowIndex by rememberSaveable { mutableIntStateOf(0) }
@@ -257,7 +267,15 @@ fun MaterialConfigurationScreen(
                 beepManager.updateProgressive(
                     actualWeight = actual,
                     targetWeight = target,
-                    tolerancePermille = bluetoothPreferences.autoConfirmTolerancePermille
+                    tolerancePermille = bluetoothPreferences.autoConfirmTolerancePermille,
+                    startPercent = dosingPreferences.progressiveStartPercent,
+                    maxIntervalMs = dosingPreferences.progressiveMaxIntervalMs.toLong(),
+                    minIntervalMs = dosingPreferences.progressiveMinIntervalMs.toLong(),
+                    curveExponent = dosingPreferences.progressiveCurveExponent,
+                    toneDurationMs = dosingPreferences.beepToneDurationMs,
+                    toneType = dosingPreferences.beepToneType.toneId,
+                    arrivedToneType = dosingPreferences.beepArrivedToneType.toneId,
+                    arrivedDurationMs = dosingPreferences.beepArrivedDurationMs
                 )
             }
             BeepMode.THRESHOLD -> {
@@ -266,7 +284,12 @@ fun MaterialConfigurationScreen(
                     targetWeight = target,
                     thresholdPercent = dosingPreferences.beepThresholdPercent,
                     continuous = dosingPreferences.beepThresholdContinuous,
-                    tolerancePermille = bluetoothPreferences.autoConfirmTolerancePermille
+                    tolerancePermille = bluetoothPreferences.autoConfirmTolerancePermille,
+                    intervalMs = dosingPreferences.thresholdIntervalMs.toLong(),
+                    toneDurationMs = dosingPreferences.beepToneDurationMs,
+                    toneType = dosingPreferences.beepToneType.toneId,
+                    arrivedToneType = dosingPreferences.beepArrivedToneType.toneId,
+                    arrivedDurationMs = dosingPreferences.beepArrivedDurationMs
                 )
             }
             BeepMode.OFF -> { /* 不会到这里 */ }
@@ -310,6 +333,13 @@ fun MaterialConfigurationScreen(
             val totalSeconds = (autoConfirmDelayMs / 1000).toInt()
             autoConfirmCountdown = totalSeconds
             while (autoConfirmCountdown > 0) {
+                // 自动确认倒计时提示音
+                if (dosingPreferences.autoConfirmBeepEnabled) {
+                    beepManager.playAutoConfirmCountdownBeep(
+                        toneType = dosingPreferences.autoConfirmBeepToneType.toneId,
+                        durationMs = dosingPreferences.beepToneDurationMs
+                    )
+                }
                 delay(1000)
                 if (stableStartTime == null) {
                     autoConfirmCountdown = -1
@@ -317,7 +347,15 @@ fun MaterialConfigurationScreen(
                 }
                 autoConfirmCountdown--
             }
-            
+
+            // 自动确认完成提示音
+            if (dosingPreferences.autoConfirmBeepEnabled) {
+                beepManager.playAutoConfirmCompleteBeep(
+                    toneType = dosingPreferences.autoConfirmCompleteToneType.toneId,
+                    durationMs = dosingPreferences.autoConfirmCompleteDurationMs
+                )
+            }
+
             // 执行确认
             val index = activeRowIndex
             materialStates = materialStates.toMutableList().apply {
@@ -372,6 +410,7 @@ fun MaterialConfigurationScreen(
                             currentWeight = currentWeight,
                             isBluetoothConnected = isBluetoothConnected,
                             isViewOnly = isViewOnly,
+                            isManualInputDisabled = isManualInputDisabled,
                             onRowClick = {
                                 activeRowIndex = it
                                 announceMaterial(it)
@@ -399,6 +438,7 @@ fun MaterialConfigurationScreen(
                             },
                             onToggleMagnify = { isMagnified = true },
                             onWeightChange = { index, newWeight ->
+                                if (isManualInputDisabled && newWeight != "RESET_AUTO") return@LargeScreenLayout
                                 materialStates = materialStates.toMutableList().apply {
                                     if (newWeight == "RESET_AUTO") {
                                         this[index] = this[index].copy(isManualOverride = false)
@@ -421,6 +461,7 @@ fun MaterialConfigurationScreen(
                             currentWeight = currentWeight,
                             isBluetoothConnected = isBluetoothConnected,
                             isViewOnly = isViewOnly,
+                            isManualInputDisabled = isManualInputDisabled,
                             onRowClick = {
                                 activeRowIndex = it
                                 announceMaterial(it)
@@ -448,6 +489,7 @@ fun MaterialConfigurationScreen(
                             },
                             onToggleMagnify = { isMagnified = true },
                             onWeightChange = { index, newWeight ->
+                                if (isManualInputDisabled && newWeight != "RESET_AUTO") return@CompactScreenLayout
                                 materialStates = materialStates.toMutableList().apply {
                                     if (newWeight == "RESET_AUTO") {
                                         this[index] = this[index].copy(isManualOverride = false)
@@ -656,6 +698,7 @@ private fun LargeScreenLayout(
     currentWeight: WeightData?,
     isBluetoothConnected: Boolean,
     isViewOnly: Boolean = false,
+    isManualInputDisabled: Boolean = false,
     onRowClick: (Int) -> Unit,
     onConfirm: () -> Unit,
     onSave: () -> Unit,
@@ -754,7 +797,14 @@ private fun LargeScreenLayout(
                     value = activeState.actualWeight,
                     onValueChange = { onWeightChange(activeRowIndex, it) },
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text(if (activeState.isManualOverride) "手动模式 (已校准)" else "天平实时同步 (点击可手动校准)") },
+                    enabled = !isManualInputDisabled,
+                    label = { Text(
+                        when {
+                            isManualInputDisabled -> "手动输入已禁用（管理员设置）"
+                            activeState.isManualOverride -> "手动模式 (已校准)"
+                            else -> "天平实时同步 (点击可手动校准)"
+                        }
+                    ) },
                     placeholder = { Text("请输入实际称重数值") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     trailingIcon = {
@@ -842,6 +892,7 @@ private fun CompactScreenLayout(
     currentWeight: WeightData?,
     isBluetoothConnected: Boolean,
     isViewOnly: Boolean = false,
+    isManualInputDisabled: Boolean = false,
     onRowClick: (Int) -> Unit,
     onConfirm: () -> Unit,
     onSave: () -> Unit,
@@ -898,7 +949,8 @@ private fun CompactScreenLayout(
                             value = state.actualWeight,
                             onValueChange = { onWeightChange(activeRowIndex, it) },
                             modifier = Modifier.fillMaxWidth(),
-                            label = { Text("手动输入实际重量 (g)") },
+                            enabled = !isManualInputDisabled,
+                            label = { Text(if (isManualInputDisabled) "手动输入已禁用（管理员设置）" else "手动输入实际重量 (g)") },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                             singleLine = true,
                             shape = RoundedCornerShape(12.dp),

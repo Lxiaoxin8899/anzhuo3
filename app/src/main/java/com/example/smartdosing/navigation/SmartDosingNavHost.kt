@@ -78,9 +78,6 @@ fun SmartDosingNavHost(
                 onNavigateToTaskCenter = {
                     navController.navigate(SmartDosingRoutes.LAB_CENTER)
                 },
-                onNavigateToMaterialConfiguration = { recipeId ->
-                    navController.navigateToMaterialConfiguration(recipeId)
-                },
                 onContinueRecoveryTask = { task ->
                     navController.navigateToMaterialConfiguration(
                         recipeId = task.recipeId.ifBlank { "quick_start" },

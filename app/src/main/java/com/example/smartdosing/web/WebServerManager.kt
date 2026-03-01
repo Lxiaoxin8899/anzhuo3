@@ -1516,14 +1516,15 @@ private class ConfigurationTaskStore(
     }
 
     private suspend fun syncDatabaseTasks() {
-        // === 从 recipes 表同步 ===
-        val recipes = recipeRepository.getAllRecipes()
-        val dbIds = recipes.map { dbTaskPrefix + it.id }.toSet()
-        tasks.removeAll { it.id.startsWith(dbTaskPrefix) && it.id !in dbIds }
-        recipes.forEach { recipe ->
-            val taskId = dbTaskPrefix + recipe.id
-            val newTask = recipe.toTask(taskId)
-            val index = tasks.indexOfFirst { it.id == taskId }
+        // === 从 received_tasks 表同步 ===（先处理，收集已关联的配方ID）
+        val receivedTasks = deviceDao.getAllReceivedTasks()
+        val rtIds = receivedTasks.map { it.id }.toSet()
+        tasks.removeAll { it.id.startsWith("RT-") && it.id !in rtIds }
+        // 收集已被局域网任务关联的配方ID，避免重复生成任务
+        val linkedRecipeIds = receivedTasks.mapNotNull { it.localRecipeId }.toSet()
+        receivedTasks.forEach { rt ->
+            val newTask = rt.toConfigurationTask()
+            val index = tasks.indexOfFirst { it.id == rt.id }
             if (index >= 0) {
                 tasks[index] = newTask
             } else {
@@ -1531,14 +1532,16 @@ private class ConfigurationTaskStore(
             }
         }
 
-        // === 从 received_tasks 表同步 ===
-        val receivedTasks = deviceDao.getAllReceivedTasks()
-        val rtIds = receivedTasks.map { it.id }.toSet()
-        // 清理已删除的接收任务（RT- 前缀）
-        tasks.removeAll { it.id.startsWith("RT-") && it.id !in rtIds }
-        receivedTasks.forEach { rt ->
-            val newTask = rt.toConfigurationTask()
-            val index = tasks.indexOfFirst { it.id == rt.id }
+        // === 从 recipes 表同步（排除已被局域网任务关联的配方）===
+        val recipes = recipeRepository.getAllRecipes()
+        val dbIds = recipes
+            .filter { it.id !in linkedRecipeIds }
+            .map { dbTaskPrefix + it.id }.toSet()
+        tasks.removeAll { it.id.startsWith(dbTaskPrefix) && it.id !in dbIds }
+        recipes.filter { it.id !in linkedRecipeIds }.forEach { recipe ->
+            val taskId = dbTaskPrefix + recipe.id
+            val newTask = recipe.toTask(taskId)
+            val index = tasks.indexOfFirst { it.id == taskId }
             if (index >= 0) {
                 tasks[index] = newTask
             } else {

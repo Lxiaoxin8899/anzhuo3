@@ -1,5 +1,7 @@
 package com.example.smartdosing.ui.screens.settings
 
+import android.media.AudioManager
+import android.media.ToneGenerator
 import android.widget.Toast
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -26,11 +28,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import com.example.smartdosing.SmartDosingApplication
 import com.example.smartdosing.audio.BeepMode
+import com.example.smartdosing.audio.BeepToneType
+import com.example.smartdosing.data.settings.AdminPreferencesManager
 import com.example.smartdosing.data.settings.DosingPreferencesManager
 import com.example.smartdosing.data.settings.DosingPreferencesState
 import com.example.smartdosing.ui.theme.SmartDosingTheme
-import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
 /**
@@ -46,11 +51,32 @@ fun SettingsScreen(
     val context = LocalContext.current
     val preferencesManager = remember { DosingPreferencesManager(context) }
     val preferencesState by preferencesManager.preferencesFlow.collectAsState(initial = DosingPreferencesState())
-    val bluetoothPreferencesManager = remember { com.example.smartdosing.bluetooth.BluetoothScalePreferencesManager(context) }
-    val bluetoothPreferences by bluetoothPreferencesManager.preferencesFlow.collectAsState(
-        initial = com.example.smartdosing.bluetooth.BluetoothScalePreferencesManager.BluetoothScalePreferencesState()
-    )
     val scope = rememberCoroutineScope()
+
+    // 管理员权限
+    val adminManager = remember {
+        (context.applicationContext as SmartDosingApplication).adminPreferencesManager
+    }
+    val adminSettings by adminManager.settingsFlow.collectAsState(
+        initial = AdminPreferencesManager.AdminSettingsState()
+    )
+    val isAdminLoggedIn by AdminPreferencesManager.isAdminLoggedIn.collectAsState()
+    val hasAdminPassword = adminSettings.passwordHash.isNotEmpty()
+
+    // 管理员对话框状态
+    var showAdminLoginDialog by remember { mutableStateOf(false) }
+    var showSetPasswordDialog by remember { mutableStateOf(false) }
+
+    // 音调预览播放器
+    val toneGenerator = remember {
+        try { ToneGenerator(AudioManager.STREAM_NOTIFICATION, 80) } catch (_: Exception) { null }
+    }
+    DisposableEffect(Unit) {
+        onDispose { toneGenerator?.release() }
+    }
+    val previewTone: (BeepToneType, Int) -> Unit = { type, durationMs ->
+        try { toneGenerator?.startTone(type.toneId, durationMs) } catch (_: Exception) { }
+    }
 
     var headerVisible by remember { mutableStateOf(false) }
 
@@ -65,11 +91,18 @@ fun SettingsScreen(
             items = listOf(
                 SettingsItem.Selection(
                     title = "配置模式",
-                    subtitle = "选择手动输入或蓝牙电子秤模式",
+                    subtitle = if (hasAdminPassword && !isAdminLoggedIn)
+                        "选择手动输入或蓝牙电子秤模式（需管理员权限）"
+                    else
+                        "选择手动输入或蓝牙电子秤模式",
                     icon = Icons.Outlined.Tune,
                     selectedValue = preferencesState.dosingMode.displayName,
                     options = com.example.smartdosing.data.settings.DosingMode.entries.map { it.displayName },
                     onSelectionChange = { selectedName ->
+                        if (hasAdminPassword && !isAdminLoggedIn) {
+                            showAdminLoginDialog = true
+                            return@Selection
+                        }
                         val mode = com.example.smartdosing.data.settings.DosingMode.entries.find { it.displayName == selectedName }
                         if (mode != null) {
                             scope.launch { preferencesManager.setDosingMode(mode) }
@@ -87,6 +120,22 @@ fun SettingsScreen(
                     subtitle = "配置无线传输端口、自动启动与服务状态",
                     icon = Icons.Outlined.Wifi,
                     onClick = onNavigateToWirelessSettings
+                ),
+                SettingsItem.Switch(
+                    title = "允许手动输入",
+                    subtitle = if (adminSettings.manualInputEnabled)
+                        "蓝牙模式下允许手动校准重量"
+                    else
+                        "蓝牙模式下禁止手动输入（仅天平数据）",
+                    icon = if (adminSettings.manualInputEnabled) Icons.Outlined.Edit else Icons.Outlined.EditOff,
+                    isChecked = adminSettings.manualInputEnabled,
+                    onCheckedChange = { enabled ->
+                        if (hasAdminPassword && !isAdminLoggedIn) {
+                            showAdminLoginDialog = true
+                            return@Switch
+                        }
+                        scope.launch { adminManager.setManualInputEnabled(enabled) }
+                    }
                 )
             )
         ),
@@ -125,54 +174,6 @@ fun SettingsScreen(
             )
         ),
         SettingsSection(
-            title = "精度控制",
-            icon = Icons.Outlined.Scale,
-            items = listOf(
-                SettingsItem.Slider(
-                    title = "精度要求",
-                    subtitle = "实验配置重量精度要求（%）",
-                    icon = Icons.Outlined.Straighten,
-                    value = 0.95f,
-                    onValueChange = { _ -> Toast.makeText(context, "该功能开发中", Toast.LENGTH_SHORT).show() },
-                    valueRange = 0.85f..0.99f,
-                    valueFormatter = { "${(it * 100).toInt()}%" }
-                ),
-                SettingsItem.Slider(
-                    title = "超标允许浮动",
-                    subtitle = "添加数量允许超过目标的百分比",
-                    icon = Icons.Outlined.Warning,
-                    value = preferencesState.overLimitTolerancePercent,
-                    onValueChange = { value ->
-                        scope.launch { preferencesManager.setTolerancePercent(value) }
-                    },
-                    valueRange = DosingPreferencesManager.MIN_TOLERANCE..DosingPreferencesManager.MAX_TOLERANCE,
-                    valueFormatter = { "${it.toInt()}%" }
-                ),
-                SettingsItem.Switch(
-                    title = "自动进入下一步",
-                    subtitle = "读数稳定且在误差范围内后自动确认并进入下一材料",
-                    icon = Icons.Outlined.SkipNext,
-                    isChecked = bluetoothPreferences.autoConfirmOnStable,
-                    onCheckedChange = { enabled ->
-                        scope.launch { bluetoothPreferencesManager.setAutoConfirmOnStable(enabled) }
-                    }
-                ),
-                SettingsItem.Selection(
-                    title = "重量单位",
-                    subtitle = "实验配置重量显示单位",
-                    icon = Icons.Outlined.Balance,
-                    selectedValue = preferencesState.weightUnit.displayName,
-                    options = com.example.smartdosing.data.settings.WeightUnit.entries.map { it.displayName },
-                    onSelectionChange = { selectedName ->
-                        val unit = com.example.smartdosing.data.settings.WeightUnit.entries.find { it.displayName == selectedName }
-                        if (unit != null) {
-                            scope.launch { preferencesManager.setWeightUnit(unit) }
-                        }
-                    }
-                )
-            )
-        ),
-        SettingsSection(
             title = "提示音",
             icon = Icons.Outlined.VolumeUp,
             items = buildList {
@@ -189,6 +190,95 @@ fun SettingsScreen(
                         }
                     }
                 ))
+                // 通用声音设置（渐进或阈值模式时显示）
+                if (preferencesState.beepMode != BeepMode.OFF) {
+                    add(SettingsItem.Selection(
+                        title = "提示音调",
+                        subtitle = "配料过程中的提示音类型",
+                        icon = Icons.Outlined.MusicNote,
+                        selectedValue = preferencesState.beepToneType.displayName,
+                        options = BeepToneType.entries.map { it.displayName },
+                        onSelectionChange = { name ->
+                            val type = BeepToneType.entries.find { it.displayName == name }
+                            if (type != null) {
+                                previewTone(type, preferencesState.beepToneDurationMs)
+                                scope.launch { preferencesManager.setBeepToneType(type) }
+                            }
+                        }
+                    ))
+                    add(SettingsItem.Slider(
+                        title = "提示音长",
+                        subtitle = "单次提示音持续时长",
+                        icon = Icons.Outlined.Timer,
+                        value = preferencesState.beepToneDurationMs.toFloat(),
+                        onValueChange = { scope.launch { preferencesManager.setBeepToneDurationMs(it.toInt()) } },
+                        valueRange = 30f..300f,
+                        valueFormatter = { "${it.toInt()}ms" }
+                    ))
+                    add(SettingsItem.Selection(
+                        title = "到达音调",
+                        subtitle = "重量到达目标时的提示音",
+                        icon = Icons.Outlined.CheckCircle,
+                        selectedValue = preferencesState.beepArrivedToneType.displayName,
+                        options = BeepToneType.entries.map { it.displayName },
+                        onSelectionChange = { name ->
+                            val type = BeepToneType.entries.find { it.displayName == name }
+                            if (type != null) {
+                                previewTone(type, preferencesState.beepArrivedDurationMs)
+                                scope.launch { preferencesManager.setBeepArrivedToneType(type) }
+                            }
+                        }
+                    ))
+                    add(SettingsItem.Slider(
+                        title = "到达音长",
+                        subtitle = "到达目标时提示音持续时长",
+                        icon = Icons.Outlined.Timer,
+                        value = preferencesState.beepArrivedDurationMs.toFloat(),
+                        onValueChange = { scope.launch { preferencesManager.setBeepArrivedDurationMs(it.toInt()) } },
+                        valueRange = 100f..500f,
+                        valueFormatter = { "${it.toInt()}ms" }
+                    ))
+                }
+                // 渐进模式专属设置
+                if (preferencesState.beepMode == BeepMode.PROGRESSIVE) {
+                    add(SettingsItem.Slider(
+                        title = "开始提示比例",
+                        subtitle = "达到目标重量的百分比后开始渐进提示",
+                        icon = Icons.Outlined.PlayArrow,
+                        value = preferencesState.progressiveStartPercent.toFloat(),
+                        onValueChange = { scope.launch { preferencesManager.setProgressiveStartPercent(it.toInt()) } },
+                        valueRange = 20f..80f,
+                        valueFormatter = { "${it.toInt()}%" }
+                    ))
+                    add(SettingsItem.Slider(
+                        title = "最慢间隔",
+                        subtitle = "刚开始提示时的最大间隔",
+                        icon = Icons.Outlined.SlowMotionVideo,
+                        value = preferencesState.progressiveMaxIntervalMs.toFloat(),
+                        onValueChange = { scope.launch { preferencesManager.setProgressiveMaxIntervalMs(it.toInt()) } },
+                        valueRange = 500f..3000f,
+                        valueFormatter = { "${it.toInt()}ms" }
+                    ))
+                    add(SettingsItem.Slider(
+                        title = "最快间隔",
+                        subtitle = "接近目标时的最小间隔",
+                        icon = Icons.Outlined.Speed,
+                        value = preferencesState.progressiveMinIntervalMs.toFloat(),
+                        onValueChange = { scope.launch { preferencesManager.setProgressiveMinIntervalMs(it.toInt()) } },
+                        valueRange = 50f..500f,
+                        valueFormatter = { "${it.toInt()}ms" }
+                    ))
+                    add(SettingsItem.Slider(
+                        title = "加速曲线",
+                        subtitle = "1.0=线性 2.0=平方 4.0=急加速",
+                        icon = Icons.Outlined.TrendingUp,
+                        value = preferencesState.progressiveCurveExponent,
+                        onValueChange = { scope.launch { preferencesManager.setProgressiveCurveExponent(it) } },
+                        valueRange = 1.0f..4.0f,
+                        valueFormatter = { "%.1f".format(it) }
+                    ))
+                }
+                // 阈值模式专属设置
                 if (preferencesState.beepMode == BeepMode.THRESHOLD) {
                     add(SettingsItem.Slider(
                         title = "提示阈值",
@@ -209,6 +299,69 @@ fun SettingsScreen(
                         onCheckedChange = { enabled ->
                             scope.launch { preferencesManager.setBeepThresholdContinuous(enabled) }
                         }
+                    ))
+                    if (preferencesState.beepThresholdContinuous) {
+                        add(SettingsItem.Slider(
+                            title = "连续提示间隔",
+                            subtitle = "阈值模式下连续提示的时间间隔",
+                            icon = Icons.Outlined.Timelapse,
+                            value = preferencesState.thresholdIntervalMs.toFloat(),
+                            onValueChange = { scope.launch { preferencesManager.setThresholdIntervalMs(it.toInt()) } },
+                            valueRange = 100f..1000f,
+                            valueFormatter = { "${it.toInt()}ms" }
+                        ))
+                    }
+                }
+            }
+        ),
+        SettingsSection(
+            title = "自动确认提示音",
+            icon = Icons.Outlined.NotificationsActive,
+            items = buildList {
+                add(SettingsItem.Switch(
+                    title = "倒计时提示音",
+                    subtitle = "自动确认倒计时过程中播放提示音",
+                    icon = Icons.Outlined.Alarm,
+                    isChecked = preferencesState.autoConfirmBeepEnabled,
+                    onCheckedChange = { scope.launch { preferencesManager.setAutoConfirmBeepEnabled(it) } }
+                ))
+                if (preferencesState.autoConfirmBeepEnabled) {
+                    add(SettingsItem.Selection(
+                        title = "倒计时音调",
+                        subtitle = "倒计时过程中的提示音类型",
+                        icon = Icons.Outlined.MusicNote,
+                        selectedValue = preferencesState.autoConfirmBeepToneType.displayName,
+                        options = BeepToneType.entries.map { it.displayName },
+                        onSelectionChange = { name ->
+                            val type = BeepToneType.entries.find { it.displayName == name }
+                            if (type != null) {
+                                previewTone(type, preferencesState.beepToneDurationMs)
+                                scope.launch { preferencesManager.setAutoConfirmBeepToneType(type) }
+                            }
+                        }
+                    ))
+                    add(SettingsItem.Selection(
+                        title = "确认完成音调",
+                        subtitle = "自动确认完成时的提示音",
+                        icon = Icons.Outlined.Verified,
+                        selectedValue = preferencesState.autoConfirmCompleteToneType.displayName,
+                        options = BeepToneType.entries.map { it.displayName },
+                        onSelectionChange = { name ->
+                            val type = BeepToneType.entries.find { it.displayName == name }
+                            if (type != null) {
+                                previewTone(type, preferencesState.autoConfirmCompleteDurationMs)
+                                scope.launch { preferencesManager.setAutoConfirmCompleteToneType(type) }
+                            }
+                        }
+                    ))
+                    add(SettingsItem.Slider(
+                        title = "确认完成音长",
+                        subtitle = "确认完成提示音持续时长",
+                        icon = Icons.Outlined.Timer,
+                        value = preferencesState.autoConfirmCompleteDurationMs.toFloat(),
+                        onValueChange = { scope.launch { preferencesManager.setAutoConfirmCompleteDurationMs(it.toInt()) } },
+                        valueRange = 100f..500f,
+                        valueFormatter = { "${it.toInt()}ms" }
                     ))
                 }
             }
@@ -239,6 +392,45 @@ fun SettingsScreen(
             )
         ),
         SettingsSection(
+            title = "管理员",
+            icon = Icons.Outlined.Lock,
+            items = buildList {
+                if (!hasAdminPassword) {
+                    add(SettingsItem.Action(
+                        title = "设置管理员密码",
+                        subtitle = "设置后可锁定关键配置项",
+                        icon = Icons.Outlined.Lock,
+                        onClick = { showSetPasswordDialog = true }
+                    ))
+                } else if (!isAdminLoggedIn) {
+                    add(SettingsItem.Action(
+                        title = "管理员登录",
+                        subtitle = "登录后可修改受保护的设置",
+                        icon = Icons.Outlined.LockOpen,
+                        onClick = { showAdminLoginDialog = true }
+                    ))
+                } else {
+                    add(SettingsItem.Info(
+                        title = "管理员状态",
+                        subtitle = "已登录（应用重启后需重新验证）",
+                        icon = Icons.Outlined.Shield
+                    ))
+                    add(SettingsItem.Action(
+                        title = "修改管理员密码",
+                        subtitle = "更改管理员密码",
+                        icon = Icons.Outlined.Lock,
+                        onClick = { showSetPasswordDialog = true }
+                    ))
+                    add(SettingsItem.Action(
+                        title = "退出管理员",
+                        subtitle = "退出后受保护设置将被锁定",
+                        icon = Icons.Outlined.ExitToApp,
+                        onClick = { adminManager.logout() }
+                    ))
+                }
+            }
+        ),
+        SettingsSection(
             title = "关于应用",
             icon = Icons.Outlined.Info,
             items = listOf(
@@ -262,6 +454,100 @@ fun SettingsScreen(
             )
         )
     )
+
+    // 管理员登录对话框
+    if (showAdminLoginDialog) {
+        var password by remember { mutableStateOf("") }
+        var error by remember { mutableStateOf<String?>(null) }
+
+        AlertDialog(
+            onDismissRequest = { showAdminLoginDialog = false },
+            title = { Text("管理员验证") },
+            text = {
+                Column {
+                    Text(
+                        "请输入管理员密码以修改受保护的设置",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = password,
+                        onValueChange = { password = it; error = null },
+                        label = { Text("密码") },
+                        singleLine = true,
+                        isError = error != null,
+                        visualTransformation = PasswordVisualTransformation(),
+                        supportingText = error?.let { msg -> { Text(msg) } }
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (adminManager.verifyAndLogin(password, adminSettings.passwordHash)) {
+                        showAdminLoginDialog = false
+                    } else {
+                        error = "密码错误"
+                    }
+                }) { Text("确认") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAdminLoginDialog = false }) { Text("取消") }
+            }
+        )
+    }
+
+    // 设置/修改密码对话框
+    if (showSetPasswordDialog) {
+        var newPassword by remember { mutableStateOf("") }
+        var confirmPassword by remember { mutableStateOf("") }
+        var error by remember { mutableStateOf<String?>(null) }
+
+        AlertDialog(
+            onDismissRequest = { showSetPasswordDialog = false },
+            title = { Text(if (!hasAdminPassword) "设置管理员密码" else "修改管理员密码") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = newPassword,
+                        onValueChange = { newPassword = it; error = null },
+                        label = { Text("新密码") },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation()
+                    )
+                    OutlinedTextField(
+                        value = confirmPassword,
+                        onValueChange = { confirmPassword = it; error = null },
+                        label = { Text("确认密码") },
+                        singleLine = true,
+                        isError = error != null,
+                        visualTransformation = PasswordVisualTransformation(),
+                        supportingText = error?.let { msg -> { Text(msg) } }
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    when {
+                        newPassword.length < 6 -> error = "密码至少6位"
+                        newPassword != confirmPassword -> error = "两次输入不一致"
+                        else -> {
+                            scope.launch { adminManager.setPassword(newPassword) }
+                            adminManager.verifyAndLogin(
+                                newPassword,
+                                AdminPreferencesManager.hashPassword(newPassword)
+                            )
+                            showSetPasswordDialog = false
+                            Toast.makeText(context, "管理员密码已设置", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }) { Text("确认") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSetPasswordDialog = false }) { Text("取消") }
+            }
+        )
+    }
 
     LazyColumn(
         modifier = modifier.fillMaxSize().padding(24.dp),

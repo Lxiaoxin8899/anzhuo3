@@ -7,6 +7,7 @@ import com.example.smartdosing.bluetooth.BluetoothPermissionHelper
 import com.example.smartdosing.bluetooth.BluetoothScaleManager
 import com.example.smartdosing.bluetooth.BluetoothScalePreferencesManager
 import com.example.smartdosing.bluetooth.DemoModeManager
+import com.example.smartdosing.data.settings.AdminPreferencesManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -47,6 +48,11 @@ class SmartDosingApplication : Application() {
     // 演示模式管理器
     val demoModeManager: DemoModeManager by lazy {
         DemoModeManager()
+    }
+
+    // 管理员偏好管理器
+    val adminPreferencesManager: AdminPreferencesManager by lazy {
+        AdminPreferencesManager(this)
     }
 
     override fun onCreate() {
