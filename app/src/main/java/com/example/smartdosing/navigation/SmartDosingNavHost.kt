@@ -23,6 +23,7 @@ import com.example.smartdosing.data.ConfigurationRecordStatus
 import com.example.smartdosing.data.TaskStatus
 import com.example.smartdosing.data.transfer.TaskReceiver
 import com.example.smartdosing.data.repository.ConfigurationRepositoryProvider
+import com.example.smartdosing.ui.components.RecipeWeightInputDialog
 import com.example.smartdosing.ui.screens.device.DeviceInfoScreen
 import com.example.smartdosing.ui.screens.dosing.MaterialConfigurationData
 import com.example.smartdosing.ui.screens.dosing.MaterialConfigurationScreen
@@ -273,6 +274,10 @@ fun SmartDosingNavHost(
         }
 
         composable(SmartDosingRoutes.RECIPES) {
+            // 配方库启动实验：重量输入对话框状态
+            var showWeightInputDialog by remember { mutableStateOf(false) }
+            var selectedRecipeIdForExperiment by remember { mutableStateOf("") }
+
             RecipesScreen(
                 onNavigateToRecipeDetail = { recipeId ->
                     navController.navigateToMaterialConfiguration(
@@ -281,9 +286,33 @@ fun SmartDosingNavHost(
                     )
                 },
                 onNavigateToMaterialConfiguration = { recipeId ->
-                    navController.navigateToMaterialConfiguration(recipeId = recipeId)
+                    // 配方库启动实验：弹出重量输入对话框
+                    selectedRecipeIdForExperiment = recipeId
+                    showWeightInputDialog = true
                 }
             )
+
+            // 配方库启动实验：重量输入对话框
+            if (showWeightInputDialog) {
+                RecipeWeightInputDialog(
+                    onConfirm = { totalWeight ->
+                        showWeightInputDialog = false
+                        navController.navigateToMaterialConfiguration(
+                            recipeId = selectedRecipeIdForExperiment,
+                            viewOnly = false,
+                            targetTotalWeight = totalWeight
+                        )
+                    },
+                    onDismiss = { showWeightInputDialog = false },
+                    onViewOnly = {
+                        showWeightInputDialog = false
+                        navController.navigateToMaterialConfiguration(
+                            recipeId = selectedRecipeIdForExperiment,
+                            viewOnly = true
+                        )
+                    }
+                )
+            }
         }
     }
 }
