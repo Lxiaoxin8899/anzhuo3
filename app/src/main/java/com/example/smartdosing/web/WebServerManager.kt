@@ -80,8 +80,13 @@ class WebServerManager(private val context: Context) {
     /**
      * 启动无线传输服务器
      */
+    @Synchronized
     fun startServer(port: Int = DEFAULT_PORT): Boolean {
         return try {
+            if (server != null) {
+                Log.i(TAG, "无线传输服务器已在运行，忽略重复启动")
+                return true
+            }
             server = embeddedServer(Netty, port = port, host = "0.0.0.0") {
                 configureServer()
             }
@@ -89,6 +94,7 @@ class WebServerManager(private val context: Context) {
             Log.i(TAG, "无线传输服务器启动成功，端口: $port")
             true
         } catch (e: Exception) {
+            server = null
             Log.e(TAG, "无线传输服务器启动失败", e)
             false
         }
@@ -97,6 +103,7 @@ class WebServerManager(private val context: Context) {
     /**
      * 停止无线传输服务器
      */
+    @Synchronized
     fun stopServer() {
         try {
             server?.stop(1000, 2000)
@@ -111,7 +118,8 @@ class WebServerManager(private val context: Context) {
      * 检查服务器是否运行
      */
     fun isServerRunning(): Boolean {
-        return server?.environment?.connectors?.isNotEmpty() == true
+        // 只要持有 Netty 实例，就认为当前进程内的接收服务处于运行态。
+        return server != null
     }
 
     /**

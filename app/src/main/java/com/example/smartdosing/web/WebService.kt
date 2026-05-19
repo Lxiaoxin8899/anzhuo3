@@ -3,7 +3,6 @@ package com.example.smartdosing.web
 import android.content.Context
 import android.net.wifi.WifiManager
 import android.util.Log
-import com.example.smartdosing.data.transfer.TaskProgressCallbackManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -49,7 +48,25 @@ class WebService(private val context: Context) {
     /**
      * 启动无线传输服务
      */
+    @Synchronized
     fun startWebService(port: Int = DEFAULT_PORT): WebServiceResult {
+        val result = ensureServerRunning(port)
+        if (result is WebServiceResult.Success) {
+            LanTransferForegroundService.start(context, result.port)
+        } else if (result is WebServiceResult.AlreadyRunning) {
+            LanTransferForegroundService.start(context, getPreferredPort())
+        } else if (result is WebServiceResult.NetworkError) {
+            LanTransferForegroundService.start(context, getPreferredPort())
+        }
+        return result
+    }
+
+    /**
+     * 仅确保 Ktor 服务已运行，不直接处理前台保活服务。
+     * 供前台服务自恢复时调用，避免出现相互拉起的递归。
+     */
+    @Synchronized
+    internal fun ensureServerRunning(port: Int = DEFAULT_PORT): WebServiceResult {
         try {
             val targetPort = normalizePort(port)
             if (webServerManager.isServerRunning()) {
@@ -88,10 +105,21 @@ class WebService(private val context: Context) {
     /**
      * 停止无线传输服务
      */
+    @Synchronized
     fun stopWebService(): Boolean {
+        val stopped = stopServerOnly()
+        LanTransferForegroundService.stop(context)
+        return stopped
+    }
+
+    /**
+     * 仅停止 Ktor 服务本体。
+     * 保持为内部方法，供通知栏停止动作和前台服务管理复用。
+     */
+    @Synchronized
+    internal fun stopServerOnly(): Boolean {
         return try {
             webServerManager.stopServer()
-            TaskProgressCallbackManager.getInstance(context).destroy()
             serviceScope?.cancel()
             serviceScope = null
             Log.i(TAG, "无线传输服务已停止")
@@ -217,7 +245,7 @@ class WebService(private val context: Context) {
      * 重启无线传输服务
      */
     fun restartWebService(port: Int = currentPort): WebServiceResult {
-        stopWebService()
+        stopServerOnly()
         return startWebService(port)
     }
 

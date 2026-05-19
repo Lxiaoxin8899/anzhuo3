@@ -52,6 +52,7 @@ fun TaskCenterScreen(
     onAcceptTask: (ConfigurationTask) -> Unit = {},
     onStartTask: (ConfigurationTask) -> Unit = {},
     onConfigureTask: (ConfigurationTask) -> Unit = {},
+    onWaitingTaskCountChanged: (Int) -> Unit = {},
     showTopBar: Boolean = false,
     refreshSignal: Int = 0
 ) {
@@ -85,6 +86,7 @@ fun TaskCenterScreen(
                 isLoading = true
                 loadError = null
                 allTasks = repository.fetchTasks()
+                onWaitingTaskCountChanged(countWaitingTasks(allTasks))
                 // 默认只显示活跃任务（排除已完成、已取消）
                 tasks = allTasks.filter {
                     it.status != TaskStatus.COMPLETED && it.status != TaskStatus.CANCELLED
@@ -150,8 +152,12 @@ fun TaskCenterScreen(
                                     scope.launch {
                                         val newStatus = TaskStatus.IN_PROGRESS
                                         repository.updateTaskStatus(task.id, newStatus)
-                                        tasks = tasks.map { 
-                                            if (it.id == task.id) it.copy(status = newStatus) else it 
+                                        allTasks = allTasks.map {
+                                            if (it.id == task.id) it.copy(status = newStatus) else it
+                                        }
+                                        onWaitingTaskCountChanged(countWaitingTasks(allTasks))
+                                        tasks = tasks.map {
+                                            if (it.id == task.id) it.copy(status = newStatus) else it
                                         }
                                     }
                                     onStartTask(task)
@@ -198,9 +204,10 @@ fun TaskCenterScreen(
                 task = taskToAccept!!,
                 onConfirm = {
                     scope.launch {
-                        var acceptedTask = repository.acceptTask(taskToAccept!!.id, currentUser)
+                        val selectedTask = taskToAccept ?: return@launch
+                        var acceptedTask = repository.acceptTask(selectedTask.id, currentUser)
                         if (acceptedTask == null) {
-                            acceptedTask = taskToAccept!!.copy(
+                            acceptedTask = selectedTask.copy(
                                 status = TaskStatus.IN_PROGRESS,
                                 acceptedBy = currentUser,
                                 acceptedAt = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
@@ -210,10 +217,12 @@ fun TaskCenterScreen(
                             snackbarMessage = "已成功接单：${acceptedTask.recipeName}"
                         }
                         showSnackbar = true
-                        tasks = tasks.map { if (it.id == acceptedTask!!.id) acceptedTask!! else it }
-                        onAcceptTask(acceptedTask!!)
+                        allTasks = allTasks.map { if (it.id == acceptedTask.id) acceptedTask else it }
+                        onWaitingTaskCountChanged(countWaitingTasks(allTasks))
+                        tasks = tasks.map { if (it.id == acceptedTask.id) acceptedTask else it }
+                        onAcceptTask(acceptedTask)
                         // 领用后自动跳转到配置界面
-                        onStartTask(acceptedTask!!)
+                        onStartTask(acceptedTask)
                         showAcceptDialog = false
                         taskToAccept = null
                     }
@@ -232,6 +241,13 @@ fun TaskCenterScreen(
             }
         }
     }
+}
+
+/**
+ * 统计需要在实验中心重点提醒的待领用任务数量。
+ */
+private fun countWaitingTasks(tasks: List<ConfigurationTask>): Int {
+    return tasks.count { it.status == TaskStatus.DRAFT || it.status == TaskStatus.READY }
 }
 
 /**
