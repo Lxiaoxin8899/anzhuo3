@@ -17,6 +17,7 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.example.smartdosing.MainActivity
 import com.example.smartdosing.R
+import com.example.smartdosing.data.transfer.BackendConnectionManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -106,6 +107,7 @@ class LanTransferForegroundService : Service() {
         if (action == ACTION_STOP) {
             isStopping = true
             Log.i(TAG, "收到停止保活服务指令")
+            BackendConnectionManager.getInstance(this).stop()
             WebService.getInstance(this).stopServerOnly()
             stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()
@@ -173,10 +175,12 @@ class LanTransferForegroundService : Service() {
         when (val result = WebService.getInstance(this).ensureServerRunning(port)) {
             is WebServiceResult.Success -> {
                 Log.i(TAG, "无线传输服务已恢复，启动成功，原因: $reason, url=${result.serverUrl}")
+                BackendConnectionManager.getInstance(this@LanTransferForegroundService).start()
                 updateForegroundNotification("服务在线: ${result.serverUrl}")
             }
 
             is WebServiceResult.AlreadyRunning -> {
+                BackendConnectionManager.getInstance(this@LanTransferForegroundService).start()
                 updateForegroundNotification("服务运行中: ${result.serverUrl}")
             }
 

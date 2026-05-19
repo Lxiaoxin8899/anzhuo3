@@ -87,6 +87,12 @@ class TaskProgressCallbackManager(private val context: Context) {
                     timestamp = System.currentTimeMillis()
                 )
 
+                // 中文注释：优先使用设备主动连接通道；未连接时保留原 HTTP 回调，兼容旧后端/旧配对。
+                if (BackendConnectionManager.getInstance(context).sendTaskProgress(payload)) {
+                    Log.i(TAG, "已通过 WebSocket 上报任务进度: transferId=$transferId, status=$status")
+                    return@launch
+                }
+
                 val url = callbackBaseUrl.trimEnd('/') + CALLBACK_PATH
                 val jsonBody = gson.toJson(payload)
 

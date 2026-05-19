@@ -145,6 +145,12 @@ class TaskResultCallbackManager private constructor(private val context: Context
     }
 
     private suspend fun sendPayload(senderUID: String, payloadJson: String): Boolean {
+        // 中文注释：最终结果优先走主动连接通道；如果当前没有连接，再回退到配对时保存的 HTTP 回调地址。
+        if (BackendConnectionManager.getInstance(context).sendTaskResultJson(payloadJson)) {
+            Log.i(TAG, "任务结果已通过 WebSocket 同步")
+            return true
+        }
+
         val database = SmartDosingDatabase.getDatabase(context)
         val callbackBaseUrl = database.deviceDao().getCallbackBaseUrl(senderUID)
         if (callbackBaseUrl.isNullOrBlank()) {
