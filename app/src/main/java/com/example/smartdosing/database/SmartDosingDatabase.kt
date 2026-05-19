@@ -17,7 +17,7 @@ import com.example.smartdosing.database.converters.DatabaseConverters
 /**
  * SmartDosing应用的Room数据库主类
  *
- * 版本: 6
+ * 版本: 7
  * 包含表: recipes, materials, recipe_tags, templates, template_fields,
  *         import_logs, dosing_records, dosing_record_details,
  *         authorized_senders, received_tasks
@@ -36,9 +36,10 @@ import com.example.smartdosing.database.converters.DatabaseConverters
         DosingRecordEntity::class,
         DosingRecordDetailEntity::class,
         AuthorizedSenderEntity::class,
-        ReceivedTaskEntity::class
+        ReceivedTaskEntity::class,
+        PendingTaskResultSyncEntity::class
     ],
-    version = 6,
+    version = 7,
     exportSchema = true
 )
 @TypeConverters(DatabaseConverters::class)
@@ -76,7 +77,7 @@ abstract class SmartDosingDatabase : RoomDatabase() {
                 .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
                 // 仅允许从历史版本（v1-v4）破坏性升级到 v5
                 .fallbackToDestructiveMigrationFrom(1, 2, 3, 4)
-                .addMigrations(MIGRATION_5_6)
+                .addMigrations(MIGRATION_5_6, MIGRATION_6_7)
                 .build()
 
                 INSTANCE = instance
@@ -103,6 +104,34 @@ abstract class SmartDosingDatabase : RoomDatabase() {
 
                 // exec_status 索引，加速按执行状态查询
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_received_tasks_exec_status ON received_tasks(exec_status)")
+            }
+        }
+
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // 局域网任务结果同步字段，用于把本地配置记录与后端任务闭环绑定。
+                db.execSQL("ALTER TABLE received_tasks ADD COLUMN result_record_id TEXT DEFAULT NULL")
+                db.execSQL("ALTER TABLE received_tasks ADD COLUMN result_synced_at INTEGER DEFAULT NULL")
+
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS pending_task_result_syncs (
+                        id TEXT NOT NULL PRIMARY KEY,
+                        task_id TEXT NOT NULL,
+                        transfer_id TEXT NOT NULL,
+                        sender_uid TEXT NOT NULL,
+                        record_id TEXT NOT NULL,
+                        payload_json TEXT NOT NULL,
+                        attempts INTEGER NOT NULL DEFAULT 0,
+                        last_error TEXT DEFAULT NULL,
+                        created_at INTEGER NOT NULL,
+                        updated_at INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_pending_task_result_syncs_transfer_id ON pending_task_result_syncs(transfer_id)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_pending_task_result_syncs_sender_uid ON pending_task_result_syncs(sender_uid)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_pending_task_result_syncs_updated_at ON pending_task_result_syncs(updated_at)")
             }
         }
 

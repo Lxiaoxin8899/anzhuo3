@@ -29,6 +29,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.smartdosing.data.transfer.TaskReceiver
+import com.example.smartdosing.data.transfer.TaskResultCallbackManager
 import com.example.smartdosing.data.settings.DosingPreferencesManager
 import com.example.smartdosing.data.settings.DosingPreferencesState
 import com.example.smartdosing.database.entities.ReceivedTaskEntity
@@ -107,11 +108,17 @@ fun SmartDosingApp() {
     val useNavigationRail = windowSize.widthClass != SmartDosingWindowWidthClass.Compact
     val context = LocalContext.current
     val taskReceiver = remember(context) { TaskReceiver.getInstance(context) }
+    val taskResultCallbackManager = remember(context) { TaskResultCallbackManager.getInstance(context) }
     val newTaskReceived by taskReceiver.newTaskReceived.collectAsState()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
     val pendingDialogTasks = remember { mutableStateListOf<ReceivedTaskEntity>() }
     var currentDialogTask by remember { mutableStateOf<ReceivedTaskEntity?>(null) }
+
+    LaunchedEffect(Unit) {
+        // 中文注释：App 启动后补传之前失败的最终配置结果，保证后端最终成为主数据源。
+        taskResultCallbackManager.retryPendingResults()
+    }
 
     // 新任务先进入本地弹窗队列，避免短时间连续到达时被覆盖。
     LaunchedEffect(newTaskReceived) {

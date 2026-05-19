@@ -485,5 +485,53 @@ data class ReceivedTaskEntity(
     val execMessage: String? = null,                // 执行消息
 
     @ColumnInfo(name = "exec_updated_at")
-    val execUpdatedAt: Long? = null                 // 执行状态最后更新时间
+    val execUpdatedAt: Long? = null,                // 执行状态最后更新时间
+
+    @ColumnInfo(name = "result_record_id")
+    val resultRecordId: String? = null,             // 本地配置结果记录 ID
+
+    @ColumnInfo(name = "result_synced_at")
+    val resultSyncedAt: Long? = null                // 最终配置结果同步到后端的时间
+)
+
+/**
+ * 最终配置结果待同步队列
+ */
+@Entity(
+    tableName = "pending_task_result_syncs",
+    indices = [
+        Index(value = ["transfer_id"], unique = true),
+        Index(value = ["sender_uid"]),
+        Index(value = ["updated_at"])
+    ]
+)
+data class PendingTaskResultSyncEntity(
+    @PrimaryKey
+    val id: String,
+
+    @ColumnInfo(name = "task_id")
+    val taskId: String,
+
+    @ColumnInfo(name = "transfer_id")
+    val transferId: String,
+
+    @ColumnInfo(name = "sender_uid")
+    val senderUID: String,
+
+    @ColumnInfo(name = "record_id")
+    val recordId: String,
+
+    @ColumnInfo(name = "payload_json")
+    val payloadJson: String,
+
+    val attempts: Int = 0,
+
+    @ColumnInfo(name = "last_error")
+    val lastError: String? = null,
+
+    @ColumnInfo(name = "created_at")
+    val createdAt: Long,
+
+    @ColumnInfo(name = "updated_at")
+    val updatedAt: Long
 )

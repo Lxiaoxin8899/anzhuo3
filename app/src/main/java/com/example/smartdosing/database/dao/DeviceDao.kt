@@ -3,6 +3,7 @@ package com.example.smartdosing.database.dao
 import androidx.room.*
 import kotlinx.coroutines.flow.Flow
 import com.example.smartdosing.database.entities.AuthorizedSenderEntity
+import com.example.smartdosing.database.entities.PendingTaskResultSyncEntity
 import com.example.smartdosing.database.entities.ReceivedTaskEntity
 
 /**
@@ -226,6 +227,39 @@ interface DeviceDao {
      */
     @Query("SELECT * FROM received_tasks WHERE exec_status = 'EXECUTING' LIMIT 1")
     suspend fun getExecutingTask(): ReceivedTaskEntity?
+
+    /**
+     * 标记局域网任务最终配置结果已同步到后端
+     */
+    @Query("""
+        UPDATE received_tasks
+        SET result_record_id = :resultRecordId,
+            result_synced_at = :syncedAt
+        WHERE id = :taskId
+    """)
+    suspend fun markTaskResultSynced(taskId: String, resultRecordId: String, syncedAt: Long)
+
+    // =================================
+    // 最终配置结果待同步队列
+    // =================================
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertPendingTaskResultSync(sync: PendingTaskResultSyncEntity)
+
+    @Query("SELECT * FROM pending_task_result_syncs ORDER BY updated_at ASC LIMIT :limit")
+    suspend fun getPendingTaskResultSyncs(limit: Int = 20): List<PendingTaskResultSyncEntity>
+
+    @Query("DELETE FROM pending_task_result_syncs WHERE transfer_id = :transferId")
+    suspend fun deletePendingTaskResultSync(transferId: String)
+
+    @Query("""
+        UPDATE pending_task_result_syncs
+        SET attempts = attempts + 1,
+            last_error = :lastError,
+            updated_at = :updatedAt
+        WHERE id = :id
+    """)
+    suspend fun incrementPendingTaskResultSyncAttempt(id: String, lastError: String?, updatedAt: Long)
 
     // =================================
     // v6 新增：配对 API Key 管理

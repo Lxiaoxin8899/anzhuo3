@@ -22,6 +22,7 @@ import com.example.smartdosing.data.ConfigurationRecord
 import com.example.smartdosing.data.ConfigurationRecordStatus
 import com.example.smartdosing.data.TaskStatus
 import com.example.smartdosing.data.transfer.TaskReceiver
+import com.example.smartdosing.data.transfer.TaskResultCallbackManager
 import com.example.smartdosing.data.repository.ConfigurationRepositoryProvider
 import com.example.smartdosing.ui.components.RecipeWeightInputDialog
 import com.example.smartdosing.ui.screens.device.DeviceInfoScreen
@@ -363,12 +364,21 @@ private suspend fun saveMaterialConfiguration(
     }
 
     runCatching {
-        recordRepository.createRecord(configData.toConfigurationRecord(tolerancePermille)).also {
+        val createdRecord = recordRepository.createRecord(configData.toConfigurationRecord(tolerancePermille))
+        createdRecord.also {
             if (configData.taskId.isNotBlank()) {
                 if (configData.taskId.startsWith("RT-")) {
                     // 局域网接收的任务，通过 TaskReceiver 标记完成
                     val taskReceiver = TaskReceiver.getInstance(context)
                     taskReceiver.completeTask(configData.taskId, "配置完成并入库")
+                    // 中文注释：最终材料明细只在保存完成时同步给后端，过程进度仍走 task-progress。
+                    TaskResultCallbackManager
+                        .getInstance(context)
+                        .syncResultForTask(
+                            taskId = configData.taskId,
+                            record = createdRecord,
+                            tolerancePercent = tolerancePermille / 10.0
+                        )
                 } else {
                     // 后端下发的任务
                     taskRepository.updateTaskStatus(configData.taskId, TaskStatus.COMPLETED)

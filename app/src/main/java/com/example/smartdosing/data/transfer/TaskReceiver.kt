@@ -336,7 +336,7 @@ class TaskReceiver(private val context: Context) {
     }
 
     /**
-     * 更新执行进度（不触发回调，仅更新本地数据供轮询）
+     * 更新执行进度（写入本地并主动回调后端，保证配置进度能及时同步）
      */
     suspend fun updateProgress(
         taskId: String,
@@ -351,6 +351,21 @@ class TaskReceiver(private val context: Context) {
                 taskId, progress, currentStep, totalSteps,
                 currentMaterial, message, System.currentTimeMillis()
             )
+
+            val task = deviceDao.getReceivedTaskById(taskId)
+            task?.let {
+                // 中文注释：后端依赖该回调判断配置执行进度，失败时仍可通过后端轮询接口兜底。
+                callbackManager.sendCallback(
+                    senderUID = it.senderUID,
+                    transferId = it.transferId,
+                    status = ExecStatus.EXECUTING,
+                    progress = progress,
+                    currentStep = currentStep,
+                    totalSteps = totalSteps,
+                    currentMaterial = currentMaterial,
+                    message = message
+                )
+            }
             true
         } catch (e: Exception) {
             Log.e(TAG, "更新任务进度失败", e)
