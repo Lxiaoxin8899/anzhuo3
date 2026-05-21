@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.*
 import androidx.datastore.preferences.preferencesDataStore
+import com.example.smartdosing.dosing.OverLimitLockMode
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -35,6 +36,7 @@ class BluetoothScalePreferencesManager(private val context: Context) {
         private val KEY_DEMO_MODE_ENABLED = booleanPreferencesKey("demo_mode_enabled")
         private val KEY_DEMO_SCENARIO_INDEX = intPreferencesKey("demo_scenario_index")
         private val KEY_AUTO_CONFIRM_TOLERANCE_PERMILLE = intPreferencesKey("auto_confirm_tolerance_permille")
+        private val KEY_OVER_LIMIT_LOCK_MODE = stringPreferencesKey("over_limit_lock_mode")
 
         // 默认值
         const val DEFAULT_BAUD_RATE = 9600
@@ -45,6 +47,7 @@ class BluetoothScalePreferencesManager(private val context: Context) {
         const val DEFAULT_AUTO_CONFIRM_DELAY_SECONDS = 10 // 默认稳定后等待10秒自动确认
         const val DEFAULT_AUTO_TARE_ON_CONFIRM = true // 默认确认后自动去皮
         const val DEFAULT_AUTO_CONFIRM_TOLERANCE_PERMILLE = 10 // 默认误差范围10‰（千分之十，即1%）
+        val DEFAULT_OVER_LIMIT_LOCK_MODE = OverLimitLockMode.SOFT
 
         // 可选波特率
         val BAUD_RATE_OPTIONS = listOf(2400, 4800, 9600, 19200, 38400, 57600, 115200)
@@ -76,7 +79,8 @@ class BluetoothScalePreferencesManager(private val context: Context) {
         val protocol: String = DEFAULT_PROTOCOL,
         val demoModeEnabled: Boolean = false, // 演示模式开关
         val demoScenarioIndex: Int = 0, // 演示场景索引
-        val autoConfirmTolerancePermille: Int = DEFAULT_AUTO_CONFIRM_TOLERANCE_PERMILLE // 自动确认误差范围（千分比‰）
+        val autoConfirmTolerancePermille: Int = DEFAULT_AUTO_CONFIRM_TOLERANCE_PERMILLE, // 自动确认误差范围（千分比‰）
+        val overLimitLockMode: OverLimitLockMode = DEFAULT_OVER_LIMIT_LOCK_MODE // 超标后的软件锁定策略
     ) {
         /**
          * 是否有已绑定的设备
@@ -127,7 +131,10 @@ class BluetoothScalePreferencesManager(private val context: Context) {
                 protocol = preferences[KEY_PROTOCOL] ?: DEFAULT_PROTOCOL,
                 demoModeEnabled = preferences[KEY_DEMO_MODE_ENABLED] ?: false,
                 demoScenarioIndex = preferences[KEY_DEMO_SCENARIO_INDEX] ?: 0,
-                autoConfirmTolerancePermille = preferences[KEY_AUTO_CONFIRM_TOLERANCE_PERMILLE] ?: DEFAULT_AUTO_CONFIRM_TOLERANCE_PERMILLE
+                autoConfirmTolerancePermille = preferences[KEY_AUTO_CONFIRM_TOLERANCE_PERMILLE] ?: DEFAULT_AUTO_CONFIRM_TOLERANCE_PERMILLE,
+                overLimitLockMode = preferences[KEY_OVER_LIMIT_LOCK_MODE]
+                    ?.let { runCatching { OverLimitLockMode.valueOf(it) }.getOrNull() }
+                    ?: DEFAULT_OVER_LIMIT_LOCK_MODE
             )
         }
 
@@ -283,6 +290,15 @@ class BluetoothScalePreferencesManager(private val context: Context) {
     suspend fun setAutoConfirmTolerancePermille(permille: Int) {
         context.bluetoothScaleDataStore.edit { preferences ->
             preferences[KEY_AUTO_CONFIRM_TOLERANCE_PERMILLE] = permille
+        }
+    }
+
+    /**
+     * 设置超标后的软件锁定策略
+     */
+    suspend fun setOverLimitLockMode(mode: OverLimitLockMode) {
+        context.bluetoothScaleDataStore.edit { preferences ->
+            preferences[KEY_OVER_LIMIT_LOCK_MODE] = mode.name
         }
     }
 

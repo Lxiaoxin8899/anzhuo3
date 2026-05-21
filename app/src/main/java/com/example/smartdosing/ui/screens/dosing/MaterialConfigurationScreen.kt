@@ -38,6 +38,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.*
 import com.example.smartdosing.SmartDosingApplication
+import android.widget.Toast
 import com.example.smartdosing.audio.BeepMode
 import com.example.smartdosing.audio.DosingBeepManager
 import com.example.smartdosing.bluetooth.BluetoothScaleManager
@@ -50,6 +51,10 @@ import com.example.smartdosing.data.repository.ConfigurationRepositoryProvider
 import com.example.smartdosing.data.settings.DosingPreferencesManager
 import com.example.smartdosing.data.settings.DosingPreferencesState
 import com.example.smartdosing.data.settings.AdminPreferencesManager
+import com.example.smartdosing.dosing.WeightEvaluation
+import com.example.smartdosing.dosing.WeightWarningConfig
+import com.example.smartdosing.dosing.WeightWarningEvaluator
+import com.example.smartdosing.dosing.WeightWarningLevel
 import com.example.smartdosing.ui.components.DosingBluetoothStatusBar
 import com.example.smartdosing.ui.theme.LocalWindowSize
 import com.example.smartdosing.ui.theme.SmartDosingTheme
@@ -94,6 +99,7 @@ fun MaterialConfigurationScreen(
     val adminSettings by adminManager.settingsFlow.collectAsState(
         initial = AdminPreferencesManager.AdminSettingsState()
     )
+    val isAdminLoggedIn by AdminPreferencesManager.isAdminLoggedIn.collectAsState()
 
     // 演示模式状态
     val isDemoMode = bluetoothPreferences.demoModeEnabled
@@ -117,6 +123,7 @@ fun MaterialConfigurationScreen(
 
     // 完成确认对话框状态
     var showCompletionDialog by rememberSaveable { mutableStateOf(false) }
+    var showOverLimitDialog by rememberSaveable { mutableStateOf(false) }
 
     var recipe by remember { mutableStateOf<Recipe?>(null) }
     var materialStates by rememberSaveable(stateSaver = MaterialConfigStateListSaver) { mutableStateOf<List<MaterialConfigState>>(emptyList()) }
@@ -137,6 +144,81 @@ fun MaterialConfigurationScreen(
         DosingBeepManager().also { it.initialize() }
     }
 
+    var stableStartTime by remember { mutableStateOf<Long?>(null) }
+    var autoConfirmCountdown by remember { mutableIntStateOf(-1) } // 倒计时剩余秒数，-1表示未计时
+
+    fun warningConfig(): WeightWarningConfig {
+        return WeightWarningConfig(
+            tolerancePermille = bluetoothPreferences.autoConfirmTolerancePermille,
+            overLimitLockMode = bluetoothPreferences.overLimitLockMode
+        )
+    }
+
+    fun actualWeightForState(index: Int, state: MaterialConfigState): Double {
+        return if (index == activeRowIndex && isBluetoothConnected && !state.isManualOverride) {
+            currentWeight?.value ?: state.actualWeight.toDoubleOrNull() ?: 0.0
+        } else {
+            state.actualWeight.toDoubleOrNull() ?: 0.0
+        }
+    }
+
+    fun evaluateState(index: Int, state: MaterialConfigState): WeightEvaluation {
+        return WeightWarningEvaluator.evaluate(
+            actualWeight = actualWeightForState(index, state),
+            targetWeight = state.material.weight,
+            config = warningConfig()
+        )
+    }
+
+    fun confirmMaterial(index: Int, hasError: Boolean = false) {
+        if (index !in materialStates.indices) return
+        stableStartTime = null
+        autoConfirmCountdown = -1
+        materialStates = materialStates.toMutableList().apply {
+            val state = this[index]
+            this[index] = state.copy(
+                actualWeight = FormatUtils.formatWeight(actualWeightForState(index, state)),
+                isConfirmed = true,
+                hasError = hasError
+            )
+        }
+        if (bluetoothPreferences.autoTareOnConfirm) {
+            scaleManager.tare()
+        }
+        val next = materialStates.indexOfFirst { !it.isConfirmed }
+        if (next >= 0) {
+            activeRowIndex = next
+            announceMaterial(next)
+        } else {
+            isMagnified = false
+            showCompletionDialog = true
+        }
+    }
+
+    fun resetActiveMaterial() {
+        if (activeRowIndex !in materialStates.indices) return
+        stableStartTime = null
+        autoConfirmCountdown = -1
+        materialStates = materialStates.toMutableList().apply {
+            val state = this[activeRowIndex]
+            this[activeRowIndex] = state.copy(
+                actualWeight = "",
+                isConfirmed = false,
+                hasError = false,
+                isManualOverride = false
+            )
+        }
+    }
+
+    fun handleConfirmClick(evaluation: WeightEvaluation) {
+        when (evaluation.level) {
+            WeightWarningLevel.IN_TOLERANCE -> confirmMaterial(activeRowIndex)
+            WeightWarningLevel.OVER_LIMIT,
+            WeightWarningLevel.HARD_OVER_LIMIT -> showOverLimitDialog = true
+            else -> Toast.makeText(context, evaluation.message, Toast.LENGTH_SHORT).show()
+        }
+    }
+
     // 页面退出时释放提示音资源
     DisposableEffect(Unit) {
         onDispose {
@@ -155,6 +237,11 @@ fun MaterialConfigurationScreen(
             recordId = recordId,
             materials = materialStates.map { state ->
                 val actual = state.actualWeight.toDoubleOrNull() ?: 0.0
+                val evaluation = WeightWarningEvaluator.evaluate(
+                    actualWeight = actual,
+                    targetWeight = state.material.weight,
+                    config = warningConfig()
+                )
                 MaterialConfigResult(
                     materialName = state.material.name,
                     materialCode = state.material.code,
@@ -163,7 +250,9 @@ fun MaterialConfigurationScreen(
                     unit = state.material.unit,
                     deviation = actual - state.material.weight,
                     deviationPercentage = if (state.material.weight > 0)
-                        (actual - state.material.weight) / state.material.weight * 100 else 0.0
+                        (actual - state.material.weight) / state.material.weight * 100 else 0.0,
+                    isOverLimit = state.hasError || evaluation.level == WeightWarningLevel.OVER_LIMIT ||
+                        evaluation.level == WeightWarningLevel.HARD_OVER_LIMIT
                 )
             }
         )
@@ -259,54 +348,30 @@ fun MaterialConfigurationScreen(
             return@LaunchedEffect
         }
 
-        val target = materialStates[activeRowIndex].material.weight
-        val actual = currentWeight?.value ?: 0.0
-
-        when (dosingPreferences.beepMode) {
-            BeepMode.PROGRESSIVE -> {
-                beepManager.updateProgressive(
-                    actualWeight = actual,
-                    targetWeight = target,
-                    tolerancePermille = bluetoothPreferences.autoConfirmTolerancePermille,
-                    startPercent = dosingPreferences.progressiveStartPercent,
-                    maxIntervalMs = dosingPreferences.progressiveMaxIntervalMs.toLong(),
-                    minIntervalMs = dosingPreferences.progressiveMinIntervalMs.toLong(),
-                    curveExponent = dosingPreferences.progressiveCurveExponent,
-                    toneDurationMs = dosingPreferences.beepToneDurationMs,
-                    toneType = dosingPreferences.beepToneType.toneId,
-                    arrivedToneType = dosingPreferences.beepArrivedToneType.toneId,
-                    arrivedDurationMs = dosingPreferences.beepArrivedDurationMs
-                )
-            }
-            BeepMode.THRESHOLD -> {
-                beepManager.updateThreshold(
-                    actualWeight = actual,
-                    targetWeight = target,
-                    thresholdPercent = dosingPreferences.beepThresholdPercent,
-                    continuous = dosingPreferences.beepThresholdContinuous,
-                    tolerancePermille = bluetoothPreferences.autoConfirmTolerancePermille,
-                    intervalMs = dosingPreferences.thresholdIntervalMs.toLong(),
-                    toneDurationMs = dosingPreferences.beepToneDurationMs,
-                    toneType = dosingPreferences.beepToneType.toneId,
-                    arrivedToneType = dosingPreferences.beepArrivedToneType.toneId,
-                    arrivedDurationMs = dosingPreferences.beepArrivedDurationMs
-                )
-            }
-            BeepMode.OFF -> { /* 不会到这里 */ }
-        }
+        val evaluation = evaluateState(activeRowIndex, materialStates[activeRowIndex])
+        beepManager.updateWarning(
+            evaluation = evaluation,
+            mode = dosingPreferences.beepMode,
+            thresholdPercent = dosingPreferences.beepThresholdPercent,
+            thresholdContinuous = dosingPreferences.beepThresholdContinuous,
+            progressiveMaxIntervalMs = dosingPreferences.progressiveMaxIntervalMs.toLong(),
+            progressiveMinIntervalMs = dosingPreferences.progressiveMinIntervalMs.toLong(),
+            thresholdIntervalMs = dosingPreferences.thresholdIntervalMs.toLong(),
+            toneDurationMs = dosingPreferences.beepToneDurationMs,
+            toneType = dosingPreferences.beepToneType.toneId,
+            arrivedToneType = dosingPreferences.beepArrivedToneType.toneId,
+            arrivedDurationMs = dosingPreferences.beepArrivedDurationMs
+        )
     }
 
     // 切换物料时重置提示音状态
     LaunchedEffect(activeRowIndex) {
-        beepManager.resetThresholdState()
+        beepManager.resetWarningState()
     }
 
     // 自动确认逻辑 (保持原有核心逻辑，仅作微调)
-    var stableStartTime by remember { mutableStateOf<Long?>(null) }
-    var autoConfirmCountdown by remember { mutableIntStateOf(-1) } // 倒计时剩余秒数，-1表示未计时
     val autoConfirmEnabled = bluetoothPreferences.autoConfirmOnStable
     val autoConfirmDelayMs = bluetoothPreferences.autoConfirmDelaySeconds * 1000L
-    val autoConfirmTolerancePermille = bluetoothPreferences.autoConfirmTolerancePermille
 
     LaunchedEffect(currentWeight?.isStable, currentWeight?.value, activeRowIndex, autoConfirmEnabled, isBluetoothConnected) {
         if (!autoConfirmEnabled || !isBluetoothConnected || activeRowIndex >= materialStates.size || materialStates[activeRowIndex].isConfirmed) {
@@ -315,12 +380,9 @@ fun MaterialConfigurationScreen(
             return@LaunchedEffect
         }
 
-        val target = materialStates[activeRowIndex].material.weight
-        val actual = currentWeight?.value ?: 0.0
-        val tolerance = target * autoConfirmTolerancePermille / 1000.0
-        val inTolerance = if (target <= 0) actual > 0 else actual in (target - tolerance)..(target + tolerance)
+        val evaluation = evaluateState(activeRowIndex, materialStates[activeRowIndex])
 
-        if (currentWeight?.isStable == true && actual > 0 && inTolerance) {
+        if (currentWeight?.isStable == true && evaluation.allowAutoConfirm) {
             if (stableStartTime == null) stableStartTime = System.currentTimeMillis()
         } else {
             stableStartTime = null
@@ -356,28 +418,10 @@ fun MaterialConfigurationScreen(
                 )
             }
 
-            // 执行确认
             val index = activeRowIndex
-            materialStates = materialStates.toMutableList().apply {
-                val state = this[index]
-                this[index] = state.copy(isConfirmed = true)
-            }
-
-            // TTS 已软下线
-            // TTSManagerFactory.speak("完成 ${materialStates[index].material.name}")
-
-            // 确认后自动去皮
-            if (bluetoothPreferences.autoTareOnConfirm) {
-                scaleManager.tare()
-            }
-
-            // 跳到下一行
-            val next = materialStates.indexOfFirst { !it.isConfirmed }
-            if (next >= 0) {
-                activeRowIndex = next
-                announceMaterial(next)
-            } else {
-                showCompletionDialog = true
+            val state = materialStates.getOrNull(index)
+            if (state != null && evaluateState(index, state).allowAutoConfirm) {
+                confirmMaterial(index)
             }
             stableStartTime = null
             autoConfirmCountdown = -1
@@ -401,11 +445,15 @@ fun MaterialConfigurationScreen(
                 recipe == null || materialStates.isEmpty() -> MaterialConfigurationEmptyState(loadError ?: "暂无配方数据", onNavigateBack)
                 else -> {
                     val windowSize = LocalWindowSize.current
+                    val activeEvaluation = materialStates.getOrNull(activeRowIndex)?.let {
+                        evaluateState(activeRowIndex, it)
+                    }
                     if (windowSize.widthClass == SmartDosingWindowWidthClass.Expanded) {
                         LargeScreenLayout(
                             recipe = recipe!!,
                             materialStates = materialStates,
                             activeRowIndex = activeRowIndex,
+                            activeEvaluation = activeEvaluation,
                             scaleManager = scaleManager,
                             currentWeight = currentWeight,
                             isBluetoothConnected = isBluetoothConnected,
@@ -416,22 +464,7 @@ fun MaterialConfigurationScreen(
                                 announceMaterial(it)
                             },
                             onConfirm = {
-                                stableStartTime = null
-                                autoConfirmCountdown = -1
-                                materialStates = materialStates.toMutableList().apply {
-                                    this[activeRowIndex] = this[activeRowIndex].copy(isConfirmed = true)
-                                }
-                                // 确认后自动去皮
-                                if (bluetoothPreferences.autoTareOnConfirm) {
-                                    scaleManager.tare()
-                                }
-                                val next = materialStates.indexOfFirst { !it.isConfirmed }
-                                if (next >= 0) {
-                                    activeRowIndex = next
-                                    announceMaterial(next)
-                                } else {
-                                    showCompletionDialog = true
-                                }
+                                activeEvaluation?.let { handleConfirmClick(it) }
                             },
                             onSave = {
                                 buildConfigurationData()?.let { onSaveConfiguration(it) }
@@ -457,6 +490,7 @@ fun MaterialConfigurationScreen(
                             recipe = recipe!!,
                             materialStates = materialStates,
                             activeRowIndex = activeRowIndex,
+                            activeEvaluation = activeEvaluation,
                             scaleManager = scaleManager,
                             currentWeight = currentWeight,
                             isBluetoothConnected = isBluetoothConnected,
@@ -467,22 +501,7 @@ fun MaterialConfigurationScreen(
                                 announceMaterial(it)
                             },
                             onConfirm = {
-                                stableStartTime = null
-                                autoConfirmCountdown = -1
-                                materialStates = materialStates.toMutableList().apply {
-                                    this[activeRowIndex] = this[activeRowIndex].copy(isConfirmed = true)
-                                }
-                                // 确认后自动去皮
-                                if (bluetoothPreferences.autoTareOnConfirm) {
-                                    scaleManager.tare()
-                                }
-                                val next = materialStates.indexOfFirst { !it.isConfirmed }
-                                if (next >= 0) {
-                                    activeRowIndex = next
-                                    announceMaterial(next)
-                                } else {
-                                    showCompletionDialog = true
-                                }
+                                activeEvaluation?.let { handleConfirmClick(it) }
                             },
                             onSave = {
                                 buildConfigurationData()?.let { onSaveConfiguration(it) }
@@ -510,32 +529,17 @@ fun MaterialConfigurationScreen(
             // 放大显示层
             if (isMagnified && activeRowIndex < materialStates.size) {
                 val activeState = materialStates[activeRowIndex]
+                val activeEvaluation = evaluateState(activeRowIndex, activeState)
                 MagnifiedWeightOverlay(
                     materialName = activeState.material.name,
                     targetWeight = activeState.material.weight,
+                    evaluation = activeEvaluation,
                     currentWeight = currentWeight,
                     isStable = currentWeight?.isStable == true,
                     onDismiss = { isMagnified = false },
                     onTare = { scaleManager.tare() },
                     onConfirm = {
-                        stableStartTime = null
-                        autoConfirmCountdown = -1
-                        materialStates = materialStates.toMutableList().apply {
-                            this[activeRowIndex] = this[activeRowIndex].copy(isConfirmed = true)
-                        }
-                        // 确认后自动去皮
-                        if (bluetoothPreferences.autoTareOnConfirm) {
-                            scaleManager.tare()
-                        }
-                        val next = materialStates.indexOfFirst { !it.isConfirmed }
-                        if (next >= 0) {
-                            activeRowIndex = next
-                            announceMaterial(next)
-                        } else {
-                            // 全部完成，自动退出放大模式并弹出完成对话框
-                            isMagnified = false
-                            showCompletionDialog = true
-                        }
+                        handleConfirmClick(activeEvaluation)
                     },
                     isConfirmed = activeState.isConfirmed,
                     autoConfirmCountdown = autoConfirmCountdown
@@ -606,6 +610,26 @@ fun MaterialConfigurationScreen(
                             Text("继续修改")
                         }
                     }
+                )
+            }
+
+            if (showOverLimitDialog && !isViewOnly && activeRowIndex in materialStates.indices) {
+                val evaluation = evaluateState(activeRowIndex, materialStates[activeRowIndex])
+                OverLimitHandlingDialog(
+                    evaluation = evaluation,
+                    isAdminLoggedIn = isAdminLoggedIn,
+                    onReset = {
+                        showOverLimitDialog = false
+                        resetActiveMaterial()
+                    },
+                    onRecordAndContinue = {
+                        showOverLimitDialog = false
+                        confirmMaterial(activeRowIndex, hasError = true)
+                    },
+                    onNeedAdmin = {
+                        Toast.makeText(context, "需要管理员权限，请在系统设置中登录", Toast.LENGTH_SHORT).show()
+                    },
+                    onDismiss = { showOverLimitDialog = false }
                 )
             }
         }
@@ -694,6 +718,7 @@ private fun LargeScreenLayout(
     recipe: Recipe,
     materialStates: List<MaterialConfigState>,
     activeRowIndex: Int,
+    activeEvaluation: WeightEvaluation?,
     scaleManager: BluetoothScaleManager,
     currentWeight: WeightData?,
     isBluetoothConnected: Boolean,
@@ -730,6 +755,7 @@ private fun LargeScreenLayout(
         // 右侧：配置工作台 (60% 宽度)
         Column(modifier = Modifier.weight(0.6f).fillMaxHeight().padding(32.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
             val activeState = materialStates.getOrNull(activeRowIndex) ?: return@Column
+            val evaluation = activeEvaluation ?: return@Column
             
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Text("当前物料配置", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
@@ -838,26 +864,23 @@ private fun LargeScreenLayout(
                     onClick = onConfirm,
                     modifier = Modifier.weight(2f).height(64.dp),
                     shape = RoundedCornerShape(16.dp),
-                    enabled = !activeState.isConfirmed,
-                    colors = if (autoConfirmCountdown > 0) ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)) else ButtonDefaults.buttonColors()
+                    enabled = confirmActionEnabled(evaluation, activeState.isConfirmed),
+                    colors = confirmButtonColors(evaluation, autoConfirmCountdown)
                 ) {
                     if (autoConfirmCountdown > 0) {
                         Icon(Icons.Default.Timer, null)
+                    } else if (evaluation.level == WeightWarningLevel.OVER_LIMIT || evaluation.level == WeightWarningLevel.HARD_OVER_LIMIT) {
+                        Icon(Icons.Default.ReportProblem, null)
                     } else {
                         Icon(Icons.Default.Check, null)
                     }
                     Spacer(Modifier.width(8.dp))
-                    if (autoConfirmCountdown > 0) {
-                        Text("${autoConfirmCountdown}s 后自动确认")
-                    } else {
-                        Text("确认完成")
-                    }
+                    Text(confirmActionText(evaluation, autoConfirmCountdown))
                 }
             }
 
             PrecisionMeter(
-                targetWeight = activeState.material.weight,
-                actualWeight = currentWeight?.value ?: activeState.actualWeight.toDoubleOrNull() ?: 0.0,
+                evaluation = evaluation,
                 modifier = Modifier.padding(top = 8.dp)
             )
 
@@ -888,6 +911,7 @@ private fun CompactScreenLayout(
     recipe: Recipe,
     materialStates: List<MaterialConfigState>,
     activeRowIndex: Int,
+    activeEvaluation: WeightEvaluation?,
     scaleManager: BluetoothScaleManager,
     currentWeight: WeightData?,
     isBluetoothConnected: Boolean,
@@ -904,6 +928,7 @@ private fun CompactScreenLayout(
         // 当前活动项卡片
         val activeState = materialStates.getOrNull(activeRowIndex)
         activeState?.let { state ->
+            val evaluation = activeEvaluation ?: return@let
             Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -962,8 +987,7 @@ private fun CompactScreenLayout(
                     }
 
                     PrecisionMeter(
-                        targetWeight = state.material.weight,
-                        actualWeight = currentWeight?.value ?: state.actualWeight.toDoubleOrNull() ?: 0.0
+                        evaluation = evaluation
                     )
 
                     // 只读模式不显示确认按钮
@@ -971,16 +995,20 @@ private fun CompactScreenLayout(
                         Button(
                             onClick = onConfirm,
                             modifier = Modifier.fillMaxWidth(),
-                            enabled = !state.isConfirmed,
-                            colors = if (autoConfirmCountdown > 0) ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)) else ButtonDefaults.buttonColors()
+                            enabled = confirmActionEnabled(evaluation, state.isConfirmed),
+                            colors = confirmButtonColors(evaluation, autoConfirmCountdown)
                         ) {
                             if (autoConfirmCountdown > 0) {
                                 Icon(Icons.Default.Timer, null)
                                 Spacer(Modifier.width(4.dp))
-                                Text("${autoConfirmCountdown}s 后自动确认")
+                            } else if (evaluation.level == WeightWarningLevel.OVER_LIMIT || evaluation.level == WeightWarningLevel.HARD_OVER_LIMIT) {
+                                Icon(Icons.Default.ReportProblem, null)
+                                Spacer(Modifier.width(4.dp))
                             } else {
-                                Text("确认当前物料")
+                                Icon(Icons.Default.Check, null)
+                                Spacer(Modifier.width(4.dp))
                             }
+                            Text(confirmActionText(evaluation, autoConfirmCountdown))
                         }
                     }
                 }
@@ -1003,15 +1031,36 @@ private fun MaterialCompactItem(
     isActive: Boolean,
     onClick: () -> Unit
 ) {
+    val itemColor = when {
+        isActive -> MaterialTheme.colorScheme.primary.copy(0.1f)
+        state.hasError -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.35f)
+        state.isConfirmed -> Color(0xFFE8F5E9)
+        else -> MaterialTheme.colorScheme.surface
+    }
     Surface(
         modifier = Modifier.fillMaxWidth().clickable { onClick() },
-        color = if (isActive) MaterialTheme.colorScheme.primary.copy(0.1f) else if (state.isConfirmed) Color(0xFFE8F5E9) else MaterialTheme.colorScheme.surface,
+        color = itemColor,
         shape = RoundedCornerShape(12.dp),
-        border = if (isActive) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+        border = if (isActive) BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+            else if (state.hasError) BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f))
+            else BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
         Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Box(modifier = Modifier.size(28.dp).background(if (state.isConfirmed) Color(0xFF4CAF50) else MaterialTheme.colorScheme.surfaceVariant, CircleShape), contentAlignment = Alignment.Center) {
-                if (state.isConfirmed) Icon(Icons.Default.Check, null, tint = Color.White, modifier = Modifier.size(16.dp))
+            Box(
+                modifier = Modifier
+                    .size(28.dp)
+                    .background(
+                        when {
+                            state.hasError -> MaterialTheme.colorScheme.error
+                            state.isConfirmed -> Color(0xFF4CAF50)
+                            else -> MaterialTheme.colorScheme.surfaceVariant
+                        },
+                        CircleShape
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                if (state.hasError) Icon(Icons.Default.ReportProblem, null, tint = Color.White, modifier = Modifier.size(16.dp))
+                else if (state.isConfirmed) Icon(Icons.Default.Check, null, tint = Color.White, modifier = Modifier.size(16.dp))
                 else Text(index.toString(), style = MaterialTheme.typography.labelMedium)
             }
             Column(modifier = Modifier.weight(1f)) {
@@ -1022,7 +1071,12 @@ private fun MaterialCompactItem(
                 Text("目标: ${FormatUtils.formatWeight(state.material.weight)} g", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             if (state.isConfirmed) {
-                Text("${state.actualWeight} g", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = Color(0xFF2E7D32))
+                Text(
+                    "${state.actualWeight} g",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Bold,
+                    color = if (state.hasError) MaterialTheme.colorScheme.error else Color(0xFF2E7D32)
+                )
             }
         }
     }
@@ -1051,24 +1105,21 @@ private fun MaterialConfigurationEmptyState(msg: String, onBack: () -> Unit) {
  */
 @Composable
 private fun PrecisionMeter(
-    targetWeight: Double,
-    actualWeight: Double,
-    tolerancePermille: Int = 10,
+    evaluation: WeightEvaluation,
     modifier: Modifier = Modifier
 ) {
-    if (targetWeight <= 0) return
+    if (evaluation.targetWeight <= 0) return
 
-    val progress = (actualWeight / targetWeight).coerceIn(0.0, 1.2).toFloat()
-    val tolerance = targetWeight * tolerancePermille / 1000.0
-    val isInTolerance = actualWeight in (targetWeight - tolerance)..(targetWeight + tolerance)
-    val isOver = actualWeight > (targetWeight + tolerance)
-    val isNear = actualWeight > (targetWeight * 0.9) && !isInTolerance && !isOver
+    val progress = evaluation.progressRatio.coerceIn(0.0, 1.2).toFloat()
 
     val meterColor by animateColorAsState(
-        targetValue = when {
-            isOver -> MaterialTheme.colorScheme.error
-            isInTolerance -> Color(0xFF4CAF50)
-            isNear -> Color(0xFFFFC107)
+        targetValue = when (evaluation.level) {
+            WeightWarningLevel.OVER_LIMIT,
+            WeightWarningLevel.HARD_OVER_LIMIT -> MaterialTheme.colorScheme.error
+            WeightWarningLevel.IN_TOLERANCE -> Color(0xFF4CAF50)
+            WeightWarningLevel.APPROACHING,
+            WeightWarningLevel.SLOW_DOWN,
+            WeightWarningLevel.FINE_DOSING -> Color(0xFFFFC107)
             else -> MaterialTheme.colorScheme.primary
         },
         label = "color"
@@ -1132,7 +1183,7 @@ private fun PrecisionMeter(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = if (isOver) "注意：已过量" else if (isInTolerance) "完美：进入公差范围" else if (isNear) "减速：接近目标值" else "加注中...",
+                text = evaluation.message,
                 style = MaterialTheme.typography.labelSmall,
                 color = meterColor,
                 fontWeight = FontWeight.Bold
@@ -1145,6 +1196,113 @@ private fun PrecisionMeter(
             )
         }
     }
+}
+
+private fun confirmActionEnabled(evaluation: WeightEvaluation?, isConfirmed: Boolean): Boolean {
+    if (isConfirmed || evaluation == null) return false
+    return evaluation.allowManualConfirm ||
+        evaluation.level == WeightWarningLevel.OVER_LIMIT ||
+        evaluation.level == WeightWarningLevel.HARD_OVER_LIMIT
+}
+
+private fun confirmActionText(evaluation: WeightEvaluation?, autoConfirmCountdown: Int): String {
+    if (autoConfirmCountdown > 0) return "${autoConfirmCountdown}s 后自动确认"
+    return when (evaluation?.level) {
+        WeightWarningLevel.IN_TOLERANCE -> "确认完成"
+        WeightWarningLevel.OVER_LIMIT -> "处理超标"
+        WeightWarningLevel.HARD_OVER_LIMIT -> if (evaluation.requireAdminUnlock) "需要管理员处理" else "处理严重超标"
+        WeightWarningLevel.IDLE -> "等待称重"
+        WeightWarningLevel.FILLING,
+        WeightWarningLevel.APPROACHING,
+        WeightWarningLevel.SLOW_DOWN,
+        WeightWarningLevel.FINE_DOSING -> "未达目标"
+        null -> "等待称重"
+    }
+}
+
+@Composable
+private fun confirmButtonColors(evaluation: WeightEvaluation?, autoConfirmCountdown: Int): ButtonColors {
+    return when {
+        autoConfirmCountdown > 0 -> ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
+        evaluation?.level == WeightWarningLevel.OVER_LIMIT ||
+            evaluation?.level == WeightWarningLevel.HARD_OVER_LIMIT -> ButtonDefaults.buttonColors(
+            containerColor = MaterialTheme.colorScheme.error
+        )
+        else -> ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+    }
+}
+
+@Composable
+private fun OverLimitHandlingDialog(
+    evaluation: WeightEvaluation,
+    isAdminLoggedIn: Boolean,
+    onReset: () -> Unit,
+    onRecordAndContinue: () -> Unit,
+    onNeedAdmin: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val isHardOverLimit = evaluation.level == WeightWarningLevel.HARD_OVER_LIMIT
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = {
+            Icon(
+                imageVector = Icons.Default.ReportProblem,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.error,
+                modifier = Modifier.size(36.dp)
+            )
+        },
+        title = {
+            Text(
+                text = if (isHardOverLimit) "严重超标" else "重量超出允许范围",
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(evaluation.message)
+                Text("目标重量：${FormatUtils.formatWeight(evaluation.targetWeight)} g")
+                Text("当前重量：${FormatUtils.formatWeight(evaluation.actualWeight)} g")
+                Text("超出重量：${FormatUtils.formatWeight(evaluation.deviationWeight.coerceAtLeast(0.0))} g")
+                Text("允许误差：±${FormatUtils.formatWeight(evaluation.toleranceWeight)} g")
+                if (isHardOverLimit) {
+                    Text(
+                        text = if (evaluation.requireAdminUnlock) {
+                            "当前策略要求管理员解锁后才能记录继续。"
+                        } else {
+                            "请确认这是明确记录的严重异常，再继续下一物料。"
+                        },
+                        color = MaterialTheme.colorScheme.error,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (evaluation.requireAdminUnlock && !isAdminLoggedIn) {
+                        onNeedAdmin()
+                    } else {
+                        onRecordAndContinue()
+                    }
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+            ) {
+                Text(if (isHardOverLimit && evaluation.requireAdminUnlock) "管理员解锁并记录" else "记录超标并继续")
+            }
+        },
+        dismissButton = {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = onReset) {
+                    Text("重新称量")
+                }
+                TextButton(onClick = onDismiss) {
+                    Text("取消")
+                }
+            }
+        }
+    )
 }
 
 /**
@@ -1211,7 +1369,8 @@ data class MaterialConfigResult(
     val actualWeight: Double,
     val unit: String,
     val deviation: Double,
-    val deviationPercentage: Double
+    val deviationPercentage: Double,
+    val isOverLimit: Boolean = false
 )
 
 /**
@@ -1221,6 +1380,7 @@ data class MaterialConfigResult(
 private fun MagnifiedWeightOverlay(
     materialName: String,
     targetWeight: Double,
+    evaluation: WeightEvaluation,
     currentWeight: WeightData?,
     isStable: Boolean,
     onDismiss: () -> Unit,
@@ -1294,8 +1454,7 @@ private fun MagnifiedWeightOverlay(
             }
 
             PrecisionMeter(
-                targetWeight = targetWeight,
-                actualWeight = currentWeight?.value ?: 0.0,
+                evaluation = evaluation,
                 modifier = Modifier.padding(horizontal = 64.dp)
             )
 
@@ -1317,21 +1476,19 @@ private fun MagnifiedWeightOverlay(
                 Button(
                     onClick = onConfirm,
                     modifier = Modifier.weight(2f).height(100.dp),
-                    enabled = !isConfirmed,
-                    colors = if (autoConfirmCountdown > 0) ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)) else ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                    enabled = confirmActionEnabled(evaluation, isConfirmed),
+                    colors = confirmButtonColors(evaluation, autoConfirmCountdown),
                     shape = RoundedCornerShape(24.dp)
                 ) {
                     if (autoConfirmCountdown > 0) {
                         Icon(Icons.Default.Timer, null, modifier = Modifier.size(32.dp))
+                    } else if (evaluation.level == WeightWarningLevel.OVER_LIMIT || evaluation.level == WeightWarningLevel.HARD_OVER_LIMIT) {
+                        Icon(Icons.Default.ReportProblem, null, modifier = Modifier.size(32.dp))
                     } else {
                         Icon(Icons.Default.Check, null, modifier = Modifier.size(32.dp))
                     }
                     Spacer(Modifier.width(16.dp))
-                    if (autoConfirmCountdown > 0) {
-                        Text("${autoConfirmCountdown}s 后自动确认", fontSize = 24.sp)
-                    } else {
-                        Text("确认当前物料", fontSize = 24.sp)
-                    }
+                    Text(confirmActionText(evaluation, autoConfirmCountdown), fontSize = 24.sp)
                 }
             }
         }

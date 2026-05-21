@@ -33,6 +33,7 @@ import com.example.smartdosing.bluetooth.BluetoothScalePreferencesManager
 import com.example.smartdosing.bluetooth.BluetoothScalePreferencesManager.Companion.BAUD_RATE_OPTIONS
 import com.example.smartdosing.bluetooth.model.ConnectionState
 import com.example.smartdosing.bluetooth.model.ScaleDevice
+import com.example.smartdosing.dosing.OverLimitLockMode
 import com.example.smartdosing.data.settings.DosingPreferencesManager
 import com.example.smartdosing.data.settings.DosingPreferencesState
 import com.example.smartdosing.data.settings.AdminPreferencesManager
@@ -83,6 +84,7 @@ fun BluetoothScaleSettingsScreen(
     var showProtocolDialog by remember { mutableStateOf(false) }
     var showAutoConfirmDelayDialog by remember { mutableStateOf(false) }
     var showAutoConfirmToleranceDialog by remember { mutableStateOf(false) }
+    var showOverLimitLockModeDialog by remember { mutableStateOf(false) }
     var showWeightUnitDialog by remember { mutableStateOf(false) }
     var headerVisible by remember { mutableStateOf(false) }
 
@@ -427,6 +429,64 @@ fun BluetoothScaleSettingsScreen(
         )
     }
 
+    // 超标处理策略选择对话框
+    if (showOverLimitLockModeDialog) {
+        val options = listOf(
+            OverLimitLockMode.OFF to ("仅提醒" to "超标后提醒，可记录异常后继续"),
+            OverLimitLockMode.SOFT to ("软锁定" to "超标后必须通过处理弹窗继续"),
+            OverLimitLockMode.HARD_ON_SEVERE to ("严重超标强锁定" to "严重超标需要管理员处理")
+        )
+
+        AlertDialog(
+            onDismissRequest = { showOverLimitLockModeDialog = false },
+            title = { Text("超标处理策略") },
+            text = {
+                Column {
+                    Text(
+                        text = "策略只锁定确认和进入下一物料，不控制硬件加料动作。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 12.dp)
+                    )
+                    options.forEach { (mode, texts) ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    scope.launch { preferencesManager.setOverLimitLockMode(mode) }
+                                    showOverLimitLockModeDialog = false
+                                }
+                                .padding(vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = preferencesState.overLimitLockMode == mode,
+                                onClick = {
+                                    scope.launch { preferencesManager.setOverLimitLockMode(mode) }
+                                    showOverLimitLockModeDialog = false
+                                }
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Column {
+                                Text(text = texts.first, fontWeight = FontWeight.Medium)
+                                Text(
+                                    text = texts.second,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showOverLimitLockModeDialog = false }) {
+                    Text("取消")
+                }
+            }
+        )
+    }
+
     // 重量单位选择对话框
     if (showWeightUnitDialog) {
         AlertDialog(
@@ -761,6 +821,21 @@ fun BluetoothScaleSettingsScreen(
                                 return@SettingsRow
                             }
                             showAutoConfirmToleranceDialog = true
+                        }
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+                    SettingsRow(
+                        icon = Icons.Outlined.ReportProblem,
+                        title = "超标处理策略",
+                        subtitle = overLimitLockModeLabel(preferencesState.overLimitLockMode),
+                        onClick = {
+                            if (adminSettings.passwordHash.isNotEmpty() && !isAdminLoggedIn) {
+                                Toast.makeText(context, "需要管理员权限，请在系统设置中登录", Toast.LENGTH_SHORT).show()
+                                return@SettingsRow
+                            }
+                            showOverLimitLockModeDialog = true
                         }
                     )
 
@@ -1233,6 +1308,14 @@ private fun SettingsRow(
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant
         )
+    }
+}
+
+private fun overLimitLockModeLabel(mode: OverLimitLockMode): String {
+    return when (mode) {
+        OverLimitLockMode.OFF -> "仅提醒：超标后可记录异常继续"
+        OverLimitLockMode.SOFT -> "软锁定：超标后必须处理"
+        OverLimitLockMode.HARD_ON_SEVERE -> "严重超标强锁定：需要管理员处理"
     }
 }
 

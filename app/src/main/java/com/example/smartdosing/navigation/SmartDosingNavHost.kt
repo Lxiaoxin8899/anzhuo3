@@ -423,7 +423,7 @@ private fun MaterialConfigurationData.toConfigurationRecord(tolerancePermille: I
         val deviation = actual - item.targetWeight
         // 判定是否超标：误差超过目标值的 X‰ (默认10‰即1%)
         // tolerancePermille / 1000.0 转为小数
-        val isOutOfTolerance = if (item.targetWeight > 0) {
+        val isOutOfTolerance = item.isOverLimit || if (item.targetWeight > 0) {
             kotlin.math.abs(deviation) > (item.targetWeight * (tolerancePermille / 1000.0))
         } else {
             false

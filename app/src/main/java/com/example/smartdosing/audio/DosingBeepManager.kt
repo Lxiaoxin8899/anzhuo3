@@ -3,6 +3,8 @@ package com.example.smartdosing.audio
 import android.media.AudioManager
 import android.media.ToneGenerator
 import android.util.Log
+import com.example.smartdosing.dosing.WeightEvaluation
+import com.example.smartdosing.dosing.WeightWarningLevel
 import kotlinx.coroutines.*
 import kotlin.math.pow
 
@@ -26,6 +28,12 @@ class DosingBeepManager {
     // 阈值模式：是否已经触发过（用于"仅提示一次"）
     @Volatile
     private var thresholdTriggered = false
+
+    @Volatile
+    private var lastWarningLevel: WeightWarningLevel? = null
+
+    @Volatile
+    private var hardOverLimitAlertCount = 0
 
     /**
      * 初始化 ToneGenerator
@@ -150,10 +158,106 @@ class DosingBeepManager {
     }
 
     /**
+     * 基于统一重量评估结果播放提示音。
+     * 合格、普通超标和严重超标只做有限次提示，避免反复刷屏式报警。
+     */
+    fun updateWarning(
+        evaluation: WeightEvaluation,
+        mode: BeepMode,
+        thresholdPercent: Int,
+        thresholdContinuous: Boolean = true,
+        progressiveMaxIntervalMs: Long = 1500L,
+        progressiveMinIntervalMs: Long = 100L,
+        thresholdIntervalMs: Long = 300L,
+        toneDurationMs: Int = 80,
+        toneType: Int = ToneGenerator.TONE_PROP_BEEP,
+        arrivedToneType: Int = ToneGenerator.TONE_PROP_ACK,
+        arrivedDurationMs: Int = 200,
+        overLimitToneType: Int = ToneGenerator.TONE_PROP_NACK,
+        overLimitDurationMs: Int = 180
+    ) {
+        if (mode == BeepMode.OFF) {
+            resetWarningState()
+            return
+        }
+
+        if (lastWarningLevel != evaluation.level) {
+            lastWarningLevel = evaluation.level
+            thresholdTriggered = false
+            hardOverLimitAlertCount = 0
+        }
+
+        when (evaluation.level) {
+            WeightWarningLevel.IDLE,
+            WeightWarningLevel.FILLING -> {
+                stopBeeping()
+                thresholdTriggered = false
+            }
+
+            WeightWarningLevel.APPROACHING,
+            WeightWarningLevel.SLOW_DOWN,
+            WeightWarningLevel.FINE_DOSING -> {
+                if (mode == BeepMode.THRESHOLD && evaluation.progressRatio < thresholdPercent / 100.0) {
+                    stopBeeping()
+                    thresholdTriggered = false
+                    return
+                }
+                val intervalMs = when (evaluation.level) {
+                    WeightWarningLevel.APPROACHING -> progressiveMaxIntervalMs
+                    WeightWarningLevel.SLOW_DOWN -> ((progressiveMaxIntervalMs + thresholdIntervalMs) / 2)
+                    WeightWarningLevel.FINE_DOSING -> progressiveMinIntervalMs.coerceAtLeast(80L)
+                    else -> thresholdIntervalMs
+                }.coerceAtLeast(80L)
+
+                if (mode == BeepMode.PROGRESSIVE || (mode == BeepMode.THRESHOLD && thresholdContinuous)) {
+                    startBeepLoop(intervalMs, toneType = toneType, toneDurationMs = toneDurationMs)
+                } else if (!thresholdTriggered) {
+                    thresholdTriggered = true
+                    playTone(toneType, toneDurationMs)
+                }
+            }
+
+            WeightWarningLevel.IN_TOLERANCE -> {
+                stopBeeping()
+                if (!thresholdTriggered) {
+                    thresholdTriggered = true
+                    playTone(arrivedToneType, arrivedDurationMs)
+                }
+            }
+
+            WeightWarningLevel.OVER_LIMIT -> {
+                stopBeeping()
+                if (!thresholdTriggered) {
+                    thresholdTriggered = true
+                    playTone(overLimitToneType, overLimitDurationMs)
+                }
+            }
+
+            WeightWarningLevel.HARD_OVER_LIMIT -> {
+                stopBeeping()
+                if (hardOverLimitAlertCount < 3) {
+                    hardOverLimitAlertCount += 1
+                    playTone(overLimitToneType, overLimitDurationMs)
+                }
+            }
+        }
+    }
+
+    /**
      * 重置阈值触发状态（切换物料时调用）
      */
     fun resetThresholdState() {
         thresholdTriggered = false
+        resetWarningState()
+    }
+
+    /**
+     * 重置统一预警提示状态。
+     */
+    fun resetWarningState() {
+        thresholdTriggered = false
+        lastWarningLevel = null
+        hardOverLimitAlertCount = 0
         stopBeeping()
     }
 
