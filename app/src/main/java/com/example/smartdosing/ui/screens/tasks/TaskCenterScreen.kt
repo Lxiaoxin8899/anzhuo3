@@ -36,6 +36,7 @@ import com.example.smartdosing.data.TaskPriority
 import com.example.smartdosing.data.TaskStatus
 import com.example.smartdosing.data.device.DeviceUIDManager
 import com.example.smartdosing.data.repository.ConfigurationRepositoryProvider
+import com.example.smartdosing.ui.components.ErrorState
 import com.example.smartdosing.ui.theme.LocalWindowSize
 import com.example.smartdosing.ui.theme.SmartDosingTheme
 import com.example.smartdosing.ui.theme.SmartDosingWindowWidthClass
@@ -53,6 +54,7 @@ fun TaskCenterScreen(
     onStartTask: (ConfigurationTask) -> Unit = {},
     onConfigureTask: (ConfigurationTask) -> Unit = {},
     onWaitingTaskCountChanged: (Int) -> Unit = {},
+    onViewRecipeLibrary: (() -> Unit)? = null,
     showTopBar: Boolean = false,
     refreshSignal: Int = 0
 ) {
@@ -63,7 +65,7 @@ fun TaskCenterScreen(
     var allTasks by remember { mutableStateOf<List<ConfigurationTask>>(emptyList()) }
     var tasks by remember { mutableStateOf<List<ConfigurationTask>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
-    var loadError by remember { mutableStateOf<String?>(null) }
+    var loadError by remember { mutableStateOf<TaskLoadError?>(null) }
     var selectedStatus by remember { mutableStateOf<TaskStatus?>(null) }
     val scope = rememberCoroutineScope()
     
@@ -92,7 +94,7 @@ fun TaskCenterScreen(
                     it.status != TaskStatus.COMPLETED && it.status != TaskStatus.CANCELLED
                 }
             } catch (e: Exception) {
-                loadError = "加载任务失败：${e.message ?: "未知错误"}"
+                loadError = e.toTaskLoadError()
             } finally {
                 isLoading = false
             }
@@ -132,7 +134,11 @@ fun TaskCenterScreen(
 
             when {
                 isLoading -> TaskLoadingState()
-                loadError != null -> TaskErrorState(message = loadError!!, onRetry = { refreshTasks() })
+                loadError != null -> TaskErrorState(
+                    error = loadError!!,
+                    onRetry = { refreshTasks() },
+                    onViewRecipeLibrary = onViewRecipeLibrary
+                )
                 displayedTasks.isEmpty() -> TaskEmptyState()
                 else -> {
                     LazyColumn(
@@ -533,17 +539,48 @@ private fun TaskLoadingState() {
 }
 
 @Composable
-private fun TaskErrorState(message: String, onRetry: () -> Unit) {
-    Column(Modifier.fillMaxWidth().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(message, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
-        Button(onClick = onRetry) { Text("重试") }
-    }
+private fun TaskErrorState(
+    error: TaskLoadError,
+    onRetry: () -> Unit,
+    onViewRecipeLibrary: (() -> Unit)?
+) {
+    ErrorState(
+        title = error.title,
+        message = error.message,
+        onRetry = onRetry,
+        secondaryActionLabel = if (onViewRecipeLibrary != null) "查看配方库" else null,
+        onSecondaryAction = onViewRecipeLibrary,
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 260.dp)
+    )
 }
 
 @Composable
 private fun TaskEmptyState() {
     Box(Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
         Text("暂无任务记录", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+private data class TaskLoadError(
+    val title: String,
+    val message: String
+)
+
+private fun Throwable.toTaskLoadError(): TaskLoadError {
+    val rawMessage = message.orEmpty()
+    // 对用户隐藏 Retrofit/HTTP 原始异常，只保留可行动的中文原因。
+    return if (rawMessage.contains("500") || rawMessage.contains("Internal Server Error", ignoreCase = true)) {
+        TaskLoadError(
+            title = "任务服务暂时不可用",
+            message = "任务服务返回异常，当前无法加载研发任务。请检查无线传输或后台服务状态，稍后重试。"
+        )
+    } else {
+        TaskLoadError(
+            title = "任务列表加载失败",
+            message = "当前无法获取研发任务。请确认网络和后台服务可用后重试。"
+        )
     }
 }
 

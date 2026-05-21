@@ -65,12 +65,12 @@ fun SmartDosingNavigationRail(
             ) {
                 Icon(
                     imageVector = Icons.Default.Home,
-                    contentDescription = "SmartDosing",
+                    contentDescription = "快速研发系统",
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(32.dp)
                 )
                 Text(
-                    text = "Smart",
+                    text = "快研",
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.Bold
                 )

@@ -238,7 +238,12 @@ fun SearchEmptyState(
 fun ErrorState(
     message: String = "加载失败，请稍后重试",
     onRetry: (() -> Unit)? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    title: String = "出错了",
+    icon: ImageVector = Icons.Outlined.ErrorOutline,
+    retryLabel: String = "重试",
+    secondaryActionLabel: String? = null,
+    onSecondaryAction: (() -> Unit)? = null
 ) {
     Column(
         modifier = modifier
@@ -248,7 +253,7 @@ fun ErrorState(
         verticalArrangement = Arrangement.Center
     ) {
         Icon(
-            imageVector = Icons.Outlined.ErrorOutline,
+            imageVector = icon,
             contentDescription = null,
             modifier = Modifier.size(64.dp),
             tint = MaterialTheme.colorScheme.error
@@ -257,7 +262,7 @@ fun ErrorState(
         Spacer(modifier = Modifier.height(SmartDosingTokens.spacing.lg))
 
         Text(
-            text = "出错了",
+            text = title,
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.error
@@ -277,9 +282,18 @@ fun ErrorState(
 
             LabButton(
                 onClick = onRetry,
-                text = "重试",
+                text = retryLabel,
                 icon = Icons.Default.Refresh,
                 containerColor = MaterialTheme.colorScheme.error
+            )
+        }
+
+        if (secondaryActionLabel != null && onSecondaryAction != null) {
+            Spacer(modifier = Modifier.height(SmartDosingTokens.spacing.sm))
+            LabOutlinedButton(
+                onClick = onSecondaryAction,
+                text = secondaryActionLabel,
+                color = MaterialTheme.colorScheme.error
             )
         }
     }

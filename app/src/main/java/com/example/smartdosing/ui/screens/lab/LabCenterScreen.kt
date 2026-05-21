@@ -200,6 +200,9 @@ fun LabCenterScreen(
                                     // 查看配方：只读模式
                                     onNavigateToMaterialConfiguration(task.recipeId.ifBlank { "quick_start" }, true)
                                 },
+                                onViewRecipeLibrary = {
+                                    selectedTab = 1
+                                },
                                 onWaitingTaskCountChanged = { count ->
                                     waitingTaskCount = count
                                 }

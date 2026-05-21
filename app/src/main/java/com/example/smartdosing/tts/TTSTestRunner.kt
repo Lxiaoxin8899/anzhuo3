@@ -19,10 +19,10 @@ class TTSTestRunner(private val context: Context) {
         // 测试用例
         val TEST_CASES = listOf(
             "小米TTS测试开始",
-            "智能投料系统启动完成",
+            "快速研发系统启动完成",
             "配方加载成功",
-            "开始投料操作",
-            "投料完成，请检查结果",
+            "开始实验配置",
+            "实验配置完成，请检查结果",
             "系统运行正常",
             "测试结束"
         )

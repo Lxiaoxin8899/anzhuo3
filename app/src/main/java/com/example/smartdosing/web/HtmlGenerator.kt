@@ -11,7 +11,7 @@ import kotlinx.html.*
  */
 fun HTML.generateMainPage() {
     head {
-        title("SmartDosing 研发任务调度中心")
+        title("快速研发系统 - 研发任务调度中心")
         generateCommonHead()
     }
     body {
@@ -177,7 +177,7 @@ fun HTML.generateMainPage() {
 
 fun HTML.generateTaskCenterPage() {
     head {
-        title("任务中心 - SmartDosing")
+        title("任务中心 - 快速研发系统")
         generateCommonHead()
     }
     body {
@@ -251,7 +251,7 @@ fun HTML.generateTaskCenterPage() {
 
 fun HTML.generateRecipesPage() {
     head {
-        title("配方管理 - SmartDosing")
+        title("配方管理 - 快速研发系统")
         generateCommonHead()
     }
     body {
@@ -361,7 +361,7 @@ fun HTML.generateRecipesPage() {
  */
 fun HTML.generateImportPage() {
     head {
-        title("导入配方 - SmartDosing")
+        title("导入配方 - 快速研发系统")
         generateCommonHead()
     }
     body {
@@ -524,7 +524,7 @@ fun HTML.generateImportPage() {
 }
 fun HTML.generateStatsPage() {
     head {
-        title("统计分析 - SmartDosing")
+        title("统计分析 - 快速研发系统")
         generateCommonHead()
     }
     body {
@@ -606,7 +606,7 @@ fun HEAD.generateCommonHead() {
     }
     meta {
         name = "description"
-        content = "SmartDosing 无线传输服务"
+        content = "快速研发系统无线传输服务"
     }
 
     // 引入样式
@@ -624,7 +624,7 @@ fun BODY.generateNavbar() {
     nav("navbar") {
         div("nav-container") {
             a(href = "/", classes = "nav-brand") {
-                +"SmartDosing"
+                +"快速研发系统"
             }
             ul("nav-menu") {
                 li { a(href = "/") { +"首页" } }
@@ -650,7 +650,7 @@ fun BODY.generateNavbar() {
 fun BODY.generateCommonFooter() {
     footer("footer") {
         div("footer-content") {
-            p { +"© 2024 SmartDosing 智能投料系统. 版权所有." }
+            p { +"© 2024 快速研发系统. 版权所有." }
             div("footer-links") {
                 a(href = "#") { +"关于我们" }
                 a(href = "#") { +"技术支持" }
@@ -665,7 +665,7 @@ fun BODY.generateCommonFooter() {
  */
 fun HTML.generateTemplatePage() {
     head {
-        title("模板管理 - SmartDosing")
+        title("模板管理 - 快速研发系统")
         generateCommonHead()
     }
     body {

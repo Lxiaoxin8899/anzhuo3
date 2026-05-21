@@ -538,13 +538,13 @@ fun AppInfoCard() {
 
             InfoRow(
                 label = "开发者",
-                value = "SmartDosing Team",
+                value = "快速研发系统团队",
                 icon = Icons.Default.Person
             )
 
             InfoRow(
                 label = "技术支持",
-                value = "smartdosing@example.com",
+                value = "quickdev@example.com",
                 icon = Icons.Default.Email
             )
         }

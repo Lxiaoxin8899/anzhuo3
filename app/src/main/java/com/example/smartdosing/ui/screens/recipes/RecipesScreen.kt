@@ -85,6 +85,7 @@ import com.example.smartdosing.data.RecipeRepository
 import com.example.smartdosing.data.DatabaseRecipeRepository
 import com.example.smartdosing.data.RecipeStats
 import com.example.smartdosing.data.RecipeStatus
+import com.example.smartdosing.ui.components.ErrorState
 import com.example.smartdosing.ui.theme.SmartDosingTheme
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -122,7 +123,8 @@ fun RecipesScreen(
     var viewMode by remember { mutableStateOf(RecipeViewMode.CARD) }
     var isFilterExpanded by remember { mutableStateOf(!isCompactScreen) }
     var isFilterSheetOpen by remember { mutableStateOf(false) }
-    var loadError by remember { mutableStateOf<String?>(null) }
+    var loadError by remember { mutableStateOf<RecipeLoadError?>(null) }
+    var reloadSignal by remember { mutableStateOf(0) }
     
     // 删除配方相关状态
     var showDeleteDialog by remember { mutableStateOf(false) }
@@ -155,8 +157,11 @@ fun RecipesScreen(
                     // 刷新数据
                     val updatedRecipes = repository.getAllRecipes()
                     recipes = updatedRecipes
-                }.onFailure { error ->
-                    loadError = "删除失败: ${error.localizedMessage}"
+                }.onFailure {
+                    loadError = RecipeLoadError(
+                        title = "配方删除失败",
+                        message = "当前无法删除配方。请稍后重试，或联系维护人员检查本机数据。"
+                    )
                 }
             }
         }
@@ -165,7 +170,7 @@ fun RecipesScreen(
     }
     
     // 预加载数据，后续可替换成 Flow 收集
-    LaunchedEffect(Unit) {
+    LaunchedEffect(reloadSignal) {
         runCatching {
             val allRecipes = repository.getAllRecipes()
             recipes = allRecipes
@@ -181,7 +186,7 @@ fun RecipesScreen(
         }.onSuccess {
             loadError = null
         }.onFailure { throwable ->
-            loadError = throwable.localizedMessage ?: "加载配方失败，请稍后重试"
+            loadError = throwable.toRecipeLoadError()
         }
     }
 
@@ -334,14 +339,6 @@ fun RecipesScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            loadError?.let { message ->
-                Text(
-                    text = "配方加载失败：$message",
-                    color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(horizontal = 8.dp)
-                )
-            }
             RecipeWorkspaceHeader(
                 searchText = searchText,
                 onSearchTextChange = { searchText = it },
@@ -380,7 +377,12 @@ fun RecipesScreen(
                     .fillMaxSize()
                     .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp))
             ) {
-                if (filteredRecipes.isEmpty()) {
+                if (loadError != null) {
+                    RecipeLoadErrorState(
+                        error = loadError!!,
+                        onRetry = { reloadSignal += 1 }
+                    )
+                } else if (filteredRecipes.isEmpty()) {
                     EmptyState()
                 } else {
                     if (viewMode == RecipeViewMode.CARD) {
@@ -544,14 +546,6 @@ fun RecipesScreen(
                     .fillMaxHeight(),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                loadError?.let { message ->
-                    Text(
-                        text = "配方加载失败：$message",
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.padding(horizontal = 8.dp)
-                    )
-                }
                 RecipeWorkspaceHeader(
                     searchText = searchText,
                     onSearchTextChange = { searchText = it },
@@ -592,7 +586,12 @@ fun RecipesScreen(
                         .fillMaxSize()
                         .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp))
                 ) {
-                    if (filteredRecipes.isEmpty()) {
+                    if (loadError != null) {
+                        RecipeLoadErrorState(
+                            error = loadError!!,
+                            onRetry = { reloadSignal += 1 }
+                        )
+                    } else if (filteredRecipes.isEmpty()) {
                         EmptyState()
                     } else {
                         if (viewMode == RecipeViewMode.CARD) {
@@ -624,6 +623,45 @@ fun RecipesScreen(
         }
     }
 }
+
+@Composable
+private fun RecipeLoadErrorState(
+    error: RecipeLoadError,
+    onRetry: () -> Unit
+) {
+    ErrorState(
+        title = error.title,
+        message = error.message,
+        onRetry = onRetry,
+        modifier = Modifier.fillMaxSize()
+    )
+}
+
+private data class RecipeLoadError(
+    val title: String,
+    val message: String
+)
+
+private fun Throwable.toRecipeLoadError(): RecipeLoadError {
+    val rawMessage = listOfNotNull(message, localizedMessage).joinToString(" ")
+    // 对用户隐藏 Room 迁移栈信息，避免把内部数据库实现暴露到界面。
+    return if (
+        rawMessage.contains("migration", ignoreCase = true) ||
+        rawMessage.contains("Room", ignoreCase = true) ||
+        rawMessage.contains("required but not found", ignoreCase = true)
+    ) {
+        RecipeLoadError(
+            title = "本机数据版本不匹配",
+            message = "本机配方数据版本与当前程序不匹配。请确认已安装最新快速研发系统，或联系维护人员处理本机数据。"
+        )
+    } else {
+        RecipeLoadError(
+            title = "配方库加载失败",
+            message = "当前无法读取配方库。请稍后重试，或联系维护人员检查本机数据。"
+        )
+    }
+}
+
 /**
  * 左侧过滤面板：容纳分类/时间/客户/状态/标签/自定义组
  */

@@ -436,7 +436,7 @@ fun SettingsScreen(
             items = listOf(
                 SettingsItem.Info(
                     title = "版本信息",
-                    subtitle = "SmartDosing v1.0.0",
+                    subtitle = "快速研发系统 v1.0.0",
                     icon = Icons.Outlined.NewReleases
                 ),
                 SettingsItem.Action(
@@ -550,8 +550,8 @@ fun SettingsScreen(
     }
 
     LazyColumn(
-        modifier = modifier.fillMaxSize().padding(24.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        modifier = modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
             AnimatedVisibility(
@@ -561,16 +561,16 @@ fun SettingsScreen(
                     animationSpec = tween(500)
                 )
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(
                         text = "系统设置",
-                        fontSize = 30.sp,
+                        fontSize = 26.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onBackground
                     )
                     Text(
                         text = "自定义应用行为和外观",
-                        fontSize = 16.sp,
+                        fontSize = 14.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
@@ -682,7 +682,7 @@ fun SettingsSectionCard(
         shape = RoundedCornerShape(20.dp)
     ) {
         Column(
-            modifier = Modifier.padding(20.dp)
+            modifier = Modifier.padding(16.dp)
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -699,28 +699,28 @@ fun SettingsSectionCard(
                         imageVector = section.icon,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(22.dp)
+                        modifier = Modifier.size(20.dp)
                     )
                 }
                 Text(
                     text = section.title,
-                    fontSize = 18.sp,
+                    fontSize = 17.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface
                 )
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
             section.items.forEachIndexed { index, item ->
                 SettingsItemView(item = item)
                 if (index < section.items.size - 1) {
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
                     HorizontalDivider(
                         color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
                         thickness = 1.dp
                     )
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
                 }
             }
         }
@@ -794,7 +794,9 @@ fun SwitchSettingItem(
     onCheckedChange: (Boolean) -> Unit
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -816,7 +818,7 @@ fun SwitchSettingItem(
                     modifier = Modifier.size(20.dp)
                 )
             }
-            Spacer(modifier = Modifier.width(14.dp))
+            Spacer(modifier = Modifier.width(12.dp))
             Column {
                 Text(
                     text = title,
@@ -859,7 +861,9 @@ fun SliderSettingItem(
 ) {
     Column {
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 48.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -881,7 +885,7 @@ fun SliderSettingItem(
                         modifier = Modifier.size(20.dp)
                     )
                 }
-                Spacer(modifier = Modifier.width(14.dp))
+                Spacer(modifier = Modifier.width(12.dp))
                 Column {
                     Text(
                         text = title,
@@ -909,7 +913,7 @@ fun SliderSettingItem(
                 )
             }
         }
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(4.dp))
         Slider(
             value = value,
             onValueChange = onValueChange,
@@ -978,6 +982,7 @@ fun SelectionSettingItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .heightIn(min = 48.dp)
             .clip(RoundedCornerShape(12.dp))
             .clickable { showDialog = true },
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -1001,7 +1006,7 @@ fun SelectionSettingItem(
                     modifier = Modifier.size(20.dp)
                 )
             }
-            Spacer(modifier = Modifier.width(14.dp))
+            Spacer(modifier = Modifier.width(12.dp))
             Column {
                 Text(
                     text = title,
@@ -1056,9 +1061,10 @@ fun ActionSettingItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .heightIn(min = 48.dp)
             .clip(RoundedCornerShape(12.dp))
             .clickable { onClick() }
-            .padding(vertical = 4.dp),
+            .padding(vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
@@ -1075,7 +1081,7 @@ fun ActionSettingItem(
                 modifier = Modifier.size(20.dp)
             )
         }
-        Spacer(modifier = Modifier.width(14.dp))
+        Spacer(modifier = Modifier.width(12.dp))
         Column(
             modifier = Modifier.weight(1f)
         ) {
@@ -1110,7 +1116,9 @@ fun InfoSettingItem(
     icon: ImageVector
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
@@ -1127,7 +1135,7 @@ fun InfoSettingItem(
                 modifier = Modifier.size(20.dp)
             )
         }
-        Spacer(modifier = Modifier.width(14.dp))
+        Spacer(modifier = Modifier.width(12.dp))
         Column {
             Text(
                 text = title,

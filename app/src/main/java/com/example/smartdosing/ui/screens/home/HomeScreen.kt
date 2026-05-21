@@ -234,13 +234,18 @@ private fun LargeScreenHomeLayout(
         // 右侧侧边栏：系统状态与设备管理
         Column(
             modifier = Modifier
-                .weight(0.6f)
+                .weight(0.58f)
                 .fillMaxHeight()
-                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
-                .padding(24.dp),
-            verticalArrangement = Arrangement.spacedBy(20.dp)
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.16f))
+                .padding(horizontal = 20.dp, vertical = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Text("系统监控", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(
+                "系统监控",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
             
             SystemStatusPanel(runtimeStatus = runtimeStatus, scaleConnectionState = scaleConnectionState)
             
@@ -486,11 +491,11 @@ private fun DashboardStatCard(info: DashboardCardInfo, modifier: Modifier = Modi
 private fun SystemStatusPanel(runtimeStatus: HomeRuntimeStatus, scaleConnectionState: ConnectionState) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        shape = RoundedCornerShape(24.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.82f)),
+        shape = RoundedCornerShape(16.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.22f))
     ) {
-        Column(modifier = Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+        Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             StatusItem(
                 title = "高精度电子天平",
                 status = when(scaleConnectionState) {
@@ -506,7 +511,7 @@ private fun SystemStatusPanel(runtimeStatus: HomeRuntimeStatus, scaleConnectionS
                 icon = Icons.Outlined.Balance
             )
             
-            Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+            Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.28f))
             
             StatusItem(
                 title = "数据同步服务",
@@ -516,7 +521,7 @@ private fun SystemStatusPanel(runtimeStatus: HomeRuntimeStatus, scaleConnectionS
                 subtitle = runtimeStatus.wirelessAddress
             )
             
-            Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+            Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.28f))
             
             StatusItem(
                 title = "语音引导引擎",
@@ -531,18 +536,20 @@ private fun SystemStatusPanel(runtimeStatus: HomeRuntimeStatus, scaleConnectionS
 
 @Composable
 private fun StatusItem(title: String, status: String, color: Color, icon: ImageVector, subtitle: String? = null) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        Icon(icon, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
-            if (subtitle != null) {
-                Text(subtitle, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Icon(icon, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(22.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                if (subtitle != null) {
+                    Text(subtitle, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
         }
         Surface(
-            color = color.copy(alpha = 0.1f),
+            color = color.copy(alpha = 0.07f),
             shape = RoundedCornerShape(8.dp),
-            border = androidx.compose.foundation.BorderStroke(1.dp, color.copy(alpha = 0.2f))
+            border = androidx.compose.foundation.BorderStroke(1.dp, color.copy(alpha = 0.12f))
         ) {
             Text(
                 text = status,
@@ -638,15 +645,15 @@ private fun HomeActionCard(action: HomeAction, modifier: Modifier = Modifier) {
     Card(
         onClick = action.onClick,
         modifier = modifier
-            .heightIn(min = 100.dp)
+            .heightIn(min = if (isPrimary) 118.dp else 96.dp)
             .scale(pulseScale),
         colors = CardDefaults.cardColors(
             containerColor = if (isPrimary) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
             contentColor = if (isPrimary) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
         ),
         shape = RoundedCornerShape(24.dp),
-        border = if (!isPrimary) androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)) else null,
-        elevation = CardDefaults.cardElevation(defaultElevation = if (isPrimary) 6.dp else 0.dp)
+        border = if (!isPrimary) androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.38f)) else null,
+        elevation = CardDefaults.cardElevation(defaultElevation = if (isPrimary) 8.dp else 0.dp)
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             if (isPrimary) {
@@ -832,4 +839,3 @@ private data class HomeAction(val title: String, val description: String, val ic
 private fun HomeScreenLargePreview() {
     SmartDosingTheme { HomeScreen() }
 }
-
