@@ -382,48 +382,51 @@ private fun HomeHeader() {
             )
         }
         
-        // 实验室在线状态呼吸灯
+        // 中文注释：状态指示保持静态，避免离线/在线状态被动画误读。
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            StatusPulseIndicator(color = Color(0xFF4CAF50))
-            Text("系统在线", style = MaterialTheme.typography.labelSmall, color = Color(0xFF4CAF50), fontWeight = FontWeight.Bold)
+            StatusPulseIndicator(
+                color = LabGreen,
+                modifier = Modifier.size(width = 28.dp, height = 10.dp)
+            )
+            Text("系统在线", style = MaterialTheme.typography.labelSmall, color = LabGreen, fontWeight = FontWeight.Bold)
         }
     }
 }
 
 @Composable
-private fun StatusPulseIndicator(color: Color) {
-    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
-    val alpha by infiniteTransition.animateFloat(
-        initialValue = 0.3f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1500, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "alpha"
-    )
-    val scale by infiniteTransition.animateFloat(
-        initialValue = 1f,
-        targetValue = 1.5f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1500, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "scale"
-    )
+private fun StatusPulseIndicator(
+    color: Color,
+    modifier: Modifier = Modifier,
+    isFlat: Boolean = false
+) {
+    Canvas(modifier = modifier) {
+        val width = size.width
+        val height = size.height
+        val centerY = height / 2f
 
-    Box(contentAlignment = Alignment.Center) {
-        Box(
-            modifier = Modifier
-                .size(8.dp)
-                .scale(scale)
-                .background(color.copy(alpha = alpha * 0.4f), CircleShape)
-        )
-        Box(
-            modifier = Modifier
-                .size(8.dp)
-                .background(color, CircleShape)
-        )
+        if (isFlat) {
+            drawLine(
+                color = color.copy(alpha = 0.35f),
+                start = Offset(0f, centerY),
+                end = Offset(width, centerY),
+                strokeWidth = 1.5.dp.toPx(),
+                cap = StrokeCap.Round
+            )
+        } else {
+            drawCircle(
+                color = color.copy(alpha = 0.18f),
+                radius = height * 0.48f,
+                center = Offset(height * 0.5f, centerY)
+            )
+            drawCircle(color = color, radius = height * 0.3f, center = Offset(height * 0.5f, centerY))
+            drawLine(
+                color = color.copy(alpha = 0.45f),
+                start = Offset(height, centerY),
+                end = Offset(width, centerY),
+                strokeWidth = 1.5.dp.toPx(),
+                cap = StrokeCap.Round
+            )
+        }
     }
 }
 
@@ -574,17 +577,34 @@ private fun StatusItem(title: String, status: String, color: Color, icon: ImageV
                 }
             }
         }
-        Surface(
-            color = color.copy(alpha = 0.07f),
-            shape = RoundedCornerShape(8.dp),
-            border = androidx.compose.foundation.BorderStroke(1.dp, color.copy(alpha = 0.12f))
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text(
-                text = status,
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                fontSize = 11.sp,
+            Surface(
+                color = color.copy(alpha = 0.07f),
+                shape = RoundedCornerShape(8.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, color.copy(alpha = 0.12f))
+            ) {
+                Text(
+                    text = status,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                    fontSize = 11.sp,
+                    color = color,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            val isOffline = color == Color(0xFF757575) ||
+                color == Color(0xFFF44336) ||
+                color == LabRed ||
+                status.contains("离线") ||
+                status.contains("未启动") ||
+                status.contains("下线")
+
+            StatusPulseIndicator(
                 color = color,
-                fontWeight = FontWeight.Bold
+                modifier = Modifier.size(width = 32.dp, height = 12.dp),
+                isFlat = isOffline
             )
         }
     }
@@ -653,65 +673,20 @@ private fun HomeActionGrid(actions: List<HomeAction>) {
 @Composable
 private fun HomeActionCard(action: HomeAction, modifier: Modifier = Modifier) {
     val isPrimary = action.emphasize
-    
-    // 强调卡片的呼吸效果
-    val infiniteTransition = rememberInfiniteTransition(label = "primary_pulse")
-    val pulseScale by if (isPrimary) {
-        infiniteTransition.animateFloat(
-            initialValue = 1f,
-            targetValue = 1.02f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(2000, easing = FastOutSlowInEasing),
-                repeatMode = RepeatMode.Reverse
-            ),
-            label = "scale"
-        )
-    } else {
-        remember { mutableStateOf(1f) }
-    }
 
     Card(
         onClick = action.onClick,
         modifier = modifier
-            .heightIn(min = if (isPrimary) 118.dp else 96.dp)
-            .scale(pulseScale),
+            .heightIn(min = if (isPrimary) 118.dp else 96.dp),
         colors = CardDefaults.cardColors(
             containerColor = if (isPrimary) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
             contentColor = if (isPrimary) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
         ),
-        shape = RoundedCornerShape(24.dp),
-        border = if (!isPrimary) androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.38f)) else null,
-        elevation = CardDefaults.cardElevation(defaultElevation = if (isPrimary) 8.dp else 0.dp)
+        shape = RoundedCornerShape(if (isPrimary) 20.dp else 16.dp),
+        border = if (!isPrimary) androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.32f)) else null,
+        elevation = CardDefaults.cardElevation(defaultElevation = if (isPrimary) 4.dp else 0.dp)
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            if (isPrimary) {
-                // 装饰性背景：高科技纹理
-                Canvas(modifier = Modifier.fillMaxSize()) {
-                    val nativePath = android.graphics.Path().apply {
-                        moveTo(size.width * 0.7f, 0f)
-                        quadTo(size.width * 0.85f, size.height * 0.4f, size.width, size.height * 0.2f)
-                        lineTo(size.width, 0f)
-                        close()
-                    }
-                    drawIntoCanvas { canvas ->
-                        canvas.nativeCanvas.drawPath(nativePath, android.graphics.Paint().apply {
-                            color = android.graphics.Color.WHITE
-                            alpha = (255 * 0.12f).toInt()
-                            style = android.graphics.Paint.Style.FILL
-                            isAntiAlias = true
-                        })
-                    }
-                    
-                    // 额外的装饰线
-                    drawLine(
-                        color = Color.White.copy(alpha = 0.1f),
-                        start = Offset(0f, size.height * 0.8f),
-                        end = Offset(size.width * 0.2f, size.height),
-                        strokeWidth = 2.dp.toPx()
-                    )
-                }
-            }
-            
             Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
                     Icon(
@@ -751,6 +726,62 @@ private fun HomeActionCard(action: HomeAction, modifier: Modifier = Modifier) {
 }
 
 @Composable
+private fun RecentOperationShimmerRow() {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .clip(CircleShape)
+                .shimmer()
+        )
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .width(120.dp)
+                    .height(14.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .shimmer()
+            )
+            Box(
+                modifier = Modifier
+                    .width(80.dp)
+                    .height(10.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .shimmer()
+            )
+        }
+        Column(
+            horizontalAlignment = Alignment.End,
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .width(60.dp)
+                    .height(14.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .shimmer()
+            )
+            Box(
+                modifier = Modifier
+                    .width(40.dp)
+                    .height(10.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .shimmer()
+            )
+        }
+    }
+}
+
+@Composable
 private fun RecentOperationsPanel(modifier: Modifier = Modifier, operations: List<ConfigurationRecord>, isLoading: Boolean, onViewMore: () -> Unit) {
     Card(
         modifier = modifier.fillMaxWidth(),
@@ -768,8 +799,13 @@ private fun RecentOperationsPanel(modifier: Modifier = Modifier, operations: Lis
             }
             
             if (isLoading) {
-                Box(Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    repeat(4) { index ->
+                        RecentOperationShimmerRow()
+                        if (index < 3) {
+                            Divider(modifier = Modifier.padding(start = 40.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                        }
+                    }
                 }
             } else if (operations.isEmpty()) {
                 Box(Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.Center) {
@@ -936,7 +972,7 @@ fun DeviationTrendChart(
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
-                "配料总偏差变化趋势 (最近已完成)",
+                "配料误差分布 (最近已完成)",
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -945,12 +981,22 @@ fun DeviationTrendChart(
 
             if (trendPoints.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("暂无充足的实验记录以描绘偏差趋势", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("暂无充足的实验记录以描绘误差分布", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             } else {
-                val pointCount = trendPoints.size
-                val rawMaxY = trendPoints.maxOf { it.deviationPercent }
-                val maxY = kotlin.math.max(rawMaxY * 1.3, 1.0)
+                // 中文注释：这里展示近期误差分布，不宣称六西格玛能力。
+                val deviations = trendPoints.map { pt -> pt.deviationPercent }
+                val mean = if (deviations.isNotEmpty()) deviations.average() else 0.0
+                val variance = if (deviations.size > 1) {
+                    deviations.map { (it - mean) * (it - mean) }.sum() / (deviations.size - 1)
+                } else 0.0
+                val stdDev = if (variance > 0.0) kotlin.math.sqrt(variance) else 0.3 // 默认 0.3%
+
+                // 确定 X 轴区间：覆盖样本离散程度，并至少保留 +/-1.5% 的阅读范围。
+                val maxAbsDev = trendPoints.maxOfOrNull { kotlin.math.abs(it.deviationPercent) } ?: 0.0
+                val rangeX = kotlin.math.max(3.0 * stdDev, kotlin.math.max(maxAbsDev * 1.2, 1.5))
+                val minX = -rangeX
+                val maxX = rangeX
 
                 Canvas(modifier = Modifier.fillMaxSize()) {
                     val width = size.width
@@ -964,133 +1010,115 @@ fun DeviationTrendChart(
                     val chartWidth = width - paddingLeft - paddingRight
                     val chartHeight = height - paddingTop - paddingBottom
 
-                    val stepY = chartHeight / 4
+                    // Draw vertical dashed lines for standard deviation references.
                     val pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 10f), 0f)
+
+                    // X-axis coordinates mapping
+                    fun mapX(value: Double): Float {
+                        val ratio = (value - minX) / (maxX - minX)
+                        return (paddingLeft + ratio * chartWidth).toFloat()
+                    }
+
+                    // Y-axis coordinates mapping
+                    // Gaussian bell curve peak normalized to chartHeight * 0.85
+                    fun gaussianHeight(value: Double): Float {
+                        val z = (value - mean) / stdDev
+                        val exponent = -0.5 * z * z
+                        val pdf = kotlin.math.exp(exponent) // peak is 1.0 when value = mean
+                        return (paddingTop + chartHeight - pdf * chartHeight * 0.85f).toFloat()
+                    }
+
+                    // 1. Draw grid / standard deviation references.
+                    val sigmaOffsets = listOf(-2.0 * stdDev, -1.0 * stdDev, 0.0, 1.0 * stdDev, 2.0 * stdDev)
+                    val sigmaLabels = listOf("-2σ", "-1σ", "目标", "+1σ", "+2σ")
 
                     val paint = Paint().apply {
                         color = textColor
-                        textSize = 10.sp.toPx()
+                        textSize = 9.sp.toPx()
                         typeface = Typeface.MONOSPACE
-                        textAlign = Paint.Align.RIGHT
+                        textAlign = Paint.Align.CENTER
                     }
 
-                    for (i in 0..4) {
-                        val y = paddingTop + i * stepY
+                    sigmaOffsets.forEachIndexed { index, offsetVal ->
+                        val x = mapX(offsetVal)
                         drawLine(
-                            color = gridColor,
-                            start = Offset(paddingLeft, y),
-                            end = Offset(width - paddingRight, y),
-                            strokeWidth = 1f,
-                            pathEffect = if (i == 4) null else pathEffect
+                            color = if (offsetVal == 0.0) primaryColor.copy(alpha = 0.5f) else gridColor,
+                            start = Offset(x, paddingTop),
+                            end = Offset(x, paddingTop + chartHeight),
+                            strokeWidth = if (offsetVal == 0.0) 2f else 1f,
+                            pathEffect = pathEffect
                         )
-                        val percentValue = maxY * (4 - i) / 4.0
                         drawIntoCanvas { canvas ->
                             canvas.nativeCanvas.drawText(
-                                String.format("%.2f%%", percentValue),
-                                paddingLeft - 8.dp.toPx(),
-                                y + 4.dp.toPx(),
+                                sigmaLabels[index],
+                                x,
+                                paddingTop + chartHeight + 15.dp.toPx(),
                                 paint
                             )
                         }
                     }
 
-                    val points = trendPoints.mapIndexed { idx, pt ->
-                        val x = paddingLeft + if (pointCount > 1) {
-                            idx * (chartWidth / (pointCount - 1))
+                    // 2. Draw Gaussian Bell Curve
+                    val curvePath = Path()
+                    val resolution = 100
+                    for (i in 0..resolution) {
+                        val t = i.toFloat() / resolution
+                        val devVal = minX + t * (maxX - minX)
+                        val x = mapX(devVal)
+                        val y = gaussianHeight(devVal)
+                        if (i == 0) {
+                            curvePath.moveTo(x, y)
                         } else {
-                            chartWidth / 2
+                            curvePath.lineTo(x, y)
                         }
-                        val ratio = pt.deviationPercent / maxY
-                        val y = paddingTop + chartHeight - (ratio * chartHeight).toFloat()
-                        Offset(x, y)
                     }
 
-                    if (points.isNotEmpty()) {
-                        val fillPath = Path().apply {
-                            moveTo(points.first().x, paddingTop + chartHeight)
-                            lineTo(points.first().x, points.first().y)
-
-                            for (i in 1 until points.size) {
-                                val prev = points[i - 1]
-                                val cur = points[i]
-                                cubicTo(
-                                    x1 = (prev.x + cur.x) / 2f, y1 = prev.y,
-                                    x2 = (prev.x + cur.x) / 2f, y2 = cur.y,
-                                    x3 = cur.x, y3 = cur.y
-                                )
-                            }
-                            lineTo(points.last().x, paddingTop + chartHeight)
-                            close()
-                        }
-
-                        drawPath(
-                            path = fillPath,
-                            brush = Brush.verticalGradient(
-                                colors = listOf(primaryColor.copy(alpha = 0.22f), Color.Transparent),
-                                startY = paddingTop,
-                                endY = paddingTop + chartHeight
-                            )
+                    // Draw filled gradient under the curve
+                    val fillPath = Path().apply {
+                        addPath(curvePath)
+                        lineTo(mapX(maxX), paddingTop + chartHeight)
+                        lineTo(mapX(minX), paddingTop + chartHeight)
+                        close()
+                    }
+                    drawPath(
+                        path = fillPath,
+                        brush = Brush.verticalGradient(
+                            colors = listOf(primaryColor.copy(alpha = 0.15f), Color.Transparent),
+                            startY = paddingTop,
+                            endY = paddingTop + chartHeight
                         )
+                    )
 
-                        val strokePath = Path().apply {
-                            moveTo(points.first().x, points.first().y)
-                            for (i in 1 until points.size) {
-                                val prev = points[i - 1]
-                                val cur = points[i]
-                                cubicTo(
-                                    x1 = (prev.x + cur.x) / 2f, y1 = prev.y,
-                                    x2 = (prev.x + cur.x) / 2f, y2 = cur.y,
-                                    x3 = cur.x, y3 = cur.y
-                                )
-                            }
-                        }
+                    // Draw curve stroke
+                    drawPath(
+                        path = curvePath,
+                        color = primaryColor,
+                        style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
+                    )
 
-                        drawPath(
-                            path = strokePath,
+                    // 3. Draw sample points.
+                    trendPoints.forEach { pt ->
+                        val x = mapX(pt.deviationPercent)
+                        val y = gaussianHeight(pt.deviationPercent)
+
+                        drawCircle(
+                            color = primaryColor.copy(alpha = 0.18f),
+                            radius = 6.dp.toPx(),
+                            center = Offset(x, y)
+                        )
+                        // White core
+                        drawCircle(
+                            color = Color.White,
+                            radius = 3.dp.toPx(),
+                            center = Offset(x, y)
+                        )
+                        // Thin outer border
+                        drawCircle(
                             color = primaryColor,
-                            style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
+                            radius = 3.dp.toPx(),
+                            center = Offset(x, y),
+                            style = Stroke(width = 1.5.dp.toPx())
                         )
-
-                        val labelPaint = Paint().apply {
-                            color = textColor
-                            textSize = 9.sp.toPx()
-                            textAlign = Paint.Align.CENTER
-                        }
-
-                        points.forEachIndexed { idx, offset ->
-                            drawCircle(
-                                color = primaryColor.copy(alpha = 0.28f),
-                                radius = 7.dp.toPx(),
-                                center = offset
-                            )
-                            drawCircle(
-                                color = Color.White,
-                                radius = 3.dp.toPx(),
-                                center = offset
-                            )
-                            drawCircle(
-                                color = primaryColor,
-                                radius = 3.dp.toPx(),
-                                center = offset,
-                                style = Stroke(width = 1.5.dp.toPx())
-                            )
-
-                            drawIntoCanvas { canvas ->
-                                canvas.nativeCanvas.drawText(
-                                    trendPoints[idx].timeLabel,
-                                    offset.x,
-                                    height - 5.dp.toPx(),
-                                    labelPaint
-                                )
-
-                                canvas.nativeCanvas.drawText(
-                                    String.format("%.2f%%", trendPoints[idx].deviationPercent),
-                                    offset.x,
-                                    offset.y - 8.dp.toPx(),
-                                    labelPaint.apply { typeface = Typeface.DEFAULT_BOLD }
-                                )
-                            }
-                        }
                     }
                 }
             }

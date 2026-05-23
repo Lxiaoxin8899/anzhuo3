@@ -58,6 +58,8 @@ import com.example.smartdosing.dosing.WeightWarningLevel
 import com.example.smartdosing.ui.components.DosingBluetoothStatusBar
 import com.example.smartdosing.ui.theme.LocalWindowSize
 import com.example.smartdosing.ui.theme.SmartDosingTheme
+import androidx.compose.ui.draw.drawBehind
+import com.example.smartdosing.ui.theme.neonGlow
 import com.example.smartdosing.ui.theme.SmartDosingWindowWidthClass
 import kotlinx.coroutines.delay
 import com.example.smartdosing.utils.FormatUtils
@@ -440,14 +442,15 @@ fun MaterialConfigurationScreen(
         }
     ) { paddingValues ->
         Box(modifier = Modifier.padding(paddingValues)) {
+            val activeEvaluation = materialStates.getOrNull(activeRowIndex)?.let {
+                evaluateState(activeRowIndex, it)
+            }
+
             when {
                 isLoading -> MaterialConfigurationLoadingState()
                 recipe == null || materialStates.isEmpty() -> MaterialConfigurationEmptyState(loadError ?: "暂无配方数据", onNavigateBack)
                 else -> {
                     val windowSize = LocalWindowSize.current
-                    val activeEvaluation = materialStates.getOrNull(activeRowIndex)?.let {
-                        evaluateState(activeRowIndex, it)
-                    }
                     if (windowSize.widthClass == SmartDosingWindowWidthClass.Expanded) {
                         LargeScreenLayout(
                             recipe = recipe!!,
@@ -557,7 +560,7 @@ fun MaterialConfigurationScreen(
                         Icon(
                             imageVector = Icons.Default.CheckCircle,
                             contentDescription = null,
-                            tint = Color(0xFF4CAF50),
+                            tint = com.example.smartdosing.ui.theme.SmartDosingTokens.colors.success,
                             modifier = Modifier.size(48.dp)
                         )
                     },
@@ -675,13 +678,13 @@ private fun LabConfigurationTopBar(
                     if (!isViewOnly) {
                         // 天平状态微型徽章
                         Surface(
-                            color = when(connectionState) {
-                                ConnectionState.CONNECTED -> Color(0xFF4CAF50).copy(0.1f)
+                            color = when (connectionState) {
+                                ConnectionState.CONNECTED -> com.example.smartdosing.ui.theme.SmartDosingTokens.colors.success.copy(alpha = 0.08f)
                                 else -> MaterialTheme.colorScheme.surfaceVariant
                             },
                             shape = CircleShape,
-                            border = BorderStroke(1.dp, when(connectionState) {
-                                ConnectionState.CONNECTED -> Color(0xFF4CAF50).copy(0.5f)
+                            border = BorderStroke(1.dp, when (connectionState) {
+                                ConnectionState.CONNECTED -> com.example.smartdosing.ui.theme.SmartDosingTokens.colors.success.copy(alpha = 0.5f)
                                 else -> MaterialTheme.colorScheme.outline.copy(0.3f)
                             })
                         ) {
@@ -690,8 +693,19 @@ private fun LabConfigurationTopBar(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
-                                Box(modifier = Modifier.size(6.dp).background(if (connectionState == ConnectionState.CONNECTED) Color(0xFF4CAF50) else Color.Gray, CircleShape))
-                                Text(if (connectionState == ConnectionState.CONNECTED) "天平就绪" else "天平未连接", style = MaterialTheme.typography.labelSmall)
+                                val isConnected = connectionState == ConnectionState.CONNECTED
+                                Box(
+                                    modifier = Modifier
+                                        .size(6.dp)
+                                        .background(
+                                            if (isConnected) com.example.smartdosing.ui.theme.SmartDosingTokens.colors.success else Color.Gray,
+                                            CircleShape
+                                        )
+                                )
+                                Text(
+                                    if (isConnected) "天平就绪" else "天平未连接 · 手动录入模式",
+                                    style = MaterialTheme.typography.labelSmall
+                                )
                             }
                         }
                         Spacer(Modifier.width(16.dp))
@@ -731,6 +745,21 @@ private fun LargeScreenLayout(
     onWeightChange: (Int, String) -> Unit,
     autoConfirmCountdown: Int = -1
 ) {
+    val activeState = materialStates.getOrNull(activeRowIndex)
+    val evaluation = activeEvaluation
+
+    val warningLevel = evaluation?.level ?: WeightWarningLevel.IDLE
+    val glowIntensity = when {
+        !isBluetoothConnected || activeState == null || activeState.isConfirmed -> 0f
+        warningLevel == WeightWarningLevel.IN_TOLERANCE && currentWeight?.isStable == true -> 0.16f
+        warningLevel == WeightWarningLevel.OVER_LIMIT ||
+            warningLevel == WeightWarningLevel.HARD_OVER_LIMIT -> 0.14f
+        warningLevel == WeightWarningLevel.APPROACHING ||
+            warningLevel == WeightWarningLevel.SLOW_DOWN ||
+            warningLevel == WeightWarningLevel.FINE_DOSING -> 0.10f
+        else -> 0f
+    }
+
     Row(modifier = Modifier.fillMaxSize()) {
         // 左侧：物料清单 (40% 宽度)
         Box(modifier = Modifier.weight(0.4f).fillMaxHeight().background(MaterialTheme.colorScheme.surfaceVariant.copy(0.3f))) {
@@ -753,24 +782,24 @@ private fun LargeScreenLayout(
         }
 
         // 右侧：配置工作台 (60% 宽度)
-        Column(modifier = Modifier.weight(0.6f).fillMaxHeight().padding(32.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
+        Column(modifier = Modifier.weight(0.6f).fillMaxHeight().padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             val activeState = materialStates.getOrNull(activeRowIndex) ?: return@Column
             val evaluation = activeEvaluation ?: return@Column
-            
+
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Text("当前物料配置", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                 IconButton(onClick = onToggleMagnify) {
                     Icon(Icons.Default.Fullscreen, contentDescription = "放大显示")
                 }
             }
-            
+
             // 物料详情卡片
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(24.dp),
+                shape = RoundedCornerShape(20.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(0.3f))
             ) {
-                Column(modifier = Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Text(activeState.material.name, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                         Surface(color = MaterialTheme.colorScheme.primary, shape = CircleShape) {
@@ -794,25 +823,66 @@ private fun LargeScreenLayout(
             // 重量显示与手动输入
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 // 重量显示仪
-                Surface(
-                    modifier = Modifier.fillMaxWidth().height(160.dp),
-                    shape = RoundedCornerShape(24.dp),
-                    color = Color.Black,
-                    border = BorderStroke(2.dp, if (currentWeight?.isStable == true) Color(0xFF4CAF50) else Color(0xFF666666))
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            RollingWeightDisplay(
-                                weight = currentWeight?.getDisplayValue() ?: "0.000",
-                                style = MaterialTheme.typography.displayLarge.copy(fontFamily = FontFamily.Monospace, fontSize = 72.sp),
-                                color = if (currentWeight?.isStable == true) Color(0xFF4CAF50) else Color.White
+                val glowColor = when (evaluation.level) {
+                    WeightWarningLevel.IN_TOLERANCE -> com.example.smartdosing.ui.theme.SmartDosingTokens.colors.success
+                    WeightWarningLevel.OVER_LIMIT,
+                    WeightWarningLevel.HARD_OVER_LIMIT -> com.example.smartdosing.ui.theme.SmartDosingTokens.colors.danger
+                    WeightWarningLevel.APPROACHING,
+                    WeightWarningLevel.SLOW_DOWN,
+                    WeightWarningLevel.FINE_DOSING -> com.example.smartdosing.ui.theme.SmartDosingTokens.colors.warning
+                    else -> Color.Gray.copy(alpha = 0.3f)
+                }
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(136.dp)
+                        .neonGlow(
+                            color = glowColor,
+                            intensity = glowIntensity,
+                            radius = 10.dp,
+                            shapeRadius = 20.dp
+                        )
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(com.example.smartdosing.ui.theme.LCDBackgroundStart, com.example.smartdosing.ui.theme.LCDBackgroundEnd)
+                            ),
+                            shape = RoundedCornerShape(20.dp)
+                        )
+                        .border(
+                            BorderStroke(
+                                1.5.dp,
+                                if (currentWeight?.isStable == true) com.example.smartdosing.ui.theme.SmartDosingTokens.colors.success
+                                else Color.Gray.copy(alpha = 0.3f)
+                            ),
+                            shape = RoundedCornerShape(20.dp)
+                        )
+                        .drawBehind {
+                            drawRect(
+                                brush = Brush.verticalGradient(
+                                    colors = listOf(Color.Black.copy(alpha = 0.6f), Color.Transparent),
+                                    startY = 0f,
+                                    endY = 24.dp.toPx()
+                                )
                             )
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Text("g", color = Color.Gray, style = MaterialTheme.typography.titleLarge)
-                                if (currentWeight?.isStable == true) {
-                                    Icon(Icons.Default.CheckCircle, null, tint = Color(0xFF4CAF50), modifier = Modifier.size(24.dp))
-                                    Text("稳定", color = Color(0xFF4CAF50), style = MaterialTheme.typography.labelLarge)
-                                }
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        RollingWeightDisplay(
+                            weight = currentWeight?.getDisplayValue() ?: "0.000",
+                            style = MaterialTheme.typography.displayLarge.copy(
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 64.sp,
+                                fontFeatureSettings = "tnum"
+                            ),
+                            color = if (currentWeight?.isStable == true) com.example.smartdosing.ui.theme.SmartDosingTokens.colors.success else Color.White
+                        )
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("g", color = Color.Gray.copy(alpha = 0.7f), style = MaterialTheme.typography.titleLarge)
+                            if (currentWeight?.isStable == true) {
+                                Icon(Icons.Default.CheckCircle, null, tint = com.example.smartdosing.ui.theme.SmartDosingTokens.colors.success, modifier = Modifier.size(24.dp))
+                                Text("稳定", color = com.example.smartdosing.ui.theme.SmartDosingTokens.colors.success, style = MaterialTheme.typography.labelLarge)
                             }
                         }
                     }
@@ -824,26 +894,29 @@ private fun LargeScreenLayout(
                     onValueChange = { onWeightChange(activeRowIndex, it) },
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !isManualInputDisabled,
-                    label = { Text(
-                        when {
-                            isManualInputDisabled -> "手动输入已禁用（管理员设置）"
-                            activeState.isManualOverride -> "手动模式 (已校准)"
-                            else -> "天平实时同步 (点击可手动校准)"
-                        }
-                    ) },
+                    label = {
+                        Text(
+                            when {
+                                isManualInputDisabled -> "手动输入已禁用（管理员设置）"
+                                !isBluetoothConnected -> "天平未连接，当前为手动录入模式"
+                                activeState.isManualOverride -> "手动模式 (已校准)"
+                                else -> "天平实时同步 (点击可手动校准)"
+                            }
+                        )
+                    },
                     placeholder = { Text("请输入实际称重数值") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     trailingIcon = {
                         if (activeState.isManualOverride) {
-                            IconButton(onClick = { 
+                            IconButton(onClick = {
                                 // 通过传递空字符串或特定信号来重置手动覆盖
-                                onWeightChange(activeRowIndex, "RESET_AUTO") 
+                                onWeightChange(activeRowIndex, "RESET_AUTO")
                             }) {
                                 Icon(Icons.Default.Refresh, contentDescription = "恢复自动同步", tint = MaterialTheme.colorScheme.primary)
                             }
                         }
                     },
-                    shape = RoundedCornerShape(16.dp),
+                    shape = RoundedCornerShape(12.dp),
                     singleLine = true
                 )
             }
@@ -852,9 +925,9 @@ private fun LargeScreenLayout(
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 Button(
                     onClick = { scaleManager.tare() },
-                    modifier = Modifier.weight(1f).height(64.dp),
+                    modifier = Modifier.weight(1f).height(56.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
-                    shape = RoundedCornerShape(16.dp)
+                    shape = RoundedCornerShape(12.dp)
                 ) {
                     Icon(Icons.Default.Balance, null)
                     Spacer(Modifier.width(8.dp))
@@ -862,8 +935,8 @@ private fun LargeScreenLayout(
                 }
                 Button(
                     onClick = onConfirm,
-                    modifier = Modifier.weight(2f).height(64.dp),
-                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.weight(2f).height(56.dp),
+                    shape = RoundedCornerShape(12.dp),
                     enabled = confirmActionEnabled(evaluation, activeState.isConfirmed),
                     colors = confirmButtonColors(evaluation, autoConfirmCountdown)
                 ) {
@@ -879,10 +952,7 @@ private fun LargeScreenLayout(
                 }
             }
 
-            PrecisionMeter(
-                evaluation = evaluation,
-                modifier = Modifier.padding(top = 8.dp)
-            )
+            PrecisionMeter(evaluation = evaluation)
 
             Spacer(Modifier.weight(1f))
 
@@ -891,10 +961,10 @@ private fun LargeScreenLayout(
                 val allDone = materialStates.all { it.isConfirmed }
                 Button(
                     onClick = onSave,
-                    modifier = Modifier.fillMaxWidth().height(64.dp),
+                    modifier = Modifier.fillMaxWidth().height(56.dp),
                     enabled = allDone,
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                    shape = RoundedCornerShape(16.dp)
+                    shape = RoundedCornerShape(12.dp)
                 ) {
                     Text("完成实验并保存记录", fontSize = 18.sp, fontWeight = FontWeight.Bold)
                 }
@@ -929,8 +999,8 @@ private fun CompactScreenLayout(
         val activeState = materialStates.getOrNull(activeRowIndex)
         activeState?.let { state ->
             val evaluation = activeEvaluation ?: return@let
-            Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
-                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.72f))) {
+                Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text("当前物料: ${state.material.name}", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
@@ -947,9 +1017,9 @@ private fun CompactScreenLayout(
                         // 当前重量 (左侧)
                         Text(
                             text = currentWeight?.getDisplayValue() ?: "0.000",
-                            style = MaterialTheme.typography.displayLarge.copy(fontSize = 56.sp),
+                            style = MaterialTheme.typography.displayLarge.copy(fontSize = 50.sp, fontFeatureSettings = "tnum"),
                             fontWeight = FontWeight.Bold,
-                            color = if (currentWeight?.isStable == true) Color(0xFF2E7D32) else MaterialTheme.colorScheme.onPrimaryContainer,
+                            color = if (currentWeight?.isStable == true) com.example.smartdosing.ui.theme.SmartDosingTokens.colors.success else MaterialTheme.colorScheme.onPrimaryContainer,
                             modifier = Modifier.weight(1f)
                         )
 
@@ -975,7 +1045,15 @@ private fun CompactScreenLayout(
                             onValueChange = { onWeightChange(activeRowIndex, it) },
                             modifier = Modifier.fillMaxWidth(),
                             enabled = !isManualInputDisabled,
-                            label = { Text(if (isManualInputDisabled) "手动输入已禁用（管理员设置）" else "手动输入实际重量 (g)") },
+                            label = {
+                                Text(
+                                    when {
+                                        isManualInputDisabled -> "手动输入已禁用（管理员设置）"
+                                        !isBluetoothConnected -> "天平未连接，当前为手动录入模式"
+                                        else -> "手动输入实际重量 (g)"
+                                    }
+                                )
+                            },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                             singleLine = true,
                             shape = RoundedCornerShape(12.dp),
@@ -1034,7 +1112,7 @@ private fun MaterialCompactItem(
     val itemColor = when {
         isActive -> MaterialTheme.colorScheme.primary.copy(0.1f)
         state.hasError -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.35f)
-        state.isConfirmed -> Color(0xFFE8F5E9)
+        state.isConfirmed -> com.example.smartdosing.ui.theme.SmartDosingTokens.colors.success.copy(alpha = 0.08f)
         else -> MaterialTheme.colorScheme.surface
     }
     Surface(
@@ -1052,7 +1130,7 @@ private fun MaterialCompactItem(
                     .background(
                         when {
                             state.hasError -> MaterialTheme.colorScheme.error
-                            state.isConfirmed -> Color(0xFF4CAF50)
+                            state.isConfirmed -> com.example.smartdosing.ui.theme.SmartDosingTokens.colors.success
                             else -> MaterialTheme.colorScheme.surfaceVariant
                         },
                         CircleShape
@@ -1075,7 +1153,7 @@ private fun MaterialCompactItem(
                     "${state.actualWeight} g",
                     style = MaterialTheme.typography.bodySmall,
                     fontWeight = FontWeight.Bold,
-                    color = if (state.hasError) MaterialTheme.colorScheme.error else Color(0xFF2E7D32)
+                    color = if (state.hasError) MaterialTheme.colorScheme.error else com.example.smartdosing.ui.theme.SmartDosingTokens.colors.success
                 )
             }
         }
@@ -1116,10 +1194,10 @@ private fun PrecisionMeter(
         targetValue = when (evaluation.level) {
             WeightWarningLevel.OVER_LIMIT,
             WeightWarningLevel.HARD_OVER_LIMIT -> MaterialTheme.colorScheme.error
-            WeightWarningLevel.IN_TOLERANCE -> Color(0xFF4CAF50)
+            WeightWarningLevel.IN_TOLERANCE -> com.example.smartdosing.ui.theme.SmartDosingTokens.colors.success
             WeightWarningLevel.APPROACHING,
             WeightWarningLevel.SLOW_DOWN,
-            WeightWarningLevel.FINE_DOSING -> Color(0xFFFFC107)
+            WeightWarningLevel.FINE_DOSING -> com.example.smartdosing.ui.theme.SmartDosingTokens.colors.warning
             else -> MaterialTheme.colorScheme.primary
         },
         label = "color"
@@ -1223,7 +1301,7 @@ private fun confirmActionText(evaluation: WeightEvaluation?, autoConfirmCountdow
 @Composable
 private fun confirmButtonColors(evaluation: WeightEvaluation?, autoConfirmCountdown: Int): ButtonColors {
     return when {
-        autoConfirmCountdown > 0 -> ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
+        autoConfirmCountdown > 0 -> ButtonDefaults.buttonColors(containerColor = com.example.smartdosing.ui.theme.SmartDosingTokens.colors.success)
         evaluation?.level == WeightWarningLevel.OVER_LIMIT ||
             evaluation?.level == WeightWarningLevel.HARD_OVER_LIMIT -> ButtonDefaults.buttonColors(
             containerColor = MaterialTheme.colorScheme.error
@@ -1440,15 +1518,16 @@ private fun MagnifiedWeightOverlay(
                     style = MaterialTheme.typography.displayLarge.copy(
                         fontFamily = FontFamily.Monospace,
                         fontSize = 160.sp,
-                        fontWeight = FontWeight.Black
+                        fontWeight = FontWeight.Black,
+                        fontFeatureSettings = "tnum"
                     ),
-                    color = if (isStable) Color(0xFF4CAF50) else Color.White
+                    color = if (isStable) com.example.smartdosing.ui.theme.SmartDosingTokens.colors.success else Color.White
                 )
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     Text("g", color = Color.Gray, style = MaterialTheme.typography.displaySmall)
                     if (isStable) {
-                        Icon(Icons.Default.CheckCircle, null, tint = Color(0xFF4CAF50), modifier = Modifier.size(48.dp))
-                        Text("稳定", color = Color(0xFF4CAF50), style = MaterialTheme.typography.headlineMedium)
+                        Icon(Icons.Default.CheckCircle, null, tint = com.example.smartdosing.ui.theme.SmartDosingTokens.colors.success, modifier = Modifier.size(48.dp))
+                        Text("稳定", color = com.example.smartdosing.ui.theme.SmartDosingTokens.colors.success, style = MaterialTheme.typography.headlineMedium)
                     }
                 }
             }
@@ -1466,7 +1545,7 @@ private fun MagnifiedWeightOverlay(
                 Button(
                     onClick = onTare,
                     modifier = Modifier.weight(1f).height(100.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF333333)),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                     shape = RoundedCornerShape(24.dp)
                 ) {
                     Icon(Icons.Default.Balance, null, modifier = Modifier.size(32.dp))

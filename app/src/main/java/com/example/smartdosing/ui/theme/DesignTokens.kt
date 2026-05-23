@@ -6,6 +6,17 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
+import androidx.compose.animation.core.*
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.runtime.getValue
+import androidx.compose.foundation.background
 
 /**
  * SmartDosing 设计系统 - 间距定义
@@ -116,4 +127,64 @@ object SmartDosingTokens {
         @Composable
         @ReadOnlyComposable
         get() = LocalExtendedColors.current
+}
+
+/**
+ * 极简精致金属流光扫光骨架屏 Modifier
+ */
+fun Modifier.shimmer(
+    durationMillis: Int = 1200,
+    shimmerWidth: Float = 600f
+): Modifier = composed {
+    val transition = rememberInfiniteTransition(label = "shimmer")
+    val translateAnim by transition.animateFloat(
+        initialValue = -shimmerWidth,
+        targetValue = 1200f + shimmerWidth,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis, easing = CubicBezierEasing(0.4f, 0.0f, 0.2f, 1.0f)),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "shimmerTranslate"
+    )
+    val shimmerColors = listOf(
+        Color.LightGray.copy(alpha = 0.03f),
+        Color.LightGray.copy(alpha = 0.15f),
+        Color.LightGray.copy(alpha = 0.03f),
+    )
+    this.background(
+        brush = Brush.linearGradient(
+            colors = shimmerColors,
+            start = Offset(translateAnim, 0f),
+            end = Offset(translateAnim + shimmerWidth, shimmerWidth)
+        )
+    )
+}
+
+/**
+ * 深色称重面板的轻量外发光 Modifier，仅用于局部状态反馈
+ */
+fun Modifier.neonGlow(
+    color: Color,
+    radius: Dp = 8.dp,
+    intensity: Float = 0.16f,
+    shapeRadius: Dp = 24.dp
+): Modifier = this.drawBehind {
+    if (intensity <= 0.01f) return@drawBehind
+    val paint = android.graphics.Paint().apply {
+        isAntiAlias = true
+        this.color = color.toArgb()
+        setShadowLayer(
+            radius.toPx(),
+            0f,
+            0f,
+            color.copy(alpha = intensity).toArgb()
+        )
+    }
+    drawIntoCanvas { canvas ->
+        canvas.nativeCanvas.drawRoundRect(
+            0f, 0f, size.width, size.height,
+            shapeRadius.toPx(), shapeRadius.toPx(),
+            paint
+        )
+    }
 }
