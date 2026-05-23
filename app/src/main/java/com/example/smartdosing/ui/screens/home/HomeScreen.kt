@@ -1,5 +1,7 @@
 package com.example.smartdosing.ui.screens.home
 
+import android.graphics.Paint
+import android.graphics.Typeface
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
@@ -24,7 +26,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -70,6 +74,8 @@ fun HomeScreen(
     val stats by viewModel.stats.collectAsState()
     val runtimeStatus by viewModel.runtimeStatus.collectAsState()
     val recentOperations by viewModel.recentOperations.collectAsState()
+    val deviationTrend by viewModel.deviationTrend.collectAsState()
+    val perfumerEfficiency by viewModel.perfumerEfficiency.collectAsState()
     val recoveryTask by viewModel.recoveryTask.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val scaleConnectionState by viewModel.scaleConnectionState.collectAsState()
@@ -154,6 +160,8 @@ fun HomeScreen(
                     onNavigateToConfigurationRecords = onNavigateToConfigurationRecords,
                     onNavigateToDeviceInfo = onNavigateToDeviceInfo,
                     recentOperations = recentOperations,
+                    deviationTrend = deviationTrend,
+                    perfumerEfficiency = perfumerEfficiency,
                     runtimeStatus = runtimeStatus,
                     recoveryTask = recoveryTask,
                     scaleConnectionState = scaleConnectionState,
@@ -169,6 +177,8 @@ fun HomeScreen(
                     onNavigateToDeviceInfo = onNavigateToDeviceInfo,
                     isCompactDevice = isCompactDevice,
                     recentOperations = recentOperations,
+                    deviationTrend = deviationTrend,
+                    perfumerEfficiency = perfumerEfficiency,
                     runtimeStatus = runtimeStatus,
                     recoveryTask = recoveryTask,
                     scaleConnectionState = scaleConnectionState,
@@ -188,6 +198,8 @@ private fun LargeScreenHomeLayout(
     onNavigateToConfigurationRecords: () -> Unit,
     onNavigateToDeviceInfo: () -> Unit,
     recentOperations: List<ConfigurationRecord>,
+    deviationTrend: List<DeviationPoint>,
+    perfumerEfficiency: List<PerfumerEfficiency>,
     runtimeStatus: HomeRuntimeStatus,
     recoveryTask: ConfigurationTask?,
     scaleConnectionState: ConnectionState,
@@ -229,6 +241,13 @@ private fun LargeScreenHomeLayout(
                     onViewMore = onNavigateToConfigurationRecords
                 )
             }
+
+            // 图形分析看板
+            AnalyticalDashboardPanel(
+                deviationTrend = deviationTrend,
+                perfumerEfficiency = perfumerEfficiency,
+                modifier = Modifier.fillMaxWidth()
+            )
         }
 
         // 右侧侧边栏：系统状态与设备管理
@@ -279,6 +298,8 @@ private fun CompactHomeLayout(
     onNavigateToDeviceInfo: () -> Unit,
     isCompactDevice: Boolean,
     recentOperations: List<ConfigurationRecord>,
+    deviationTrend: List<DeviationPoint>,
+    perfumerEfficiency: List<PerfumerEfficiency>,
     runtimeStatus: HomeRuntimeStatus,
     recoveryTask: ConfigurationTask?,
     scaleConnectionState: ConnectionState,
@@ -310,6 +331,13 @@ private fun CompactHomeLayout(
             operations = recentOperations,
             isLoading = isLoading,
             onViewMore = onNavigateToConfigurationRecords
+        )
+
+        // 图形分析看板
+        AnalyticalDashboardPanel(
+            deviationTrend = deviationTrend,
+            perfumerEfficiency = perfumerEfficiency,
+            modifier = Modifier.fillMaxWidth()
         )
 
         Row(
@@ -833,6 +861,347 @@ private fun SettingsActionItem(title: String, icon: ImageVector, onClick: () -> 
 
 private data class DashboardCardInfo(val title: String, val value: String, val icon: ImageVector, val color: Color, val unit: String)
 private data class HomeAction(val title: String, val description: String, val icon: ImageVector, val containerColor: Color, val contentColor: Color, val emphasize: Boolean = false, val badge: String? = null, val onClick: () -> Unit)
+
+@Composable
+fun AnalyticalDashboardPanel(
+    deviationTrend: List<DeviationPoint>,
+    perfumerEfficiency: List<PerfumerEfficiency>,
+    modifier: Modifier = Modifier
+) {
+    val windowSize = LocalWindowSize.current
+    val isLargeScreen = windowSize.widthClass == SmartDosingWindowWidthClass.Expanded
+
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+    ) {
+        Column(modifier = Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(Icons.Outlined.TrendingUp, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                Text("研发效能分析看板 (高精度投料)", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+            }
+
+            if (isLargeScreen) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(24.dp)
+                ) {
+                    DeviationTrendChart(
+                        trendPoints = deviationTrend,
+                        modifier = Modifier.weight(1.2f).height(240.dp)
+                    )
+                    PerfumerEfficiencyChart(
+                        efficiencies = perfumerEfficiency,
+                        modifier = Modifier.weight(0.8f).height(240.dp)
+                    )
+                }
+            } else {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(24.dp)
+                ) {
+                    DeviationTrendChart(
+                        trendPoints = deviationTrend,
+                        modifier = Modifier.fillMaxWidth().height(200.dp)
+                    )
+                    PerfumerEfficiencyChart(
+                        efficiencies = perfumerEfficiency,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun DeviationTrendChart(
+    trendPoints: List<DeviationPoint>,
+    modifier: Modifier = Modifier
+) {
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val gridColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
+    val textColor = MaterialTheme.colorScheme.onSurfaceVariant.toArgb()
+
+    Card(
+        modifier = modifier,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.15f)),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                "配料总偏差变化趋势 (最近已完成)",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(12.dp))
+
+            if (trendPoints.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("暂无充足的实验记录以描绘偏差趋势", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            } else {
+                val pointCount = trendPoints.size
+                val rawMaxY = trendPoints.maxOf { it.deviationPercent }
+                val maxY = kotlin.math.max(rawMaxY * 1.3, 1.0)
+
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    val width = size.width
+                    val height = size.height
+
+                    val paddingLeft = 45.dp.toPx()
+                    val paddingRight = 15.dp.toPx()
+                    val paddingTop = 15.dp.toPx()
+                    val paddingBottom = 25.dp.toPx()
+
+                    val chartWidth = width - paddingLeft - paddingRight
+                    val chartHeight = height - paddingTop - paddingBottom
+
+                    val stepY = chartHeight / 4
+                    val pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 10f), 0f)
+
+                    val paint = Paint().apply {
+                        color = textColor
+                        textSize = 10.sp.toPx()
+                        typeface = Typeface.MONOSPACE
+                        textAlign = Paint.Align.RIGHT
+                    }
+
+                    for (i in 0..4) {
+                        val y = paddingTop + i * stepY
+                        drawLine(
+                            color = gridColor,
+                            start = Offset(paddingLeft, y),
+                            end = Offset(width - paddingRight, y),
+                            strokeWidth = 1f,
+                            pathEffect = if (i == 4) null else pathEffect
+                        )
+                        val percentValue = maxY * (4 - i) / 4.0
+                        drawIntoCanvas { canvas ->
+                            canvas.nativeCanvas.drawText(
+                                String.format("%.2f%%", percentValue),
+                                paddingLeft - 8.dp.toPx(),
+                                y + 4.dp.toPx(),
+                                paint
+                            )
+                        }
+                    }
+
+                    val points = trendPoints.mapIndexed { idx, pt ->
+                        val x = paddingLeft + if (pointCount > 1) {
+                            idx * (chartWidth / (pointCount - 1))
+                        } else {
+                            chartWidth / 2
+                        }
+                        val ratio = pt.deviationPercent / maxY
+                        val y = paddingTop + chartHeight - (ratio * chartHeight).toFloat()
+                        Offset(x, y)
+                    }
+
+                    if (points.isNotEmpty()) {
+                        val fillPath = Path().apply {
+                            moveTo(points.first().x, paddingTop + chartHeight)
+                            lineTo(points.first().x, points.first().y)
+
+                            for (i in 1 until points.size) {
+                                val prev = points[i - 1]
+                                val cur = points[i]
+                                cubicTo(
+                                    x1 = (prev.x + cur.x) / 2f, y1 = prev.y,
+                                    x2 = (prev.x + cur.x) / 2f, y2 = cur.y,
+                                    x3 = cur.x, y3 = cur.y
+                                )
+                            }
+                            lineTo(points.last().x, paddingTop + chartHeight)
+                            close()
+                        }
+
+                        drawPath(
+                            path = fillPath,
+                            brush = Brush.verticalGradient(
+                                colors = listOf(primaryColor.copy(alpha = 0.22f), Color.Transparent),
+                                startY = paddingTop,
+                                endY = paddingTop + chartHeight
+                            )
+                        )
+
+                        val strokePath = Path().apply {
+                            moveTo(points.first().x, points.first().y)
+                            for (i in 1 until points.size) {
+                                val prev = points[i - 1]
+                                val cur = points[i]
+                                cubicTo(
+                                    x1 = (prev.x + cur.x) / 2f, y1 = prev.y,
+                                    x2 = (prev.x + cur.x) / 2f, y2 = cur.y,
+                                    x3 = cur.x, y3 = cur.y
+                                )
+                            }
+                        }
+
+                        drawPath(
+                            path = strokePath,
+                            color = primaryColor,
+                            style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
+                        )
+
+                        val labelPaint = Paint().apply {
+                            color = textColor
+                            textSize = 9.sp.toPx()
+                            textAlign = Paint.Align.CENTER
+                        }
+
+                        points.forEachIndexed { idx, offset ->
+                            drawCircle(
+                                color = primaryColor.copy(alpha = 0.28f),
+                                radius = 7.dp.toPx(),
+                                center = offset
+                            )
+                            drawCircle(
+                                color = Color.White,
+                                radius = 3.dp.toPx(),
+                                center = offset
+                            )
+                            drawCircle(
+                                color = primaryColor,
+                                radius = 3.dp.toPx(),
+                                center = offset,
+                                style = Stroke(width = 1.5.dp.toPx())
+                            )
+
+                            drawIntoCanvas { canvas ->
+                                canvas.nativeCanvas.drawText(
+                                    trendPoints[idx].timeLabel,
+                                    offset.x,
+                                    height - 5.dp.toPx(),
+                                    labelPaint
+                                )
+
+                                canvas.nativeCanvas.drawText(
+                                    String.format("%.2f%%", trendPoints[idx].deviationPercent),
+                                    offset.x,
+                                    offset.y - 8.dp.toPx(),
+                                    labelPaint.apply { typeface = Typeface.DEFAULT_BOLD }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun PerfumerEfficiencyChart(
+    efficiencies: List<PerfumerEfficiency>,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.15f)),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                "调香师研发投料效能 (已归档记录)",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(16.dp))
+
+            if (efficiencies.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("暂无充足的调香师配置统计", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            } else {
+                val maxCount = efficiencies.maxOf { it.completedCount }.toFloat().coerceAtLeast(1f)
+
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    efficiencies.forEach { item ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Text(
+                                text = item.perfumer,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.width(72.dp),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+
+                            val progress = item.completedCount / maxCount
+                            Box(
+                                modifier = Modifier.weight(1f).height(12.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f), RoundedCornerShape(6.dp))
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth(progress)
+                                        .fillMaxHeight()
+                                        .background(
+                                            Brush.horizontalGradient(
+                                                colors = listOf(
+                                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
+                                                    MaterialTheme.colorScheme.primary
+                                                )
+                                            ),
+                                            RoundedCornerShape(6.dp)
+                                        )
+                                )
+                            }
+
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text(
+                                    text = "${item.completedCount}次",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+
+                                val devColor = when {
+                                    item.averageDeviationPercent < 0.3 -> Color(0xFF4CAF50)
+                                    item.averageDeviationPercent < 1.0 -> Color(0xFFFF9800)
+                                    else -> Color(0xFFF44336)
+                                }
+
+                                Surface(
+                                    color = devColor.copy(alpha = 0.08f),
+                                    shape = RoundedCornerShape(6.dp),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, devColor.copy(alpha = 0.16f))
+                                ) {
+                                    Text(
+                                        text = String.format("±%.2f%%", item.averageDeviationPercent),
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                        fontSize = 10.sp,
+                                        color = devColor,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
 
 @Preview(showBackground = true, device = "spec:width=1280dp,height=800dp,dpi=240")
 @Composable

@@ -29,7 +29,6 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.smartdosing.data.transfer.TaskReceiver
-import com.example.smartdosing.data.transfer.TaskResultCallbackManager
 import com.example.smartdosing.data.settings.DosingPreferencesManager
 import com.example.smartdosing.data.settings.DosingPreferencesState
 import com.example.smartdosing.database.entities.ReceivedTaskEntity
@@ -43,18 +42,11 @@ import com.example.smartdosing.ui.theme.SmartDosingTokens
 import com.example.smartdosing.ui.theme.LocalWindowSize
 import com.example.smartdosing.ui.theme.SmartDosingWindowHeightClass
 import com.example.smartdosing.ui.theme.SmartDosingWindowWidthClass
-import com.example.smartdosing.web.WebService
-import com.example.smartdosing.web.WebServiceResult
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
-    private lateinit var webService: WebService
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        // 无线传输服务初始化（本机 API + 局域网传输）
-        webService = WebService.getInstance(this)
 
         // TTS 语音系统已软下线，如需恢复请取消注释
         // initializeXiaomiTTS()
@@ -69,35 +61,6 @@ class MainActivity : ComponentActivity() {
                 SmartDosingApp()
             }
         }
-
-        // 启动无线传输服务
-        if (webService.isAutoStartEnabled()) {
-            startWebService()
-        }
-    }
-
-    private fun startWebService() {
-        lifecycleScope.launch {
-            val preferredPort = webService.getPreferredPort()
-            when (val result = webService.startWebService(preferredPort)) {
-                is WebServiceResult.Success -> {
-                    showToast("无线传输服务已启动: ${result.serverUrl}")
-                }
-                is WebServiceResult.AlreadyRunning -> {
-                    // Optionally show a toast, or just ignore
-                }
-                is WebServiceResult.NetworkError -> {
-                    showToast("网络错误: ${result.message}")
-                }
-                is WebServiceResult.StartFailed -> {
-                    showToast("无线传输服务启动失败: ${result.message}")
-                }
-            }
-        }
-    }
-
-    private fun showToast(message: String) {
-        Toast.makeText(this, message, Toast.LENGTH_LONG).show()
     }
 }
 
@@ -108,17 +71,11 @@ fun SmartDosingApp() {
     val useNavigationRail = windowSize.widthClass != SmartDosingWindowWidthClass.Compact
     val context = LocalContext.current
     val taskReceiver = remember(context) { TaskReceiver.getInstance(context) }
-    val taskResultCallbackManager = remember(context) { TaskResultCallbackManager.getInstance(context) }
     val newTaskReceived by taskReceiver.newTaskReceived.collectAsState()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
     val pendingDialogTasks = remember { mutableStateListOf<ReceivedTaskEntity>() }
     var currentDialogTask by remember { mutableStateOf<ReceivedTaskEntity?>(null) }
-
-    LaunchedEffect(Unit) {
-        // 中文注释：App 启动后补传之前失败的最终配置结果，保证后端最终成为主数据源。
-        taskResultCallbackManager.retryPendingResults()
-    }
 
     // 新任务先进入本地弹窗队列，避免短时间连续到达时被覆盖。
     LaunchedEffect(newTaskReceived) {

@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.smartdosing.SmartDosingApplication
 import com.example.smartdosing.bluetooth.model.ConnectionState
 import com.example.smartdosing.data.ConfigurationRecord
+import com.example.smartdosing.data.ConfigurationRecordStatus
 import com.example.smartdosing.data.ConfigurationTask
 import com.example.smartdosing.data.RecipeStats
 import com.example.smartdosing.data.TaskStatus
@@ -47,6 +48,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val _recentOperations = MutableStateFlow<List<ConfigurationRecord>>(emptyList())
     val recentOperations: StateFlow<List<ConfigurationRecord>> = _recentOperations.asStateFlow()
 
+    // 待同步偏差趋势
+    private val _deviationTrend = MutableStateFlow<List<DeviationPoint>>(emptyList())
+    val deviationTrend: StateFlow<List<DeviationPoint>> = _deviationTrend.asStateFlow()
+
+    // 调香师效率统计
+    private val _perfumerEfficiency = MutableStateFlow<List<PerfumerEfficiency>>(emptyList())
+    val perfumerEfficiency: StateFlow<List<PerfumerEfficiency>> = _perfumerEfficiency.asStateFlow()
+
     // 待恢复的任务
     private val _recoveryTask = MutableStateFlow<ConfigurationTask?>(null)
     val recoveryTask: StateFlow<ConfigurationTask?> = _recoveryTask.asStateFlow()
@@ -86,10 +95,59 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
                 // 记录最近的操作 (从 ConfigurationRecordRepository 获取)
                 try {
-                    val records = configurationRecordRepository.fetchRecords(ConfigurationRecordFilter(limit = 5))
-                    _recentOperations.value = records
+                    val records = configurationRecordRepository.fetchRecords(ConfigurationRecordFilter(limit = 30))
+                    _recentOperations.value = records.take(5)
+
+                    // 1. 计算偏差趋势 (取最近 7 个已完成/已归档的记录，并按时间正序)
+                    val completedRecords = records
+                        .filter { it.resultStatus == ConfigurationRecordStatus.COMPLETED || it.resultStatus == ConfigurationRecordStatus.ARCHIVED }
+                        .take(7)
+                        .reversed() // 反转为正序（时间从早到晚）
+
+                    val trend = completedRecords.map { r ->
+                        val devPercent = if (r.quantity > 0) {
+                            kotlin.math.abs(r.actualQuantity - r.quantity) / r.quantity * 100.0
+                        } else {
+                            0.0
+                        }
+                        DeviationPoint(
+                            recordId = r.id,
+                            recipeName = r.recipeName,
+                            deviationPercent = devPercent,
+                            timeLabel = r.updatedAt.substringAfter(" ")
+                        )
+                    }
+                    _deviationTrend.value = trend
+
+                    // 2. 计算调香师绩效效率
+                    val efficiency = records
+                        .filter { it.resultStatus == ConfigurationRecordStatus.COMPLETED || it.resultStatus == ConfigurationRecordStatus.ARCHIVED }
+                        .groupBy { it.operator }
+                        .map { entry ->
+                            val perfumer = entry.key
+                            val rList = entry.value
+                            val avgDev = rList.map { r ->
+                                if (r.quantity > 0) {
+                                    kotlin.math.abs(r.actualQuantity - r.quantity) / r.quantity * 100.0
+                                } else {
+                                    0.0
+                                }
+                            }.average()
+
+                            PerfumerEfficiency(
+                                perfumer = perfumer,
+                                completedCount = rList.size,
+                                averageDeviationPercent = if (avgDev.isNaN()) 0.0 else avgDev
+                            )
+                        }
+                        .sortedByDescending { it.completedCount }
+                        .take(5)
+                    _perfumerEfficiency.value = efficiency
+
                 } catch (e: Exception) {
                     _recentOperations.value = emptyList()
+                    _deviationTrend.value = emptyList()
+                    _perfumerEfficiency.value = emptyList()
                 }
 
                 // 查找待恢复的任务 (第一个进行中的任务)
@@ -138,4 +196,23 @@ data class HomeRuntimeStatus(
     val wirelessAddress: String = "未连接网络",
     val ttsStatus: String = "语音服务检测中",
     val ttsHint: String = "将根据设备能力自动选择语音引擎"
+)
+
+/**
+ * 偏差趋势点
+ */
+data class DeviationPoint(
+    val recordId: String,
+    val recipeName: String,
+    val deviationPercent: Double,
+    val timeLabel: String
+)
+
+/**
+ * 调香师效能统计
+ */
+data class PerfumerEfficiency(
+    val perfumer: String,
+    val completedCount: Int,
+    val averageDeviationPercent: Double
 )

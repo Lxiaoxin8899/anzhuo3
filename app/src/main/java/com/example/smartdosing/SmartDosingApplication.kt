@@ -1,13 +1,19 @@
 package com.example.smartdosing
 
 import android.app.Application
+import android.content.Context
 import android.util.Log
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.ProcessLifecycleOwner
 import cn.wch.ch9140lib.CH9140BluetoothManager
 import com.example.smartdosing.bluetooth.BluetoothPermissionHelper
 import com.example.smartdosing.bluetooth.BluetoothScaleManager
 import com.example.smartdosing.bluetooth.BluetoothScalePreferencesManager
 import com.example.smartdosing.bluetooth.DemoModeManager
 import com.example.smartdosing.data.settings.AdminPreferencesManager
+import com.example.smartdosing.data.transfer.TaskResultCallbackManager
+import com.example.smartdosing.web.WebService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -33,7 +39,7 @@ class SmartDosingApplication : Application() {
         }
     }
 
-    private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    internal val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     // 全局蓝牙秤管理器（懒加载）
     val bluetoothScaleManager: BluetoothScaleManager by lazy {
@@ -61,6 +67,7 @@ class SmartDosingApplication : Application() {
 
         initBluetoothSdk()
         scheduleAutoConnect()
+        initAppLifecycleAndWireless()
     }
 
     /**
@@ -139,6 +146,51 @@ class SmartDosingApplication : Application() {
     fun triggerAutoConnect() {
         applicationScope.launch {
             tryAutoConnectBoundDevice()
+        }
+    }
+
+    private fun initAppLifecycleAndWireless() {
+        try {
+            ProcessLifecycleOwner.get().lifecycle.addObserver(AppLifecycleObserver(this))
+            Log.i(TAG, "ProcessLifecycleOwner 监听注册成功")
+        } catch (e: Exception) {
+            Log.e(TAG, "ProcessLifecycleOwner 监听注册失败: ${e.message}", e)
+        }
+
+        startWirelessService()
+    }
+
+    private fun startWirelessService() {
+        val webService = WebService.getInstance(this)
+        if (webService.isAutoStartEnabled()) {
+            applicationScope.launch(Dispatchers.IO) {
+                try {
+                    val preferredPort = webService.getPreferredPort()
+                    Log.i(TAG, "自启无线传输服务中... 端口: $preferredPort")
+                    webService.startWebService(preferredPort)
+                } catch (e: Exception) {
+                    Log.e(TAG, "自启动无线服务失败: ${e.message}", e)
+                }
+            }
+        }
+    }
+}
+
+class AppLifecycleObserver(private val context: Context) : DefaultLifecycleObserver {
+    companion object {
+        private const val TAG = "AppLifecycleObserver"
+    }
+
+    override fun onStart(owner: LifecycleOwner) {
+        super.onStart(owner)
+        Log.i(TAG, "检测到应用进入前台，自动执行配置结果补传自愈流程")
+        val app = context.applicationContext as SmartDosingApplication
+        app.applicationScope.launch(Dispatchers.IO) {
+            try {
+                TaskResultCallbackManager.getInstance(context).retryPendingResults()
+            } catch (e: Exception) {
+                Log.e(TAG, "执行配置结果补传自愈失败: ${e.message}", e)
+            }
         }
     }
 }
