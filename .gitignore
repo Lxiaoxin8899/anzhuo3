@@ -17,3 +17,8 @@ _tmp_script.py
 replace_template.py
 update_template.py
 蓝牙rs232资料/
+
+# 忽略 gstack 生成的截图和窗口快照
+.gstack/**/screenshots/
+.gstack/**/*.png
+.gstack/**/*.xml
