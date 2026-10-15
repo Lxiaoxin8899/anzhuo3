@@ -10,6 +10,7 @@ import com.example.smartdosing.data.ConfigurationRecordStatus
 import com.example.smartdosing.data.ConfigurationTask
 import com.example.smartdosing.data.TaskSampleData
 import com.example.smartdosing.data.TaskStatus
+import com.example.smartdosing.web.WebService
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -27,79 +28,81 @@ import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.Path
 import retrofit2.http.Query
+import com.google.gson.annotations.SerializedName
 
-private const val DEFAULT_BASE_URL = "http://127.0.0.1:8080/api/"
+private const val LOCAL_HOST = "127.0.0.1"
+private const val DEFAULT_BASE_URL = "http://$LOCAL_HOST:8080/api/"
 private const val WEB_SERVER_PREFS_NAME = "web_server_prefs"
 private const val WEB_SERVER_API_KEY = "api_key"
 private const val API_KEY_HEADER = "X-API-Key"
 
 /** DTO ?? */
 data class ConfigurationTaskDto(
-    val id: String,
-    val title: String,
-    val recipeId: String,
-    val recipeName: String,
-    val recipeCode: String,
-    val quantity: Double,
-    val unit: String,
-    val priority: String,
-    val requestedBy: String,
-    val perfumer: String,
-    val customer: String,
-    val salesOwner: String,
-    val status: TaskStatus,
-    val deadline: String,
-    val createdAt: String,
-    val publishedAt: String?,
-    val statusUpdatedAt: String,
-    val targetDevices: List<String>,
-    val note: String,
-    val tags: List<String>,
+    @SerializedName("id") val id: String,
+    @SerializedName("title") val title: String,
+    @SerializedName("recipeId") val recipeId: String,
+    @SerializedName("recipeName") val recipeName: String,
+    @SerializedName("recipeCode") val recipeCode: String,
+    @SerializedName("quantity") val quantity: Double,
+    @SerializedName("unit") val unit: String,
+    @SerializedName("priority") val priority: String,
+    @SerializedName("requestedBy") val requestedBy: String,
+    @SerializedName("perfumer") val perfumer: String,
+    @SerializedName("customer") val customer: String,
+    @SerializedName("salesOwner") val salesOwner: String,
+    @SerializedName("status") val status: TaskStatus,
+    @SerializedName("deadline") val deadline: String,
+    @SerializedName("createdAt") val createdAt: String,
+    @SerializedName("publishedAt") val publishedAt: String?,
+    @SerializedName("statusUpdatedAt") val statusUpdatedAt: String,
+    @SerializedName("targetDevices") val targetDevices: List<String>,
+    @SerializedName("note") val note: String,
+    @SerializedName("tags") val tags: List<String>,
     // 接单相关字段
-    val acceptedBy: String? = null,
-    val acceptedAt: String? = null,
+    @SerializedName("acceptedBy") val acceptedBy: String? = null,
+    @SerializedName("acceptedAt") val acceptedAt: String? = null,
     // 执行时间跟踪
-    val startedAt: String? = null,
-    val completedAt: String? = null
+    @SerializedName("startedAt") val startedAt: String? = null,
+    @SerializedName("completedAt") val completedAt: String? = null
 )
 
 data class ConfigurationRecordDto(
-    val id: String,
-    val taskId: String,
-    val recipeId: String,
-    val recipeName: String,
-    val recipeCode: String,
-    val category: String,
-    val operator: String,
-    val quantity: Double,
-    val actualQuantity: Double,
-    val unit: String,
-    val customer: String,
-    val salesOwner: String,
-    val resultStatus: ConfigurationRecordStatus,
-    val updatedAt: String,
-    val tags: List<String>,
-    val note: String,
-    val materialDetails: List<ConfigurationMaterialRecord> = emptyList()
+    @SerializedName("id") val id: String,
+    @SerializedName("taskId") val taskId: String,
+    @SerializedName("recipeId") val recipeId: String,
+    @SerializedName("recipeName") val recipeName: String,
+    @SerializedName("recipeCode") val recipeCode: String,
+    @SerializedName("category") val category: String,
+    @SerializedName("operator") val operator: String,
+    @SerializedName("quantity") val quantity: Double,
+    @SerializedName("actualQuantity") val actualQuantity: Double,
+    @SerializedName("unit") val unit: String,
+    @SerializedName("customer") val customer: String,
+    @SerializedName("salesOwner") val salesOwner: String,
+    @SerializedName("resultStatus") val resultStatus: ConfigurationRecordStatus,
+    @SerializedName("updatedAt") val updatedAt: String,
+    @SerializedName("tags") val tags: List<String>,
+    @SerializedName("note") val note: String,
+    @SerializedName("materialDetails") val materialDetails: List<ConfigurationMaterialRecord> = emptyList()
 )
 
 data class ConfigurationRecordPayload(
-    val taskId: String,
-    val recipeId: String,
-    val recipeCode: String,
-    val recipeName: String,
-    val category: String,
-    val operator: String,
-    val quantity: Double,
-    val actualQuantity: Double,
-    val unit: String,
-    val customer: String,
-    val salesOwner: String,
-    val tags: List<String> = emptyList(),
-    val note: String = "",
-    val materialDetails: List<ConfigurationMaterialRecord> = emptyList(),
-    val resultStatus: ConfigurationRecordStatus = ConfigurationRecordStatus.COMPLETED,
-    val recordId: String? = null
+    @SerializedName("taskId") val taskId: String,
+    @SerializedName("recipeId") val recipeId: String,
+    @SerializedName("recipeCode") val recipeCode: String,
+    @SerializedName("recipeName") val recipeName: String,
+    @SerializedName("category") val category: String,
+    @SerializedName("operator") val operator: String,
+    @SerializedName("quantity") val quantity: Double,
+    @SerializedName("actualQuantity") val actualQuantity: Double,
+    @SerializedName("unit") val unit: String,
+    @SerializedName("customer") val customer: String,
+    @SerializedName("salesOwner") val salesOwner: String,
+    @SerializedName("tags") val tags: List<String> = emptyList(),
+    @SerializedName("note") val note: String = "",
+    @SerializedName("materialDetails") val materialDetails: List<ConfigurationMaterialRecord> = emptyList(),
+    @SerializedName("resultStatus") val resultStatus: ConfigurationRecordStatus = ConfigurationRecordStatus.COMPLETED,
+    @SerializedName("recordId") val recordId: String? = null
 )
 
 data class ConfigurationRecordFilterDto(
@@ -156,10 +159,32 @@ private fun apiKeyInterceptor(): Interceptor = Interceptor { chain ->
     chain.proceed(builder.build())
 }
 
+private fun resolveLocalPort(): Int? {
+    return runCatching {
+        val context = SmartDosingApplication.getInstance().applicationContext
+        context
+            .getSharedPreferences(WebService.PREFS_NAME, Context.MODE_PRIVATE)
+            .getInt(WebService.KEY_PREFERRED_PORT, -1)
+            .takeIf { it in 1024..65535 }
+    }.getOrNull()
+}
+
+/** 本机服务端口可在设置里修改，Retrofit 的 baseUrl 只在首次创建时确定，所以每次请求按当前端口改写 */
+private fun localPortInterceptor(): Interceptor = Interceptor { chain ->
+    val original = chain.request()
+    val port = resolveLocalPort()
+    if (port == null || original.url.host != LOCAL_HOST || original.url.port == port) {
+        chain.proceed(original)
+    } else {
+        chain.proceed(original.newBuilder().url(original.url.newBuilder().port(port).build()).build())
+    }
+}
+
 private fun loggingInterceptor(): HttpLoggingInterceptor =
     HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.BASIC }
 
 private fun defaultHttpClient(): OkHttpClient = OkHttpClient.Builder()
+    .addInterceptor(localPortInterceptor())
     .addInterceptor(apiKeyInterceptor())
     .addInterceptor(loggingInterceptor())
     .callTimeout(15, TimeUnit.SECONDS)
@@ -173,17 +198,17 @@ private fun retrofit(baseUrl: String, client: OkHttpClient): Retrofit = Retrofit
     .addConverterFactory(GsonConverterFactory.create())
     .build()
 
-private data class TaskStatusUpdateDto(val status: TaskStatus)
-private data class RecordStatusUpdateDto(val status: ConfigurationRecordStatus, val note: String? = null)
+private data class TaskStatusUpdateDto(@SerializedName("status") val status: TaskStatus)
+private data class RecordStatusUpdateDto(@SerializedName("status") val status: ConfigurationRecordStatus, @SerializedName("note") val note: String? = null)
 // 接单相关DTO
-private data class TaskAcceptDto(val acceptedBy: String)
+private data class TaskAcceptDto(@SerializedName("acceptedBy") val acceptedBy: String)
 private data class TaskProgressReportDto(
-    val taskId: String,
-    val status: TaskStatus,
-    val acceptedBy: String? = null,
-    val startedAt: String? = null,
-    val completedAt: String? = null,
-    val note: String? = null
+    @SerializedName("taskId") val taskId: String,
+    @SerializedName("status") val status: TaskStatus,
+    @SerializedName("acceptedBy") val acceptedBy: String? = null,
+    @SerializedName("startedAt") val startedAt: String? = null,
+    @SerializedName("completedAt") val completedAt: String? = null,
+    @SerializedName("note") val note: String? = null
 )
 
 private interface ConfigurationTaskService {

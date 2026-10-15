@@ -1,41 +1,43 @@
 
 package com.example.smartdosing.data
 
+import com.google.gson.annotations.SerializedName
+
 /**
  * 配置记录数据类，表示一次完整的实验配置操作记录
  */
 data class ConfigurationRecord(
-    val id: String,
-    val taskId: String,
-    val recipeId: String,
-    val recipeName: String,
-    val recipeCode: String,
-    val category: String,
-    val operator: String,
-    val quantity: Double,
-    val unit: String,
-    val actualQuantity: Double = quantity,
-    val customer: String,
-    val salesOwner: String,
-    val resultStatus: ConfigurationRecordStatus,
-    val updatedAt: String,
-    val tags: List<String> = emptyList(),
-    val note: String = "",
-    val materialDetails: List<ConfigurationMaterialRecord> = emptyList()
+    @SerializedName("id") val id: String,
+    @SerializedName("taskId") val taskId: String,
+    @SerializedName("recipeId") val recipeId: String,
+    @SerializedName("recipeName") val recipeName: String,
+    @SerializedName("recipeCode") val recipeCode: String,
+    @SerializedName("category") val category: String,
+    @SerializedName("operator") val operator: String,
+    @SerializedName("quantity") val quantity: Double,
+    @SerializedName("unit") val unit: String,
+    @SerializedName("actualQuantity") val actualQuantity: Double = quantity,
+    @SerializedName("customer") val customer: String,
+    @SerializedName("salesOwner") val salesOwner: String,
+    @SerializedName("resultStatus") val resultStatus: ConfigurationRecordStatus,
+    @SerializedName("updatedAt") val updatedAt: String,
+    @SerializedName("tags") val tags: List<String> = emptyList(),
+    @SerializedName("note") val note: String = "",
+    @SerializedName("materialDetails") val materialDetails: List<ConfigurationMaterialRecord> = emptyList()
 )
 
 /**
  * 配置材料记录，用于在配置记录详情中显示每个材料的配置情况
  */
 data class ConfigurationMaterialRecord(
-    val sequence: Int,
-    val name: String,
-    val code: String,
-    val targetWeight: Double,
-    val actualWeight: Double,
-    val unit: String,
-    val deviation: Double,
-    val isOutOfTolerance: Boolean
+    @SerializedName("sequence") val sequence: Int,
+    @SerializedName("name") val name: String,
+    @SerializedName("code") val code: String,
+    @SerializedName("targetWeight") val targetWeight: Double,
+    @SerializedName("actualWeight") val actualWeight: Double,
+    @SerializedName("unit") val unit: String,
+    @SerializedName("deviation") val deviation: Double,
+    @SerializedName("isOutOfTolerance") val isOutOfTolerance: Boolean
 )
 
 enum class ConfigurationRecordStatus {

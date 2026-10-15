@@ -159,8 +159,13 @@ fun SmartDosingApp() {
                 },
                 onViewTasks = {
                     currentDialogTask = null
+                    // 与导航栏保持同一套顶层切换方式，否则实验中心会被存进其他 tab 的回退栈
                     navController.navigate(SmartDosingRoutes.LAB_CENTER) {
+                        popUpTo(navController.graph.startDestinationId) {
+                            saveState = true
+                        }
                         launchSingleTop = true
+                        restoreState = true
                     }
                 }
             )

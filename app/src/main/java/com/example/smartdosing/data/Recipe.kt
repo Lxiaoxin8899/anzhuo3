@@ -6,41 +6,41 @@ import com.google.gson.annotations.SerializedName
  * 配方数据模型
  */
 data class Recipe(
-    val id: String,
-    val code: String, // 配方编码，唯一标识
-    val name: String,
-    val category: String, // 一级分类（香精、酸类、甜味剂等）
-    val subCategory: String = "", // 二级分类（客户、时间等）
-    val customer: String = "", // 客户名称
-    val salesOwner: String = "", // 业务员
-    val perfumer: String = "", // 调香师
-    val batchNo: String = "", // 批次号
-    val version: String = "1.0", // 版本号
-    val description: String = "",
-    val materials: List<Material>,
-    val totalWeight: Double,
-    val createTime: String, // 创建时间
-    val updateTime: String = "", // 更新时间
-    val lastUsed: String? = null, // 最后使用时间
-    val usageCount: Int = 0, // 使用次数
-    val status: RecipeStatus = RecipeStatus.ACTIVE, // 配方状态
-    val priority: RecipePriority = RecipePriority.NORMAL, // 优先级
-    val tags: List<String> = emptyList(), // 标签
-    val creator: String = "", // 创建者
-    val reviewer: String = "" // 审核者
+    @SerializedName("id") val id: String,
+    @SerializedName("code") val code: String, // 配方编码，唯一标识
+    @SerializedName("name") val name: String,
+    @SerializedName("category") val category: String, // 一级分类（香精、酸类、甜味剂等）
+    @SerializedName("subCategory") val subCategory: String = "", // 二级分类（客户、时间等）
+    @SerializedName("customer") val customer: String = "", // 客户名称
+    @SerializedName("salesOwner") val salesOwner: String = "", // 业务员
+    @SerializedName("perfumer") val perfumer: String = "", // 调香师
+    @SerializedName("batchNo") val batchNo: String = "", // 批次号
+    @SerializedName("version") val version: String = "1.0", // 版本号
+    @SerializedName("description") val description: String = "",
+    @SerializedName("materials") val materials: List<Material>,
+    @SerializedName("totalWeight") val totalWeight: Double,
+    @SerializedName("createTime") val createTime: String, // 创建时间
+    @SerializedName("updateTime") val updateTime: String = "", // 更新时间
+    @SerializedName("lastUsed") val lastUsed: String? = null, // 最后使用时间
+    @SerializedName("usageCount") val usageCount: Int = 0, // 使用次数
+    @SerializedName("status") val status: RecipeStatus = RecipeStatus.ACTIVE, // 配方状态
+    @SerializedName("priority") val priority: RecipePriority = RecipePriority.NORMAL, // 优先级
+    @SerializedName("tags") val tags: List<String> = emptyList(), // 标签
+    @SerializedName("creator") val creator: String = "", // 创建者
+    @SerializedName("reviewer") val reviewer: String = "" // 审核者
 )
 
 /**
  * 配方材料
  */
 data class Material(
-    val id: String,
-    val name: String,
-    val weight: Double, // 克
-    val unit: String = "g",
-    val sequence: Int = 1, // 投料顺序
-    val notes: String = "",
-    val code: String = "" // 材料编码 - 用于库存管理和追溯
+    @SerializedName("id") val id: String,
+    @SerializedName("name") val name: String,
+    @SerializedName("weight") val weight: Double, // 克
+    @SerializedName("unit") val unit: String = "g",
+    @SerializedName("sequence") val sequence: Int = 1, // 投料顺序
+    @SerializedName("notes") val notes: String = "",
+    @SerializedName("code") val code: String = "" // 材料编码 - 用于库存管理和追溯
 )
 
 /**
@@ -78,40 +78,40 @@ enum class CategoryType {
  * 配方导入请求
  */
 data class RecipeImportRequest(
-    val code: String = "", // 配方编码
-    val name: String,
-    val category: String,
-    val subCategory: String = "",
-    val customer: String = "",
-    val salesOwner: String = "",
-    val perfumer: String = "",
-    val batchNo: String = "",
-    val version: String = "1.0",
-    val description: String = "",
-    val materials: List<MaterialImport>,
-    val status: RecipeStatus = RecipeStatus.ACTIVE,
-    val priority: RecipePriority = RecipePriority.NORMAL,
-    val tags: List<String> = emptyList(),
-    val creator: String = "",
-    val reviewer: String = ""
+    @SerializedName("code") val code: String = "", // 配方编码
+    @SerializedName("name") val name: String,
+    @SerializedName("category") val category: String,
+    @SerializedName("subCategory") val subCategory: String = "",
+    @SerializedName("customer") val customer: String = "",
+    @SerializedName("salesOwner") val salesOwner: String = "",
+    @SerializedName("perfumer") val perfumer: String = "",
+    @SerializedName("batchNo") val batchNo: String = "",
+    @SerializedName("version") val version: String = "1.0",
+    @SerializedName("description") val description: String = "",
+    @SerializedName("materials") val materials: List<MaterialImport>,
+    @SerializedName("status") val status: RecipeStatus = RecipeStatus.ACTIVE,
+    @SerializedName("priority") val priority: RecipePriority = RecipePriority.NORMAL,
+    @SerializedName("tags") val tags: List<String> = emptyList(),
+    @SerializedName("creator") val creator: String = "",
+    @SerializedName("reviewer") val reviewer: String = ""
 )
 
 data class MaterialImport(
-    val name: String,
-    val code: String = "", // 材料编码
-    val weight: Double,
-    val unit: String = "g",
-    val sequence: Int = 1,
-    val notes: String = ""
+    @SerializedName("name") val name: String,
+    @SerializedName("code") val code: String = "", // 材料编码
+    @SerializedName("weight") val weight: Double,
+    @SerializedName("unit") val unit: String = "g",
+    @SerializedName("sequence") val sequence: Int = 1,
+    @SerializedName("notes") val notes: String = ""
 )
 
 /**
  * API响应包装
  */
 data class ApiResponse<T>(
-    val success: Boolean,
-    val message: String = "",
-    val data: T? = null
+    @SerializedName("success") val success: Boolean,
+    @SerializedName("message") val message: String = "",
+    @SerializedName("data") val data: T? = null
 )
 
 /**
@@ -164,25 +164,25 @@ enum class SortOrder {
  * 分类信息
  */
 data class CategoryInfo(
-    val type: CategoryType,
-    val name: String,
-    val count: Int,
-    val icon: String = "",
-    val color: String = "",
-    val children: List<CategoryInfo> = emptyList()
+    @SerializedName("type") val type: CategoryType,
+    @SerializedName("name") val name: String,
+    @SerializedName("count") val count: Int,
+    @SerializedName("icon") val icon: String = "",
+    @SerializedName("color") val color: String = "",
+    @SerializedName("children") val children: List<CategoryInfo> = emptyList()
 )
 
 /**
  * 配方统计信息
  */
 data class RecipeStats(
-    val totalRecipes: Int,
-    val categoryCounts: Map<String, Int>,
-    val customerCounts: Map<String, Int>,
-    val statusCounts: Map<RecipeStatus, Int>,
-    val priorityCounts: Map<RecipePriority, Int>,
-    val recentlyUsed: List<Recipe>,
-    val mostUsed: List<Recipe>,
-    val recentlyCreated: List<Recipe>,
-    val categoryTree: List<CategoryInfo>
+    @SerializedName("totalRecipes") val totalRecipes: Int,
+    @SerializedName("categoryCounts") val categoryCounts: Map<String, Int>,
+    @SerializedName("customerCounts") val customerCounts: Map<String, Int>,
+    @SerializedName("statusCounts") val statusCounts: Map<RecipeStatus, Int>,
+    @SerializedName("priorityCounts") val priorityCounts: Map<RecipePriority, Int>,
+    @SerializedName("recentlyUsed") val recentlyUsed: List<Recipe>,
+    @SerializedName("mostUsed") val mostUsed: List<Recipe>,
+    @SerializedName("recentlyCreated") val recentlyCreated: List<Recipe>,
+    @SerializedName("categoryTree") val categoryTree: List<CategoryInfo>
 )

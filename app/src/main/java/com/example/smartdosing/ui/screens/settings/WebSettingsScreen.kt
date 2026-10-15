@@ -674,7 +674,7 @@ fun AppInfoCard() {
 
             InfoRow(
                 label = "应用版本",
-                value = "1.0.0",
+                value = BuildConfig.VERSION_NAME,
                 icon = Icons.Default.Info
             )
 

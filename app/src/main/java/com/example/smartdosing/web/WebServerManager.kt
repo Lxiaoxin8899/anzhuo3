@@ -46,6 +46,7 @@ import java.util.UUID
 import com.example.smartdosing.web.transfer.LanTransferProposalAdapter
 import com.example.smartdosing.web.transfer.UnsupportedSchemaException
 import com.example.smartdosing.web.transfer.toSummary
+import com.google.gson.annotations.SerializedName
 
 private val AuthenticatedSenderKey = AttributeKey<AuthorizedSenderEntity>("AuthenticatedSender")
 
@@ -96,6 +97,8 @@ class WebServerManager(private val context: Context) {
                 Log.i(TAG, "无线传输服务器已在运行，忽略重复启动")
                 return true
             }
+            // App 内部 loopback 调用直接从 SharedPreferences 读 Key，所以必须在服务可访问前生成，否则新装机永远 401
+            Log.d(TAG, "本机 loopback API Key 已就绪（长度 ${apiKey.length}）")
             server = embeddedServer(Netty, port = port, host = "0.0.0.0") {
                 smartDosingModule()
             }
@@ -1846,6 +1849,9 @@ private class TaskDeviceStore {
     }
 }
 
+/** 配置记录不在 Room 里，备份恢复需要单独处理这个文件 */
+internal const val CONFIGURATION_RECORDS_FILE_NAME = "configuration_records.json"
+
 /**
  * 配置记录存储：持久化至应用私有目录，确保展示真实数据
  */
@@ -1855,13 +1861,12 @@ private class ConfigurationRecordStore(
 ) {
     companion object {
         private const val STORE_TAG = "ConfigurationRecordStore"
-        private const val STORE_FILE_NAME = "configuration_records.json"
     }
 
     private val mutex = Mutex()
     private val formatter = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
-    private val storageFile = File(context.filesDir, STORE_FILE_NAME)
-    private val listType = object : TypeToken<List<ConfigurationRecord>>() {}.type
+    private val storageFile = File(context.filesDir, CONFIGURATION_RECORDS_FILE_NAME)
+    private val listType = TypeToken.getParameterized(List::class.java, ConfigurationRecord::class.java).type
     private val records = mutableListOf<ConfigurationRecord>()
 
     init {
@@ -2013,31 +2018,31 @@ private data class ConfigurationRecordFilterQuery(
 }
 
 private data class TaskStatusUpdateRequest(
-    val status: TaskStatus
+    @SerializedName("status") val status: TaskStatus
 )
 
 private data class QuickPublishRequest(
-    val title: String,
-    val recipeKeyword: String,
-    val priority: TaskPriority = TaskPriority.NORMAL,
-    val deviceId: String? = null,
-    val deviceIds: List<String> = emptyList()
+    @SerializedName("title") val title: String,
+    @SerializedName("recipeKeyword") val recipeKeyword: String,
+    @SerializedName("priority") val priority: TaskPriority = TaskPriority.NORMAL,
+    @SerializedName("deviceId") val deviceId: String? = null,
+    @SerializedName("deviceIds") val deviceIds: List<String> = emptyList()
 )
 
 private data class RecordStatusUpdateRequest(
-    val status: ConfigurationRecordStatus,
-    val note: String? = null
+    @SerializedName("status") val status: ConfigurationRecordStatus,
+    @SerializedName("note") val note: String? = null
 )
 
 private data class PairRequest(
-    val senderUID: String = "",
-    val senderName: String = "",
-    val senderIP: String = "",
-    val senderPort: Int = 0,
-    val callbackBaseUrl: String = "",
-    val timestamp: Long = 0
+    @SerializedName("senderUID") val senderUID: String = "",
+    @SerializedName("senderName") val senderName: String = "",
+    @SerializedName("senderIP") val senderIP: String = "",
+    @SerializedName("senderPort") val senderPort: Int = 0,
+    @SerializedName("callbackBaseUrl") val callbackBaseUrl: String = "",
+    @SerializedName("timestamp") val timestamp: Long = 0
 )
 
 private data class BatchProgressRequest(
-    val transferIds: List<String> = emptyList()
+    @SerializedName("transferIds") val transferIds: List<String> = emptyList()
 )

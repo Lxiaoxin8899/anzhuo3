@@ -7,6 +7,7 @@ import android.net.Uri
 import android.util.Log
 import com.example.smartdosing.BuildConfig
 import com.example.smartdosing.database.SmartDosingDatabase
+import com.example.smartdosing.web.CONFIGURATION_RECORDS_FILE_NAME
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -18,7 +19,7 @@ import java.util.zip.ZipOutputStream
 /**
  * 本地数据备份与恢复
  *
- * 备份内容为 Room 数据库文件（配方、模板、配料记录、任务、已配对发送端），打包为 ZIP。
+ * 备份内容为 Room 数据库文件（配方、模板、任务、已配对发送端）和档案库使用的配置记录文件，打包为 ZIP。
  * 设备 UID、本机 API Key 等设备身份信息存放在 SharedPreferences 中，不随备份迁移。
  */
 class DataBackupManager(context: Context) {
@@ -37,6 +38,7 @@ class DataBackupManager(context: Context) {
                 .use { it.moveToFirst() }
 
             val dbFile = appContext.getDatabasePath(SmartDosingDatabase.DATABASE_NAME)
+            val recordsFile = recordsFile()
             val output = appContext.contentResolver.openOutputStream(uri)
                 ?: throw IOException("无法写入目标文件")
             ZipOutputStream(output.buffered()).use { zip ->
@@ -47,8 +49,15 @@ class DataBackupManager(context: Context) {
                 zip.putNextEntry(ZipEntry(DATABASE_ENTRY))
                 dbFile.inputStream().use { it.copyTo(zip) }
                 zip.closeEntry()
+
+                if (recordsFile.isFile) {
+                    zip.putNextEntry(ZipEntry(RECORDS_ENTRY))
+                    recordsFile.inputStream().use { it.copyTo(zip) }
+                    zip.closeEntry()
+                }
             }
-            BackupResult.Success("备份完成（${formatSize(dbFile.length())}）")
+            val totalSize = dbFile.length() + if (recordsFile.isFile) recordsFile.length() else 0L
+            BackupResult.Success("备份完成（${formatSize(totalSize)}）")
         }.getOrElse { error ->
             Log.e(TAG, "导出备份失败", error)
             BackupResult.Failure("备份失败：${error.message ?: "未知错误"}")
@@ -61,8 +70,9 @@ class DataBackupManager(context: Context) {
      */
     suspend fun restoreFrom(uri: Uri): BackupResult = withContext(Dispatchers.IO) {
         val stagingFile = File(appContext.cacheDir, "restore_staging.db")
+        val recordsStagingFile = File(appContext.cacheDir, "restore_staging_records.json")
         try {
-            extractDatabaseEntry(uri, stagingFile)
+            val hasRecords = extractBackup(uri, stagingFile, recordsStagingFile)
             validateBackupDatabase(stagingFile)?.let { reason ->
                 return@withContext BackupResult.Failure(reason)
             }
@@ -73,6 +83,10 @@ class DataBackupManager(context: Context) {
             File(dbFile.path + "-wal").delete()
             File(dbFile.path + "-shm").delete()
             stagingFile.copyTo(dbFile, overwrite = true)
+            // 旧版备份不含配置记录文件，此时保留本机现有记录
+            if (hasRecords) {
+                recordsStagingFile.copyTo(recordsFile(), overwrite = true)
+            }
 
             BackupResult.Success("恢复完成，应用即将重启")
         } catch (error: Exception) {
@@ -80,6 +94,7 @@ class DataBackupManager(context: Context) {
             BackupResult.Failure("恢复失败：${error.message ?: "未知错误"}")
         } finally {
             stagingFile.delete()
+            recordsStagingFile.delete()
         }
     }
 
@@ -105,18 +120,34 @@ class DataBackupManager(context: Context) {
         Runtime.getRuntime().exit(0)
     }
 
-    private fun extractDatabaseEntry(uri: Uri, target: File) {
+    private fun recordsFile(): File = File(appContext.filesDir, CONFIGURATION_RECORDS_FILE_NAME)
+
+    /**
+     * 解压备份到临时文件，返回备份里是否带有配置记录文件
+     */
+    private fun extractBackup(uri: Uri, databaseTarget: File, recordsTarget: File): Boolean {
         val input = appContext.contentResolver.openInputStream(uri)
             ?: throw IOException("无法读取备份文件")
+        var hasDatabase = false
+        var hasRecords = false
         ZipInputStream(input.buffered()).use { zip ->
             generateSequence { zip.nextEntry }.forEach { entry ->
-                if (entry.name == DATABASE_ENTRY) {
-                    target.outputStream().use { zip.copyTo(it) }
-                    return
+                when (entry.name) {
+                    DATABASE_ENTRY -> {
+                        databaseTarget.outputStream().use { zip.copyTo(it) }
+                        hasDatabase = true
+                    }
+                    RECORDS_ENTRY -> {
+                        recordsTarget.outputStream().use { zip.copyTo(it) }
+                        hasRecords = true
+                    }
                 }
             }
         }
-        throw IOException("备份文件中缺少数据库内容，请确认选择的是本应用导出的备份")
+        if (!hasDatabase) {
+            throw IOException("备份文件中缺少数据库内容，请确认选择的是本应用导出的备份")
+        }
+        return hasRecords
     }
 
     /**
@@ -154,6 +185,7 @@ class DataBackupManager(context: Context) {
         private const val TAG = "DataBackupManager"
         private const val DATABASE_ENTRY = "smartdosing.db"
         private const val BACKUP_INFO_ENTRY = "backup-info.json"
+        private const val RECORDS_ENTRY = CONFIGURATION_RECORDS_FILE_NAME
         private const val MIN_RESTORABLE_VERSION = 5
         private val SQLITE_HEADER = "SQLite format 3\u0000".toByteArray(Charsets.US_ASCII)
 

@@ -112,6 +112,14 @@ app/src/main/java/com/example/smartdosing/
 - 路由定义在 `SmartDosingDestinations.kt`
 - 导航图在 `SmartDosingNavHost.kt`
 - 新增页面需要在两个文件中添加对应定义
+- 顶层页面（首页/实验中心/档案库/系统设置）之间跳转必须带 `popUpTo(start){saveState}` + `restoreState`，与导航栏一致
+
+### 发布
+- 版本号在 `app/build.gradle.kts` 顶部的 `versionMajor/Minor/Patch` 维护，versionCode 由三者推导，只增不减
+- release 签名读取根目录 `keystore.properties`（参照 `keystore.properties.example`，已 gitignore）；缺失时 release 包不签名
+- release 开启 R8 与资源压缩，`mapping.txt` 自动归档到 `release-mappings/<版本>/`，需随版本另行保存，用于还原线上堆栈
+- 真机验证用 `assembleStaging`：与 release 同样混淆，debug 签名，包名带 `.staging`，可与正式版并存
+- Gson 模型字段一律加 `@SerializedName`；新增 Netty/Ktor 反射相关问题优先在 `proguard-rules.pro` 补窄范围 keep
 
 ## 当前状态
 

@@ -8,31 +8,32 @@ import java.util.Locale
 import java.util.UUID
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
+import com.google.gson.annotations.SerializedName
 
 /**
  * 标准模板字段定义
  */
 data class TemplateField(
-    val id: String,
-    val key: String,
-    val label: String,
-    val description: String,
-    val required: Boolean,
-    val example: String,
-    val order: Int
+    @SerializedName("id") val id: String,
+    @SerializedName("key") val key: String,
+    @SerializedName("label") val label: String,
+    @SerializedName("description") val description: String,
+    @SerializedName("required") val required: Boolean,
+    @SerializedName("example") val example: String,
+    @SerializedName("order") val order: Int
 )
 
 /**
  * 模板定义
  */
 data class TemplateDefinition(
-    val id: String,
-    val name: String,
-    val description: String,
-    val version: Int,
-    val updatedAt: String,
-    val supportedFormats: List<TemplateFormat>,
-    val fields: List<TemplateField>
+    @SerializedName("id") val id: String,
+    @SerializedName("name") val name: String,
+    @SerializedName("description") val description: String,
+    @SerializedName("version") val version: Int,
+    @SerializedName("updatedAt") val updatedAt: String,
+    @SerializedName("supportedFormats") val supportedFormats: List<TemplateFormat>,
+    @SerializedName("fields") val fields: List<TemplateField>
 )
 
 enum class TemplateFormat {
@@ -44,22 +45,22 @@ enum class TemplateFormat {
  * 模板字段更新载荷
  */
 data class TemplateFieldPayload(
-    val id: String? = null,
-    val key: String,
-    val label: String,
-    val description: String = "",
-    val required: Boolean = true,
-    val example: String = "",
-    val order: Int = 0
+    @SerializedName("id") val id: String? = null,
+    @SerializedName("key") val key: String,
+    @SerializedName("label") val label: String,
+    @SerializedName("description") val description: String = "",
+    @SerializedName("required") val required: Boolean = true,
+    @SerializedName("example") val example: String = "",
+    @SerializedName("order") val order: Int = 0
 )
 
 /**
  * 模板更新请求体
  */
 data class TemplateUpdateRequest(
-    val name: String? = null,
-    val description: String? = null,
-    val fields: List<TemplateFieldPayload>
+    @SerializedName("name") val name: String? = null,
+    @SerializedName("description") val description: String? = null,
+    @SerializedName("fields") val fields: List<TemplateFieldPayload>
 )
 
 /**

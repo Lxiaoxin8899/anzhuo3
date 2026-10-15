@@ -85,6 +85,8 @@ class SmartDosingDatabaseMigrationTest {
         )
             .addMigrations(SmartDosingDatabase.MIGRATION_5_6, SmartDosingDatabase.MIGRATION_6_7)
             .allowMainThreadQueries()
+            .setQueryExecutor { it.run() }
+            .setTransactionExecutor { it.run() }
             .build()
         try {
             assertEquals(0, database.deviceDao().getActiveSenderCount())

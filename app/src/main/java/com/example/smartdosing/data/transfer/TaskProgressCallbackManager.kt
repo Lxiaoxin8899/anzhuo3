@@ -11,6 +11,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.IOException
 import java.util.concurrent.TimeUnit
+import com.google.gson.annotations.SerializedName
 
 /**
  * 任务进度回调管理器
@@ -152,14 +153,14 @@ class TaskProgressCallbackManager(private val context: Context) {
  * 回调请求体数据结构
  */
 data class TaskProgressCallback(
-    val transferId: String,
-    val deviceUID: String,
-    val deviceName: String,
-    val status: String,
-    val progress: Int = 0,
-    val currentStep: Int = 0,
-    val totalSteps: Int = 0,
-    val currentMaterial: String? = null,
-    val message: String? = null,
-    val timestamp: Long
+    @SerializedName("transferId") val transferId: String,
+    @SerializedName("deviceUID") val deviceUID: String,
+    @SerializedName("deviceName") val deviceName: String,
+    @SerializedName("status") val status: String,
+    @SerializedName("progress") val progress: Int = 0,
+    @SerializedName("currentStep") val currentStep: Int = 0,
+    @SerializedName("totalSteps") val totalSteps: Int = 0,
+    @SerializedName("currentMaterial") val currentMaterial: String? = null,
+    @SerializedName("message") val message: String? = null,
+    @SerializedName("timestamp") val timestamp: Long
 )

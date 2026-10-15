@@ -1,6 +1,7 @@
 package com.example.smartdosing.database.entities
 
 import androidx.room.*
+import com.google.gson.annotations.SerializedName
 
 /**
  * 配方实体类 - Room数据库映射
@@ -419,79 +420,79 @@ data class AuthorizedSenderEntity(
 )
 data class ReceivedTaskEntity(
     @PrimaryKey
-    val id: String,                                 // 本地任务 ID
+    @SerializedName("id") val id: String,                                 // 本地任务 ID
 
     @ColumnInfo(name = "transfer_id")
-    val transferId: String,                         // 传输流水号（发送端生成）
+    @SerializedName("transferId") val transferId: String,                         // 传输流水号（发送端生成）
 
     @ColumnInfo(name = "sender_uid")
-    val senderUID: String,                          // 发送端 UID
+    @SerializedName("senderUID") val senderUID: String,                          // 发送端 UID
 
     @ColumnInfo(name = "sender_name")
-    val senderName: String,                         // 发送端名称
+    @SerializedName("senderName") val senderName: String,                         // 发送端名称
 
     @ColumnInfo(name = "sender_ip")
-    val senderIP: String? = null,                   // 发送端 IP
+    @SerializedName("senderIP") val senderIP: String? = null,                   // 发送端 IP
 
     @ColumnInfo(name = "sender_app_version")
-    val senderAppVersion: String? = null,           // 发送端应用版本
+    @SerializedName("senderAppVersion") val senderAppVersion: String? = null,           // 发送端应用版本
 
     @ColumnInfo(name = "schema_version")
-    val schemaVersion: String = "1.0",              // 协议版本
+    @SerializedName("schemaVersion") val schemaVersion: String = "1.0",              // 协议版本
 
     // 任务内容
-    val title: String,                              // 任务标题
+    @SerializedName("title") val title: String,                              // 任务标题
     @ColumnInfo(name = "recipe_code")
-    val recipeCode: String,                         // 配方编码
+    @SerializedName("recipeCode") val recipeCode: String,                         // 配方编码
     @ColumnInfo(name = "recipe_name")
-    val recipeName: String,                         // 配方名称
-    val quantity: Double,                           // 数量
-    val unit: String = "g",                         // 单位
-    val priority: String = "NORMAL",                // 优先级
-    val deadline: String? = null,                   // 截止时间
-    val customer: String? = null,                   // 客户
-    val note: String? = null,                       // 备注
+    @SerializedName("recipeName") val recipeName: String,                         // 配方名称
+    @SerializedName("quantity") val quantity: Double,                           // 数量
+    @SerializedName("unit") val unit: String = "g",                         // 单位
+    @SerializedName("priority") val priority: String = "NORMAL",                // 优先级
+    @SerializedName("deadline") val deadline: String? = null,                   // 截止时间
+    @SerializedName("customer") val customer: String? = null,                   // 客户
+    @SerializedName("note") val note: String? = null,                       // 备注
 
     // 关联配方（如果同时传输了配方）
     @ColumnInfo(name = "local_recipe_id")
-    val localRecipeId: String? = null,              // 本地保存的配方 ID
+    @SerializedName("localRecipeId") val localRecipeId: String? = null,              // 本地保存的配方 ID
 
     // 时间和状态
     @ColumnInfo(name = "received_at")
-    val receivedAt: Long,                           // 接收时间戳
+    @SerializedName("receivedAt") val receivedAt: Long,                           // 接收时间戳
 
     @ColumnInfo(name = "accepted_at")
-    val acceptedAt: Long? = null,                   // 确认接收时间
+    @SerializedName("acceptedAt") val acceptedAt: Long? = null,                   // 确认接收时间
 
-    val status: String = "PENDING",                 // 状态：PENDING, ACCEPTED, REJECTED, COMPLETED
+    @SerializedName("status") val status: String = "PENDING",                 // 状态：PENDING, ACCEPTED, REJECTED, COMPLETED
 
     // === v6 新增：执行进度字段 ===
     @ColumnInfo(name = "exec_status")
-    val execStatus: String = "PENDING",             // 执行状态：PENDING/ACCEPTED/REJECTED/EXECUTING/COMPLETED/EXEC_FAILED
+    @SerializedName("execStatus") val execStatus: String = "PENDING",             // 执行状态：PENDING/ACCEPTED/REJECTED/EXECUTING/COMPLETED/EXEC_FAILED
 
     @ColumnInfo(name = "progress")
-    val progress: Int = 0,                          // 进度百分比 0-100
+    @SerializedName("progress") val progress: Int = 0,                          // 进度百分比 0-100
 
     @ColumnInfo(name = "current_step")
-    val currentStep: Int = 0,                       // 当前步骤序号
+    @SerializedName("currentStep") val currentStep: Int = 0,                       // 当前步骤序号
 
     @ColumnInfo(name = "total_steps")
-    val totalSteps: Int = 0,                        // 总步骤数
+    @SerializedName("totalSteps") val totalSteps: Int = 0,                        // 总步骤数
 
     @ColumnInfo(name = "current_material")
-    val currentMaterial: String? = null,            // 当前材料名称
+    @SerializedName("currentMaterial") val currentMaterial: String? = null,            // 当前材料名称
 
     @ColumnInfo(name = "exec_message")
-    val execMessage: String? = null,                // 执行消息
+    @SerializedName("execMessage") val execMessage: String? = null,                // 执行消息
 
     @ColumnInfo(name = "exec_updated_at")
-    val execUpdatedAt: Long? = null,                // 执行状态最后更新时间
+    @SerializedName("execUpdatedAt") val execUpdatedAt: Long? = null,                // 执行状态最后更新时间
 
     @ColumnInfo(name = "result_record_id")
-    val resultRecordId: String? = null,             // 本地配置结果记录 ID
+    @SerializedName("resultRecordId") val resultRecordId: String? = null,             // 本地配置结果记录 ID
 
     @ColumnInfo(name = "result_synced_at")
-    val resultSyncedAt: Long? = null                // 最终配置结果同步到后端的时间
+    @SerializedName("resultSyncedAt") val resultSyncedAt: Long? = null                // 最终配置结果同步到后端的时间
 )
 
 /**

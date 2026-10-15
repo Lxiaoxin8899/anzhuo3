@@ -8,6 +8,7 @@ import com.google.gson.Gson
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import java.util.Locale
+import com.google.gson.annotations.SerializedName
 
 /**
  * 局域网任务 JSON 适配器，将发送端提案格式转换为内部的 IncomingTaskRequest
@@ -61,12 +62,12 @@ class LanTransferProposalAdapter(
 class UnsupportedSchemaException(val version: String) : IllegalArgumentException("不支持的协议版本: $version")
 
 private data class LanTransferEnvelope(
-    val schemaVersion: String,
-    val transferId: String,
-    val timestamp: Long,
-    val sender: LanSenderPayload,
-    val task: LanTaskPayload,
-    val recipe: LanRecipePayload?
+    @SerializedName("schemaVersion") val schemaVersion: String,
+    @SerializedName("transferId") val transferId: String,
+    @SerializedName("timestamp") val timestamp: Long,
+    @SerializedName("sender") val sender: LanSenderPayload,
+    @SerializedName("task") val task: LanTaskPayload,
+    @SerializedName("recipe") val recipe: LanRecipePayload?
 ) {
     fun validate() {
         require(transferId.isNotBlank()) { "transferId 不能为空" }
@@ -94,19 +95,19 @@ private data class LanTransferEnvelope(
 }
 
 private data class LanSenderPayload(
-    val uid: String,
-    val name: String,
-    val ip: String? = null,
-    val appVersion: String? = null
+    @SerializedName("uid") val uid: String,
+    @SerializedName("name") val name: String,
+    @SerializedName("ip") val ip: String? = null,
+    @SerializedName("appVersion") val appVersion: String? = null
 )
 
 private data class LanTaskPayload(
-    val title: String,
-    val quantity: Double?,
-    val unit: String? = null,
-    val priority: String? = null,
-    val deadline: String? = null,
-    val customer: String? = null
+    @SerializedName("title") val title: String,
+    @SerializedName("quantity") val quantity: Double?,
+    @SerializedName("unit") val unit: String? = null,
+    @SerializedName("priority") val priority: String? = null,
+    @SerializedName("deadline") val deadline: String? = null,
+    @SerializedName("customer") val customer: String? = null
 ) {
     fun toTaskPayload(recipe: RecipePayload): TaskPayload {
         val normalizedPriority = priority?.uppercase(Locale.getDefault()) ?: "NORMAL"
@@ -129,16 +130,16 @@ private data class LanTaskPayload(
 }
 
 private data class LanRecipePayload(
-    val id: String? = null,
-    val code: String? = null,
-    val name: String,
-    val category: String? = null,
-    val subCategory: String? = null,
-    val customer: String? = null,
-    val perfumer: String? = null,
-    val description: String? = null,
-    val totalWeight: Double,
-    val materials: List<LanMaterialPayload>?
+    @SerializedName("id") val id: String? = null,
+    @SerializedName("code") val code: String? = null,
+    @SerializedName("name") val name: String,
+    @SerializedName("category") val category: String? = null,
+    @SerializedName("subCategory") val subCategory: String? = null,
+    @SerializedName("customer") val customer: String? = null,
+    @SerializedName("perfumer") val perfumer: String? = null,
+    @SerializedName("description") val description: String? = null,
+    @SerializedName("totalWeight") val totalWeight: Double,
+    @SerializedName("materials") val materials: List<LanMaterialPayload>?
 ) {
     fun toRecipePayload(): RecipePayload {
         val resolvedCode = (code ?: id).orEmpty()
@@ -161,12 +162,12 @@ private data class LanRecipePayload(
 }
 
 private data class LanMaterialPayload(
-    val id: String? = null,
-    val code: String? = null,
-    val name: String,
-    val weight: Double,
-    val unit: String? = null,
-    val sequence: Int? = null
+    @SerializedName("id") val id: String? = null,
+    @SerializedName("code") val code: String? = null,
+    @SerializedName("name") val name: String,
+    @SerializedName("weight") val weight: Double,
+    @SerializedName("unit") val unit: String? = null,
+    @SerializedName("sequence") val sequence: Int? = null
 ) {
     fun toMaterialPayload(index: Int): MaterialPayload {
         val resolvedCode = code.orEmpty()

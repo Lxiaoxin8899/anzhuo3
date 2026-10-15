@@ -6,6 +6,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.example.smartdosing.data.DatabaseRecipeImportManager
 import com.example.smartdosing.data.DatabaseRecipeRepository
 import com.example.smartdosing.data.device.PairingRequestStore
+import com.example.smartdosing.data.transfer.TaskResultCallbackManager
 import com.example.smartdosing.database.SmartDosingDatabase
 import com.example.smartdosing.database.entities.AuthorizedSenderEntity
 import io.ktor.client.request.get
@@ -67,6 +68,7 @@ class WebServerAuthTest {
     private fun resetSingletons() {
         DatabaseRecipeImportManager.clearInstance()
         DatabaseRecipeRepository.clearInstance()
+        TaskResultCallbackManager.clearInstance()
         SmartDosingDatabase.closeAndClearInstance()
     }
 

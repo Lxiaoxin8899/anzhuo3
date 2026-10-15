@@ -8,9 +8,11 @@ import com.example.smartdosing.data.device.DeviceUIDManager
 import com.example.smartdosing.database.SmartDosingDatabase
 import com.example.smartdosing.database.entities.PendingTaskResultSyncEntity
 import com.google.gson.Gson
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -21,6 +23,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.concurrent.TimeUnit
+import com.google.gson.annotations.SerializedName
 
 /**
  * 任务最终配置结果同步器
@@ -50,6 +53,7 @@ class TaskResultCallbackManager internal constructor(
 
         /** 仅供单元测试：丢弃单例，避免用例之间共享状态 */
         internal fun clearInstance() {
+            INSTANCE?.scope?.cancel()
             INSTANCE = null
         }
 
@@ -66,7 +70,14 @@ class TaskResultCallbackManager internal constructor(
     init {
         if (retryOnInit) {
             scope.launch {
-                retryPendingResults()
+                try {
+                    retryPendingResults()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    // 恢复备份等场景会关闭数据库，补传失败不应让后台协程崩溃整个进程
+                    Log.w(TAG, "启动时补传待同步结果失败", e)
+                }
             }
         }
     }
@@ -241,32 +252,32 @@ class TaskResultCallbackManager internal constructor(
 }
 
 private data class TaskResultPayload(
-    val transferId: String,
-    val deviceUID: String,
-    val status: String,
-    val operator: String,
-    val recipeCode: String,
-    val recipeName: String,
-    val startedAt: String? = null,
-    val completedAt: String,
-    val totalMaterials: Int,
-    val completedMaterials: Int,
-    val plannedTotalWeight: Double,
-    val actualTotalWeight: Double,
-    val averageDeviationPercent: Double,
-    val overLimitCount: Int,
-    val tolerancePercent: Double,
-    val materials: List<TaskResultMaterialPayload>
+    @SerializedName("transferId") val transferId: String,
+    @SerializedName("deviceUID") val deviceUID: String,
+    @SerializedName("status") val status: String,
+    @SerializedName("operator") val operator: String,
+    @SerializedName("recipeCode") val recipeCode: String,
+    @SerializedName("recipeName") val recipeName: String,
+    @SerializedName("startedAt") val startedAt: String? = null,
+    @SerializedName("completedAt") val completedAt: String,
+    @SerializedName("totalMaterials") val totalMaterials: Int,
+    @SerializedName("completedMaterials") val completedMaterials: Int,
+    @SerializedName("plannedTotalWeight") val plannedTotalWeight: Double,
+    @SerializedName("actualTotalWeight") val actualTotalWeight: Double,
+    @SerializedName("averageDeviationPercent") val averageDeviationPercent: Double,
+    @SerializedName("overLimitCount") val overLimitCount: Int,
+    @SerializedName("tolerancePercent") val tolerancePercent: Double,
+    @SerializedName("materials") val materials: List<TaskResultMaterialPayload>
 )
 
 private data class TaskResultMaterialPayload(
-    val sequence: Int,
-    val materialCode: String,
-    val materialName: String,
-    val targetWeight: Double,
-    val actualWeight: Double,
-    val unit: String,
-    val deviation: Double,
-    val deviationPercent: Double,
-    val isOutOfTolerance: Boolean
+    @SerializedName("sequence") val sequence: Int,
+    @SerializedName("materialCode") val materialCode: String,
+    @SerializedName("materialName") val materialName: String,
+    @SerializedName("targetWeight") val targetWeight: Double,
+    @SerializedName("actualWeight") val actualWeight: Double,
+    @SerializedName("unit") val unit: String,
+    @SerializedName("deviation") val deviation: Double,
+    @SerializedName("deviationPercent") val deviationPercent: Double,
+    @SerializedName("isOutOfTolerance") val isOutOfTolerance: Boolean
 )

@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.net.wifi.WifiManager
 import android.os.Build
+import com.example.smartdosing.web.WebService
 import java.net.Inet4Address
 import java.net.NetworkInterface
 import java.util.Locale
@@ -18,6 +19,7 @@ object DeviceUIDManager {
     private const val KEY_DEVICE_UID = "device_uid"
     private const val KEY_DEVICE_NAME = "device_name"
     private const val KEY_CREATED_AT = "created_at"
+    private const val DEFAULT_SERVICE_PORT = 8080
 
     private var cachedIdentity: DeviceIdentity? = null
 
@@ -44,8 +46,8 @@ object DeviceUIDManager {
      */
     fun getDeviceIdentity(context: Context): DeviceIdentity {
         cachedIdentity?.let {
-            // 更新 IP 地址（可能变化）
-            return it.copy(ipAddress = getLocalIPAddress(context))
+            // 更新 IP 地址和端口（可能变化）
+            return it.copy(ipAddress = getLocalIPAddress(context), port = getServicePort(context))
         }
 
         val prefs = getPrefs(context)
@@ -57,7 +59,7 @@ object DeviceUIDManager {
             uid = uid,
             deviceName = deviceName,
             ipAddress = getLocalIPAddress(context),
-            port = 8080,
+            port = getServicePort(context),
             appVersion = getAppVersion(context),
             status = ReceiverStatus.IDLE,
             createdAt = createdAt
@@ -66,6 +68,10 @@ object DeviceUIDManager {
         cachedIdentity = identity
         return identity
     }
+
+    private fun getServicePort(context: Context): Int =
+        context.getSharedPreferences(WebService.PREFS_NAME, Context.MODE_PRIVATE)
+            .getInt(WebService.KEY_PREFERRED_PORT, DEFAULT_SERVICE_PORT)
 
     /**
      * 更新设备名称

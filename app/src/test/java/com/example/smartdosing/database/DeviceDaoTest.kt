@@ -23,10 +23,16 @@ class DeviceDaoTest {
 
     @Before
     fun setUp() {
+        // Windows 上 Robolectric 使用 legacy SQLite，连接与打开它的线程绑定；
+        // 用直接执行器让 Room 查询都在测试线程上跑，避免偶发 “Illegal connection pointer”
         database = Room.inMemoryDatabaseBuilder(
             ApplicationProvider.getApplicationContext(),
             SmartDosingDatabase::class.java
-        ).allowMainThreadQueries().build()
+        )
+            .allowMainThreadQueries()
+            .setQueryExecutor { it.run() }
+            .setTransactionExecutor { it.run() }
+            .build()
         dao = database.deviceDao()
     }
 

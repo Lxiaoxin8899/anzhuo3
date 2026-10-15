@@ -4,6 +4,7 @@ import android.util.Log
 import java.util.Collections
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import com.google.gson.annotations.SerializedName
 
 /**
  * 配对请求内存管理器
@@ -171,16 +172,16 @@ object PairingRequestStore {
  * 配对会话
  */
 data class PairingSession(
-    val pairingId: String,
-    val senderUID: String,
-    val senderName: String,
-    val senderIP: String,
-    val senderPort: Int,
-    val callbackBaseUrl: String,
-    val status: PairingStatus,
-    val generatedApiKey: String?,
-    val createdAt: Long,
-    val expiresAt: Long
+    @SerializedName("pairingId") val pairingId: String,
+    @SerializedName("senderUID") val senderUID: String,
+    @SerializedName("senderName") val senderName: String,
+    @SerializedName("senderIP") val senderIP: String,
+    @SerializedName("senderPort") val senderPort: Int,
+    @SerializedName("callbackBaseUrl") val callbackBaseUrl: String,
+    @SerializedName("status") val status: PairingStatus,
+    @SerializedName("generatedApiKey") val generatedApiKey: String?,
+    @SerializedName("createdAt") val createdAt: Long,
+    @SerializedName("expiresAt") val expiresAt: Long
 )
 
 /**

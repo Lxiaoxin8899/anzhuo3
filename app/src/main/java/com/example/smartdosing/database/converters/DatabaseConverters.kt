@@ -23,7 +23,7 @@ class DatabaseConverters {
     @TypeConverter
     fun toStringList(value: String?): List<String>? {
         if (value == null) return null
-        val listType = object : TypeToken<List<String>>() {}.type
+        val listType = TypeToken.getParameterized(List::class.java, String::class.java).type
         return gson.fromJson(value, listType)
     }
 

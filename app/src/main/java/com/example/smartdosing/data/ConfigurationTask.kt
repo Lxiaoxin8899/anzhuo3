@@ -1,35 +1,37 @@
 package com.example.smartdosing.data
 
+import com.google.gson.annotations.SerializedName
+
 /**
  * 研发配置任务：记录配方、目标设备与执行状态
  */
 data class ConfigurationTask(
-    val id: String,
-    val title: String = "",
-    val recipeId: String,
-    val recipeName: String,
-    val recipeCode: String,
-    val quantity: Double,
-    val unit: String = "g",
-    val priority: TaskPriority = TaskPriority.NORMAL,
-    val requestedBy: String = "",
-    val perfumer: String = "",
-    val customer: String = "",
-    val salesOwner: String = "",
-    val status: TaskStatus = TaskStatus.DRAFT,
-    val deadline: String = "",
-    val createdAt: String = "",
-    val publishedAt: String? = null,
-    val statusUpdatedAt: String = "",
-    val targetDevices: List<String> = emptyList(),
-    val note: String = "",
-    val tags: List<String> = emptyList(),
+    @SerializedName("id") val id: String,
+    @SerializedName("title") val title: String = "",
+    @SerializedName("recipeId") val recipeId: String,
+    @SerializedName("recipeName") val recipeName: String,
+    @SerializedName("recipeCode") val recipeCode: String,
+    @SerializedName("quantity") val quantity: Double,
+    @SerializedName("unit") val unit: String = "g",
+    @SerializedName("priority") val priority: TaskPriority = TaskPriority.NORMAL,
+    @SerializedName("requestedBy") val requestedBy: String = "",
+    @SerializedName("perfumer") val perfumer: String = "",
+    @SerializedName("customer") val customer: String = "",
+    @SerializedName("salesOwner") val salesOwner: String = "",
+    @SerializedName("status") val status: TaskStatus = TaskStatus.DRAFT,
+    @SerializedName("deadline") val deadline: String = "",
+    @SerializedName("createdAt") val createdAt: String = "",
+    @SerializedName("publishedAt") val publishedAt: String? = null,
+    @SerializedName("statusUpdatedAt") val statusUpdatedAt: String = "",
+    @SerializedName("targetDevices") val targetDevices: List<String> = emptyList(),
+    @SerializedName("note") val note: String = "",
+    @SerializedName("tags") val tags: List<String> = emptyList(),
     // 接单相关字段
-    val acceptedBy: String? = null,  // 接单人
-    val acceptedAt: String? = null,  // 接单时间
+    @SerializedName("acceptedBy") val acceptedBy: String? = null,  // 接单人
+    @SerializedName("acceptedAt") val acceptedAt: String? = null,  // 接单时间
     // 执行时间跟踪
-    val startedAt: String? = null,   // 开始配置时间
-    val completedAt: String? = null  // 完成时间
+    @SerializedName("startedAt") val startedAt: String? = null,   // 开始配置时间
+    @SerializedName("completedAt") val completedAt: String? = null  // 完成时间
 )
 
 /**
@@ -92,12 +94,12 @@ object TaskSampleData {
  * 任务中心中的设备信息
  */
 data class TaskDeviceInfo(
-    val id: String,
-    val name: String,
-    val status: DeviceStatus,
-    val currentTaskId: String? = null,
-    val currentTaskName: String? = null,
-    val lastHeartbeat: String? = null
+    @SerializedName("id") val id: String,
+    @SerializedName("name") val name: String,
+    @SerializedName("status") val status: DeviceStatus,
+    @SerializedName("currentTaskId") val currentTaskId: String? = null,
+    @SerializedName("currentTaskName") val currentTaskName: String? = null,
+    @SerializedName("lastHeartbeat") val lastHeartbeat: String? = null
 )
 
 enum class DeviceStatus {
@@ -111,12 +113,12 @@ enum class DeviceStatus {
  * 发布记录
  */
 data class TaskPublishLogEntry(
-    val id: String,
-    val time: String,
-    val title: String,
-    val description: String,
-    val operator: String = "",
-    val status: PublishResultStatus = PublishResultStatus.SUCCEEDED
+    @SerializedName("id") val id: String,
+    @SerializedName("time") val time: String,
+    @SerializedName("title") val title: String,
+    @SerializedName("description") val description: String,
+    @SerializedName("operator") val operator: String = "",
+    @SerializedName("status") val status: PublishResultStatus = PublishResultStatus.SUCCEEDED
 )
 
 enum class PublishResultStatus {
@@ -126,13 +128,13 @@ enum class PublishResultStatus {
 }
 
 data class TaskOverviewSnapshot(
-    val pendingCount: Int,
-    val runningCount: Int,
-    val completedToday: Int,
-    val heartbeatWindow: String,
-    val tasks: List<ConfigurationTask>,
-    val devices: List<TaskDeviceInfo>,
-    val publishLog: List<TaskPublishLogEntry>
+    @SerializedName("pendingCount") val pendingCount: Int,
+    @SerializedName("runningCount") val runningCount: Int,
+    @SerializedName("completedToday") val completedToday: Int,
+    @SerializedName("heartbeatWindow") val heartbeatWindow: String,
+    @SerializedName("tasks") val tasks: List<ConfigurationTask>,
+    @SerializedName("devices") val devices: List<TaskDeviceInfo>,
+    @SerializedName("publishLog") val publishLog: List<TaskPublishLogEntry>
 )
 
 object TaskDeviceSampleData {
