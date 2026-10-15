@@ -11,6 +11,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Assignment
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -53,7 +54,6 @@ fun MaterialListScreen(
     val recipeRepository = remember { DatabaseRecipeRepository.getInstance(context) }
     val preferencesManager = remember { DosingPreferencesManager(context) }
     val preferencesState by preferencesManager.preferencesFlow.collectAsState(initial = DosingPreferencesState())
-    val scope = rememberCoroutineScope()
     
     var tasks by remember { mutableStateOf<List<ConfigurationTask>>(emptyList()) }
     var selectedTask by remember { mutableStateOf<ConfigurationTask?>(null) }
@@ -192,7 +192,7 @@ private fun TaskSelectorCard(
         ) {
             Row(modifier = Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 Box(modifier = Modifier.size(48.dp).background(MaterialTheme.colorScheme.primary.copy(0.1f), CircleShape), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Default.Assignment, null, tint = MaterialTheme.colorScheme.primary)
+                    Icon(Icons.AutoMirrored.Filled.Assignment, null, tint = MaterialTheme.colorScheme.primary)
                 }
                 Column(modifier = Modifier.weight(1f)) {
                     Text(selectedTask?.recipeName ?: "选择研发任务", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -235,7 +235,7 @@ private fun PrepProgressSection(confirmedCount: Int, totalCount: Int) {
             Text("$confirmedCount / $totalCount", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold, fontFamily = FontFamily.Monospace)
         }
         LinearProgressIndicator(
-            progress = progress,
+            progress = { progress },
             modifier = Modifier.fillMaxWidth().height(8.dp).clip(CircleShape),
             color = MaterialTheme.colorScheme.primary,
             trackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)

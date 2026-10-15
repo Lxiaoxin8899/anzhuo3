@@ -263,7 +263,7 @@ class DatabaseRecipeRepository(private val context: Context) {
      * 删除配方
      */
     suspend fun deleteRecipe(id: String): Boolean {
-        val recipe = recipeDao.getRecipeById(id) ?: return false
+        recipeDao.getRecipeById(id) ?: return false
         recipeDao.deleteRecipeById(id)
         return true
     }

@@ -13,6 +13,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.Assignment
+import androidx.compose.material.icons.automirrored.outlined.FormatListBulleted
+import androidx.compose.material.icons.automirrored.outlined.TrendingUp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -64,7 +67,6 @@ fun HomeScreen(
     onNavigateToMaterialList: () -> Unit = {},
     onNavigateToSettings: () -> Unit = {},
     onNavigateToDeviceInfo: () -> Unit = {},
-    onImportRecipe: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: HomeViewModel = viewModel()
 ) {
@@ -103,7 +105,7 @@ fun HomeScreen(
         HomeAction(
             title = "物料清单",
             description = "查看当前任务所需的详细物料列表",
-            icon = Icons.Outlined.FormatListBulleted,
+            icon = Icons.AutoMirrored.Outlined.FormatListBulleted,
             containerColor = MaterialTheme.colorScheme.surface,
             contentColor = MaterialTheme.colorScheme.onSurface,
             onClick = onNavigateToMaterialList
@@ -271,7 +273,7 @@ private fun LargeScreenHomeLayout(
             
             Spacer(Modifier.weight(1f))
             
-            Divider(color = MaterialTheme.colorScheme.outlineVariant)
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 SettingsActionItem(
@@ -438,7 +440,7 @@ private fun DashboardOverview(stats: DashboardStats, isLoading: Boolean) {
 
     val cardConfigs = listOf(
         DashboardCardInfo("研发配方库", if (isLoading) "-" else stats.totalRecipes.toString(), Icons.Outlined.Inventory2, MaterialTheme.colorScheme.primary, "件"),
-        DashboardCardInfo("待处理任务", if (isLoading) "-" else stats.pendingTasks.toString(), Icons.Outlined.Assignment, MaterialTheme.colorScheme.secondary, "项"),
+        DashboardCardInfo("待处理任务", if (isLoading) "-" else stats.pendingTasks.toString(), Icons.AutoMirrored.Outlined.Assignment, MaterialTheme.colorScheme.secondary, "项"),
         DashboardCardInfo("今日已完成", if (isLoading) "-" else stats.completedToday.toString(), Icons.Outlined.CheckCircle, Color(0xFF4CAF50), "次")
     )
 
@@ -543,7 +545,7 @@ private fun SystemStatusPanel(runtimeStatus: HomeRuntimeStatus, scaleConnectionS
                 icon = Icons.Outlined.Balance
             )
             
-            Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.28f))
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.28f))
             
             StatusItem(
                 title = "数据同步服务",
@@ -553,7 +555,7 @@ private fun SystemStatusPanel(runtimeStatus: HomeRuntimeStatus, scaleConnectionS
                 subtitle = runtimeStatus.wirelessAddress
             )
             
-            Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.28f))
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.28f))
             
             StatusItem(
                 title = "语音引导引擎",
@@ -804,7 +806,7 @@ private fun RecentOperationsPanel(modifier: Modifier = Modifier, operations: Lis
                     repeat(4) { index ->
                         RecentOperationShimmerRow()
                         if (index < 3) {
-                            Divider(modifier = Modifier.padding(start = 40.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                            HorizontalDivider(modifier = Modifier.padding(start = 40.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
                         }
                     }
                 }
@@ -817,7 +819,7 @@ private fun RecentOperationsPanel(modifier: Modifier = Modifier, operations: Lis
                     operations.take(4).forEachIndexed { index, record ->
                         RecentOperationRow(record)
                         if (index < operations.take(4).size - 1) {
-                            Divider(modifier = Modifier.padding(start = 40.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                            HorizontalDivider(modifier = Modifier.padding(start = 40.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
                         }
                     }
                 }
@@ -920,7 +922,7 @@ fun AnalyticalDashboardPanel(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Icon(Icons.Outlined.TrendingUp, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                Icon(Icons.AutoMirrored.Outlined.TrendingUp, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
                 Text("研发效能分析看板 (高精度投料)", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
             }
 

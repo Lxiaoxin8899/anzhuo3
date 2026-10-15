@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.BluetoothSearching
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -287,7 +288,7 @@ fun BluetoothDeviceSelectDialog(
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.BluetoothSearching,
+                                    imageVector = Icons.AutoMirrored.Filled.BluetoothSearching,
                                     contentDescription = null,
                                     modifier = Modifier.size(48.dp),
                                     tint = Color(0xFFBDBDBD)

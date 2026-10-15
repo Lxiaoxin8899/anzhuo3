@@ -1,7 +1,7 @@
 package com.example.smartdosing.web
 
 import android.content.Context
-import android.net.wifi.WifiManager
+import android.net.ConnectivityManager
 import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -199,33 +199,31 @@ class WebService(private val context: Context) {
      */
     private fun getLocalIPAddress(): String? {
         try {
-            val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
-            val wifiInfo = wifiManager.connectionInfo
-            val ipInt = wifiInfo.ipAddress
-
-            if (ipInt != 0) {
-                return String.format(
-                    Locale.US,
-                    "%d.%d.%d.%d",
-                    ipInt and 0xff,
-                    ipInt shr 8 and 0xff,
-                    ipInt shr 16 and 0xff,
-                    ipInt shr 24 and 0xff
-                )
-            }
-
-            val networkInterfaces = NetworkInterface.getNetworkInterfaces()
-            for (networkInterface in networkInterfaces) {
-                if (!networkInterface.isLoopback && networkInterface.isUp) {
-                    val addresses = networkInterface.inetAddresses
-                    for (address in addresses) {
-                        if (address is Inet4Address && !address.isLoopbackAddress) {
-                            return address.hostAddress
-                        }
-                    }
+            val candidates = NetworkInterface.getNetworkInterfaces().toList()
+                .filter { !it.isLoopback && it.isUp }
+                .flatMap { networkInterface ->
+                    networkInterface.inetAddresses.toList()
+                        .filterIsInstance<Inet4Address>()
+                        .filter { !it.isLoopbackAddress }
+                        .map { networkInterface.name to it }
                 }
+
+            // 局域网接单优先使用 Wi-Fi 网卡地址，其次是当前默认网络，最后兜底任意 IPv4
+            candidates.firstOrNull { (name, _) -> name.startsWith("wlan") }?.let {
+                return it.second.hostAddress
             }
 
+            val connectivityManager = context.getSystemService(ConnectivityManager::class.java)
+            val activeAddress = connectivityManager?.activeNetwork
+                ?.let { connectivityManager.getLinkProperties(it) }
+                ?.linkAddresses
+                ?.map { it.address }
+                ?.firstOrNull { it is Inet4Address && !it.isLoopbackAddress }
+            if (activeAddress != null) {
+                return activeAddress.hostAddress
+            }
+
+            return candidates.firstOrNull()?.second?.hostAddress
         } catch (e: Exception) {
             Log.e(TAG, "获取IP地址失败", e)
         }

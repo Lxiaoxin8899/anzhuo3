@@ -14,6 +14,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.outlined.ExitToApp
+import androidx.compose.material.icons.automirrored.outlined.Help
+import androidx.compose.material.icons.automirrored.outlined.TrendingUp
+import androidx.compose.material.icons.automirrored.outlined.VolumeUp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -227,7 +231,7 @@ fun SettingsScreen(
         ),
         SettingsSection(
             title = "提示音",
-            icon = Icons.Outlined.VolumeUp,
+            icon = Icons.AutoMirrored.Outlined.VolumeUp,
             items = buildList {
                 add(SettingsItem.Selection(
                     title = "提示音模式",
@@ -323,7 +327,7 @@ fun SettingsScreen(
                     add(SettingsItem.Slider(
                         title = "加速曲线",
                         subtitle = "1.0=线性 2.0=平方 4.0=急加速",
-                        icon = Icons.Outlined.TrendingUp,
+                        icon = Icons.AutoMirrored.Outlined.TrendingUp,
                         value = preferencesState.progressiveCurveExponent,
                         onValueChange = { scope.launch { preferencesManager.setProgressiveCurveExponent(it) } },
                         valueRange = 1.0f..4.0f,
@@ -335,7 +339,7 @@ fun SettingsScreen(
                     add(SettingsItem.Slider(
                         title = "提示阈值",
                         subtitle = "达到目标重量的百分比后开始提示",
-                        icon = Icons.Outlined.TrendingUp,
+                        icon = Icons.AutoMirrored.Outlined.TrendingUp,
                         value = preferencesState.beepThresholdPercent.toFloat(),
                         onValueChange = { value ->
                             scope.launch { preferencesManager.setBeepThresholdPercent(value.toInt()) }
@@ -476,7 +480,7 @@ fun SettingsScreen(
                     add(SettingsItem.Action(
                         title = "退出管理员",
                         subtitle = "退出后受保护设置将被锁定",
-                        icon = Icons.Outlined.ExitToApp,
+                        icon = Icons.AutoMirrored.Outlined.ExitToApp,
                         onClick = { adminManager.logout() }
                     ))
                 }
@@ -494,7 +498,7 @@ fun SettingsScreen(
                 SettingsItem.Action(
                     title = "使用帮助",
                     subtitle = "查看操作指南和常见问题",
-                    icon = Icons.Outlined.Help,
+                    icon = Icons.AutoMirrored.Outlined.Help,
                     onClick = { Toast.makeText(context, "该功能开发中", Toast.LENGTH_SHORT).show() }
                 ),
                 SettingsItem.Action(

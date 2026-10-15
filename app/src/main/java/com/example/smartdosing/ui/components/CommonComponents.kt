@@ -409,7 +409,6 @@ fun MiniStatChip(
 fun StatusBadge(
     text: String,
     color: Color,
-    icon: ImageVector? = null,
     modifier: Modifier = Modifier
 ) {
     // Redirect to LabStatusBadge logic but generic
@@ -424,17 +423,16 @@ fun PriorityBadge(
     priority: String,
     modifier: Modifier = Modifier
 ) {
-    val (color, icon) = when (priority.lowercase()) {
-        "urgent", "紧急" -> MaterialTheme.colorScheme.error to Icons.Default.PriorityHigh
-        "high", "高" -> MaterialTheme.colorScheme.tertiary to Icons.Default.ArrowUpward
-        "normal", "普通", "标准" -> MaterialTheme.colorScheme.primary to Icons.Default.Remove
-        else -> MaterialTheme.colorScheme.outline to Icons.Default.ArrowDownward
+    val color = when (priority.lowercase()) {
+        "urgent", "紧急" -> MaterialTheme.colorScheme.error
+        "high", "高" -> MaterialTheme.colorScheme.tertiary
+        "normal", "普通", "标准" -> MaterialTheme.colorScheme.primary
+        else -> MaterialTheme.colorScheme.outline
     }
 
     StatusBadge(
         text = priority,
         color = color,
-        icon = icon,
         modifier = modifier
     )
 }

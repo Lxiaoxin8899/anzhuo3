@@ -13,6 +13,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.BluetoothSearching
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -76,7 +77,6 @@ fun BluetoothScaleSettingsScreen(
     )
     val connectionState by scaleManager.connectionState.collectAsState()
     val connectedDeviceName by scaleManager.connectedDeviceName.collectAsState()
-    val scannedDevices by scaleManager.scannedDevices.collectAsState()
     val errorMessage by scaleManager.errorMessage.collectAsState()
 
     // UI 状态
@@ -1148,7 +1148,7 @@ private fun ConnectionStatusCard(
                         Icon(
                             imageVector = when (connectionState) {
                                 ConnectionState.CONNECTED -> Icons.Default.BluetoothConnected
-                                ConnectionState.CONNECTING, ConnectionState.SCANNING -> Icons.Default.BluetoothSearching
+                                ConnectionState.CONNECTING, ConnectionState.SCANNING -> Icons.AutoMirrored.Filled.BluetoothSearching
                                 ConnectionState.ERROR -> Icons.Default.BluetoothDisabled
                                 else -> Icons.Default.Bluetooth
                             },

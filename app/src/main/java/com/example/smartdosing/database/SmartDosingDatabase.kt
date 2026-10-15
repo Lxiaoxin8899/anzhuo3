@@ -349,7 +349,6 @@ abstract class SmartDosingDatabase : RoomDatabase() {
          */
         private suspend fun insertSampleRecipes(database: SmartDosingDatabase) {
             val recipeDao = database.recipeDao()
-            val materialDao = database.materialDao()
 
             val currentTime = getCurrentTimeString()
 

@@ -78,14 +78,12 @@ fun MaterialConfigurationScreen(
     isViewOnly: Boolean = false,
     targetTotalWeight: Double? = null,
     onNavigateBack: () -> Unit = {},
-    onNavigateToTaskCenter: () -> Unit = {},
     onSaveConfiguration: (MaterialConfigurationData) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val repository = remember { DatabaseRecipeRepository.getInstance(context) }
     val taskRepository = remember { ConfigurationRepositoryProvider.taskRepository }
-    val recordRepository = remember { ConfigurationRepositoryProvider.recordRepository }
 
     // 蓝牙电子秤相关
     val application = context.applicationContext as SmartDosingApplication
@@ -423,6 +421,7 @@ fun MaterialConfigurationScreen(
     }
 
     Scaffold(
+        modifier = modifier,
         topBar = {
             LabConfigurationTopBar(
                 recipeName = recipe?.name ?: if (isViewOnly) "配方详情" else "实验配置",
@@ -450,7 +449,6 @@ fun MaterialConfigurationScreen(
                     val windowSize = LocalWindowSize.current
                     if (windowSize.widthClass == SmartDosingWindowWidthClass.Expanded) {
                         LargeScreenLayout(
-                            recipe = recipe!!,
                             materialStates = materialStates,
                             activeRowIndex = activeRowIndex,
                             activeEvaluation = activeEvaluation,
@@ -484,11 +482,9 @@ fun MaterialConfigurationScreen(
                         )
                     } else {
                         CompactScreenLayout(
-                            recipe = recipe!!,
                             materialStates = materialStates,
                             activeRowIndex = activeRowIndex,
                             activeEvaluation = activeEvaluation,
-                            scaleManager = scaleManager,
                             currentWeight = currentWeight,
                             isBluetoothConnected = isBluetoothConnected,
                             isViewOnly = isViewOnly,
@@ -496,9 +492,6 @@ fun MaterialConfigurationScreen(
                             onRowClick = { activeRowIndex = it },
                             onConfirm = {
                                 activeEvaluation?.let { handleConfirmClick(it) }
-                            },
-                            onSave = {
-                                buildConfigurationData()?.let { onSaveConfiguration(it) }
                             },
                             onToggleMagnify = { isMagnified = true },
                             onWeightChange = { index, newWeight ->
@@ -523,17 +516,17 @@ fun MaterialConfigurationScreen(
             // 放大显示层
             if (isMagnified && activeRowIndex < materialStates.size) {
                 val activeState = materialStates[activeRowIndex]
-                val activeEvaluation = evaluateState(activeRowIndex, activeState)
+                val magnifiedEvaluation = evaluateState(activeRowIndex, activeState)
                 MagnifiedWeightOverlay(
                     materialName = activeState.material.name,
                     targetWeight = activeState.material.weight,
-                    evaluation = activeEvaluation,
+                    evaluation = magnifiedEvaluation,
                     currentWeight = currentWeight,
                     isStable = currentWeight?.isStable == true,
                     onDismiss = { isMagnified = false },
                     onTare = { scaleManager.tare() },
                     onConfirm = {
-                        handleConfirmClick(activeEvaluation)
+                        handleConfirmClick(magnifiedEvaluation)
                     },
                     isConfirmed = activeState.isConfirmed,
                     autoConfirmCountdown = autoConfirmCountdown
@@ -720,7 +713,6 @@ private fun LabConfigurationTopBar(
  */
 @Composable
 private fun LargeScreenLayout(
-    recipe: Recipe,
     materialStates: List<MaterialConfigState>,
     activeRowIndex: Int,
     activeEvaluation: WeightEvaluation?,
@@ -736,12 +728,11 @@ private fun LargeScreenLayout(
     onWeightChange: (Int, String) -> Unit,
     autoConfirmCountdown: Int = -1
 ) {
-    val activeState = materialStates.getOrNull(activeRowIndex)
-    val evaluation = activeEvaluation
+    val selectedState = materialStates.getOrNull(activeRowIndex)
 
-    val warningLevel = evaluation?.level ?: WeightWarningLevel.IDLE
+    val warningLevel = activeEvaluation?.level ?: WeightWarningLevel.IDLE
     val glowIntensity = when {
-        !isBluetoothConnected || activeState == null || activeState.isConfirmed -> 0f
+        !isBluetoothConnected || selectedState == null || selectedState.isConfirmed -> 0f
         warningLevel == WeightWarningLevel.IN_TOLERANCE && currentWeight?.isStable == true -> 0.16f
         warningLevel == WeightWarningLevel.OVER_LIMIT ||
             warningLevel == WeightWarningLevel.HARD_OVER_LIMIT -> 0.14f
@@ -969,18 +960,15 @@ private fun LargeScreenLayout(
  */
 @Composable
 private fun CompactScreenLayout(
-    recipe: Recipe,
     materialStates: List<MaterialConfigState>,
     activeRowIndex: Int,
     activeEvaluation: WeightEvaluation?,
-    scaleManager: BluetoothScaleManager,
     currentWeight: WeightData?,
     isBluetoothConnected: Boolean,
     isViewOnly: Boolean = false,
     isManualInputDisabled: Boolean = false,
     onRowClick: (Int) -> Unit,
     onConfirm: () -> Unit,
-    onSave: () -> Unit,
     onToggleMagnify: () -> Unit,
     onWeightChange: (Int, String) -> Unit,
     autoConfirmCountdown: Int = -1
@@ -1388,10 +1376,10 @@ private fun RollingWeightDisplay(
         targetState = weight,
         transitionSpec = {
             if (targetState > initialState) {
-                slideInVertically { height -> height } + fadeIn() with
+                slideInVertically { height -> height } + fadeIn() togetherWith
                         slideOutVertically { height -> -height } + fadeOut()
             } else {
-                slideInVertically { height -> -height } + fadeIn() with
+                slideInVertically { height -> -height } + fadeIn() togetherWith
                         slideOutVertically { height -> height } + fadeOut()
             }.using(SizeTransform(clip = false))
         },

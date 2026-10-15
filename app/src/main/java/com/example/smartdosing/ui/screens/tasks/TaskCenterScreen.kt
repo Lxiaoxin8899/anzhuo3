@@ -13,6 +13,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.Inbox
 import androidx.compose.material3.*
@@ -269,7 +270,7 @@ private fun TaskSummarySection(tasks: List<ConfigurationTask>, isCompact: Boolea
 
     val summaryData = listOf(
         SummaryCardData("待处理", waitingCount, Icons.Default.HourglassEmpty, MaterialTheme.colorScheme.primary),
-        SummaryCardData("进行中", progressingCount, Icons.Default.TrendingUp, MaterialTheme.colorScheme.tertiary),
+        SummaryCardData("进行中", progressingCount, Icons.AutoMirrored.Filled.TrendingUp, MaterialTheme.colorScheme.tertiary),
         SummaryCardData("已归档", completedCount, Icons.Default.CheckCircle, Color(0xFF4CAF50))
     )
 

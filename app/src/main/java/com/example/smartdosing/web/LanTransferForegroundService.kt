@@ -294,6 +294,8 @@ class LanTransferForegroundService : Service() {
 
     private fun acquireWifiLock() {
         val wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager ?: return
+        // 替代方案 WIFI_MODE_FULL_LOW_LATENCY 只在前台亮屏时生效，后台接单保活仍需 HIGH_PERF
+        @Suppress("DEPRECATION")
         wifiLock = wifiManager.createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, WIFI_LOCK_TAG).apply {
             setReferenceCounted(false)
             if (!isHeld) {

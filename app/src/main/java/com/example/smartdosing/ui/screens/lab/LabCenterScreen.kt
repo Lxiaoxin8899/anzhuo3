@@ -13,8 +13,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Assignment
-import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.automirrored.filled.Assignment
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -54,8 +54,8 @@ fun LabCenterScreen(
     val scope = rememberCoroutineScope()
     var waitingTaskCount by remember { mutableIntStateOf(0) }
     val tabs = listOf(
-        LabTabItem("研发任务", Icons.Default.Assignment),
-        LabTabItem("配方库", Icons.Default.List)
+        LabTabItem("研发任务", Icons.AutoMirrored.Filled.Assignment),
+        LabTabItem("配方库", Icons.AutoMirrored.Filled.List)
     )
 
     // 配方库启动实验：重量输入对话框状态

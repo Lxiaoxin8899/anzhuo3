@@ -33,6 +33,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Article
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.automirrored.filled.ViewList
+import androidx.compose.material.icons.automirrored.outlined.Article
+import androidx.compose.material.icons.automirrored.outlined.TrendingUp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.Button
@@ -736,7 +741,7 @@ fun RecipeFilterPanel(
         )
 
         if (selectedCategory.isNotEmpty() && subCategories.isNotEmpty()) {
-            SectionTitle(icon = Icons.Default.List, text = "子分类")
+            SectionTitle(icon = Icons.AutoMirrored.Filled.List, text = "子分类")
             FilterChipGroup(
                 options = listOf("全部") + subCategories,
                 selected = selectedSubCategory.ifEmpty { "全部" },
@@ -920,7 +925,7 @@ fun RecipeWorkspaceHeader(
                 )
                 IconToggleChip(
                     label = "表格",
-                    icon = Icons.Default.ViewList,
+                    icon = Icons.AutoMirrored.Filled.ViewList,
                     selected = viewMode == RecipeViewMode.TABLE,
                     onClick = { onViewModeChange(RecipeViewMode.TABLE) }
                 )
@@ -1047,7 +1052,7 @@ fun RecipeStatsOverview(
         Triple("总配方", stats.totalRecipes.toString(), Icons.Default.AllInbox),
         Triple("当前结果", filteredCount.toString(), Icons.Default.FilterAlt),
         Triple("紧急", urgentCount.toString(), Icons.Default.Bolt),
-        Triple("草稿/待审", draftCount.toString(), Icons.Default.Article)
+        Triple("草稿/待审", draftCount.toString(), Icons.AutoMirrored.Filled.Article)
     )
     FlowRow(
         modifier = Modifier.fillMaxWidth(),
@@ -1613,8 +1618,8 @@ fun SectionTitle(icon: ImageVector, text: String) {
 enum class QuickCollectionType(val label: String, val icon: ImageVector) {
     ALL("全部配方", Icons.Outlined.AllInbox),
     RECENT("最近使用", Icons.Outlined.Schedule),
-    FREQUENT("高频生产", Icons.Outlined.TrendingUp),
-    DRAFT("草稿/未审核", Icons.Outlined.Article),
+    FREQUENT("高频生产", Icons.AutoMirrored.Outlined.TrendingUp),
+    DRAFT("草稿/未审核", Icons.AutoMirrored.Outlined.Article),
     URGENT("紧急任务", Icons.Outlined.Bolt)
 }
 

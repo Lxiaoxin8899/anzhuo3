@@ -220,9 +220,6 @@ fun SmartDosingNavHost(
                 isViewOnly = viewOnly,
                 targetTotalWeight = targetTotalWeight,
                 onNavigateBack = { navController.popBackStack() },
-                onNavigateToTaskCenter = {
-                    navController.navigate(SmartDosingRoutes.LAB_CENTER)
-                },
                 onSaveConfiguration = { configData ->
                     scope.launch {
                         saveMaterialConfiguration(
