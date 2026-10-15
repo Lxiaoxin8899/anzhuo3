@@ -6,10 +6,12 @@ SmartDosing 是一个基于 Kotlin + Jetpack Compose 的 Android 应用，用于
 
 ## 技术栈
 
-- **语言**: Kotlin
-- **UI框架**: Jetpack Compose + Material 3
-- **数据库**: Room 2.6.1 (SQLite)
-- **局域网服务**: Ktor 2.3.7（仅 JSON API，网页管理端已移除）
+- **语言**: Kotlin 2.0.21（Compose 编译器插件，注解处理用 KSP）
+- **UI框架**: Jetpack Compose（BOM 2024.12.01）+ Material 3 + material3-adaptive
+- **导航**: navigation-compose 2.8.5（字符串路由）
+- **数据库**: Room 2.6.1 (SQLite，schema 导出到 `app/schemas`)
+- **局域网服务**: Ktor 2.3.13（仅 JSON API，网页管理端已移除）
+- **单元测试**: JUnit4 + MockK + Robolectric + Ktor testApplication + MockWebServer
 - **最低API**: 26 (Android 8.0)
 - **目标API**: 36
 
@@ -94,6 +96,11 @@ app/src/main/java/com/example/smartdosing/
 ### 局域网接口
 - 除配对接口外，所有 `/api` 请求必须携带 `X-API-Key`
 - 对外接口返回专用 DTO，不要直接返回 Room 实体（实体中含 API Key 等敏感字段）
+
+### 测试
+- 纯逻辑（导入解析、导出、配对限流）写普通 JVM 单测；涉及 Room、Ktor 路由、WebSocket 的用 Robolectric
+- 单例类通过 `internal` 构造器注入测试替身，用例结束调用 `clearInstance()` / `resetForTest()` 清理
+- CI（`.github/workflows/android.yml`）在 push/PR 上跑 `compileDebugKotlin testDebugUnitTest lintDebug`
 
 ### 代码风格
 - 使用 Kotlin 协程处理异步操作
