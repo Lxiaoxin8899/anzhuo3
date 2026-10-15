@@ -49,6 +49,7 @@ import com.example.smartdosing.data.ConfigurationTask
 import com.example.smartdosing.ui.theme.*
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 /**
  * SmartDosing 实验室研发看板 (Advanced Dashboard)
@@ -1215,7 +1216,7 @@ fun PerfumerEfficiencyChart(
                                     border = androidx.compose.foundation.BorderStroke(1.dp, devColor.copy(alpha = 0.16f))
                                 ) {
                                     Text(
-                                        text = String.format("±%.2f%%", item.averageDeviationPercent),
+                                        text = String.format(Locale.US, "±%.2f%%", item.averageDeviationPercent),
                                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                                         fontSize = 10.sp,
                                         color = devColor,

@@ -96,6 +96,9 @@ class BackendConnectionManager private constructor(private val context: Context)
 
     fun reconnect(reason: String) {
         Log.i(TAG, "请求重新连接后端: $reason")
+        // 中文注释：配对刚确认时需要立刻使用新写入的 senderApiKey，取消旧的延迟重连任务避免等待退避周期。
+        reconnectJob?.cancel()
+        reconnectJob = null
         webSocket?.close(1001, reason)
         webSocket = null
         connected = false
@@ -255,6 +258,11 @@ class BackendConnectionManager private constructor(private val context: Context)
         }
 
         override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+            // 旧 socket 的异步回调不能清理当前新连接状态。
+            if (webSocket !== this@BackendConnectionManager.webSocket) {
+                Log.d(TAG, "忽略陈旧回调：旧 socket 已不是当前连接，跳过状态清理")
+                return
+            }
             Log.i(TAG, "后端 WebSocket 已关闭: code=$code, reason=$reason")
             connected = false
             heartbeatJob?.cancel()
@@ -263,6 +271,11 @@ class BackendConnectionManager private constructor(private val context: Context)
         }
 
         override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+            // 旧 socket 的异步回调不能清理当前新连接状态。
+            if (webSocket !== this@BackendConnectionManager.webSocket) {
+                Log.d(TAG, "忽略陈旧回调：旧 socket 已不是当前连接，跳过状态清理")
+                return
+            }
             Log.w(TAG, "后端 WebSocket 连接失败: ${t.message}")
             connected = false
             heartbeatJob?.cancel()

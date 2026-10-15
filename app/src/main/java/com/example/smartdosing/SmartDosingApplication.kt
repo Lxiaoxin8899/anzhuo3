@@ -12,6 +12,7 @@ import com.example.smartdosing.bluetooth.BluetoothScaleManager
 import com.example.smartdosing.bluetooth.BluetoothScalePreferencesManager
 import com.example.smartdosing.bluetooth.DemoModeManager
 import com.example.smartdosing.data.settings.AdminPreferencesManager
+import com.example.smartdosing.data.settings.OperatorIdentityManager
 import com.example.smartdosing.data.transfer.TaskResultCallbackManager
 import com.example.smartdosing.web.WebService
 import kotlinx.coroutines.CoroutineScope
@@ -59,6 +60,11 @@ class SmartDosingApplication : Application() {
     // 管理员偏好管理器
     val adminPreferencesManager: AdminPreferencesManager by lazy {
         AdminPreferencesManager(this)
+    }
+
+    // 当前操作员身份占位管理器
+    val operatorIdentityManager: OperatorIdentityManager by lazy {
+        OperatorIdentityManager(this)
     }
 
     override fun onCreate() {

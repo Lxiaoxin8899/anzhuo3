@@ -9,6 +9,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import java.net.Inet4Address
 import java.net.NetworkInterface
+import java.util.Locale
 
 /**
  * 无线传输服务管理类
@@ -31,9 +32,10 @@ class WebService(private val context: Context) {
         private const val TAG = "WebService"
         private const val DEFAULT_PORT = 8080
         private const val LOCALHOST_FALLBACK = "127.0.0.1" // 回环地址，无法获取局域网IP时用于本机访问
-        private const val PREFS_NAME = "wireless_transfer_prefs"
-        private const val KEY_PREFERRED_PORT = "preferred_port"
-        private const val KEY_AUTO_START = "auto_start_enabled"
+        internal const val PREFS_NAME = "wireless_transfer_prefs"
+        internal const val KEY_PREFERRED_PORT = "preferred_port"
+        internal const val KEY_AUTO_START = "auto_start_enabled"
+        internal const val KEY_DEBUG_NO_AUTH = "debug_no_auth_enabled"
 
         @Volatile
         private var INSTANCE: WebService? = null
@@ -183,6 +185,16 @@ class WebService(private val context: Context) {
     }
 
     /**
+     * Debug 构建下是否允许绕过局域网 API Key 鉴权。
+     * Release 构建不会读取该开关，始终强制鉴权。
+     */
+    fun isDebugNoAuthEnabled(): Boolean = servicePrefs.getBoolean(KEY_DEBUG_NO_AUTH, false)
+
+    fun setDebugNoAuthEnabled(enabled: Boolean) {
+        servicePrefs.edit().putBoolean(KEY_DEBUG_NO_AUTH, enabled).apply()
+    }
+
+    /**
      * 获取设备本地IP地址
      */
     private fun getLocalIPAddress(): String? {
@@ -193,6 +205,7 @@ class WebService(private val context: Context) {
 
             if (ipInt != 0) {
                 return String.format(
+                    Locale.US,
                     "%d.%d.%d.%d",
                     ipInt and 0xff,
                     ipInt shr 8 and 0xff,

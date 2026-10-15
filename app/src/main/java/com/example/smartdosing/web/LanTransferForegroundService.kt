@@ -1,5 +1,6 @@
 package com.example.smartdosing.web
 
+import android.Manifest
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -7,6 +8,7 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.wifi.WifiManager
@@ -15,6 +17,7 @@ import android.os.IBinder
 import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import com.example.smartdosing.MainActivity
 import com.example.smartdosing.R
 import com.example.smartdosing.data.transfer.BackendConnectionManager
@@ -43,6 +46,7 @@ class LanTransferForegroundService : Service() {
         private const val EXTRA_PORT = "extra_port"
         private const val HEALTH_CHECK_INTERVAL_MS = 20_000L
         private const val NETWORK_RECOVERY_DELAY_MS = 1_500L
+        private const val WAKE_LOCK_TIMEOUT_MS = 10 * 60 * 1000L
         private const val WAKE_LOCK_TAG = "smartdosing:lan-transfer-wake-lock"
         private const val WIFI_LOCK_TAG = "smartdosing:lan-transfer-wifi-lock"
 
@@ -51,11 +55,7 @@ class LanTransferForegroundService : Service() {
                 action = ACTION_START
                 putExtra(EXTRA_PORT, port)
             }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(intent)
-            } else {
-                context.startService(intent)
-            }
+            context.startForegroundService(intent)
         }
 
         fun stop(context: Context) {
@@ -153,6 +153,7 @@ class LanTransferForegroundService : Service() {
         monitorJob = serviceScope.launch {
             while (isActive) {
                 delay(HEALTH_CHECK_INTERVAL_MS)
+                renewWakeLock()
                 ensureServerRunning(
                     port = WebService.getInstance(this@LanTransferForegroundService).getPreferredPort(),
                     reason = "周期巡检"
@@ -197,9 +198,6 @@ class LanTransferForegroundService : Service() {
     }
 
     private fun createNotificationChannel() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
-            return
-        }
         val manager = getSystemService(NotificationManager::class.java)
         if (manager.getNotificationChannel(CHANNEL_ID) != null) {
             return
@@ -250,6 +248,13 @@ class LanTransferForegroundService : Service() {
     }
 
     private fun updateForegroundNotification(contentText: String) {
+        if (
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            Log.w(TAG, "通知权限未授权，跳过前台服务通知更新")
+            return
+        }
         val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.notify(NOTIFICATION_ID, buildNotification(contentText))
     }
@@ -259,8 +264,22 @@ class LanTransferForegroundService : Service() {
         wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, WAKE_LOCK_TAG).apply {
             setReferenceCounted(false)
             if (!isHeld) {
-                acquire()
+                // 中文注释：使用超时 WakeLock 并由健康巡检续期，避免异常路径永久持锁。
+                acquire(WAKE_LOCK_TIMEOUT_MS)
             }
+        }
+    }
+
+    private fun renewWakeLock() {
+        val current = wakeLock
+        if (current == null || !current.isHeld) {
+            acquireWakeLock()
+            return
+        }
+        runCatching {
+            current.acquire(WAKE_LOCK_TIMEOUT_MS)
+        }.onFailure {
+            Log.w(TAG, "续期 WakeLock 失败: ${it.message}")
         }
     }
 

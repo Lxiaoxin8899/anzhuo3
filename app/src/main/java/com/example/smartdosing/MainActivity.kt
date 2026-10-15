@@ -1,6 +1,7 @@
 package com.example.smartdosing
 
 import android.os.Bundle
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -20,6 +21,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -28,6 +30,9 @@ import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.example.smartdosing.data.device.PairingApprovalManager
+import com.example.smartdosing.data.device.PairingRequestStore
+import com.example.smartdosing.data.device.PairingSession
 import com.example.smartdosing.data.transfer.TaskReceiver
 import com.example.smartdosing.data.settings.DosingPreferencesManager
 import com.example.smartdosing.data.settings.DosingPreferencesState
@@ -35,6 +40,7 @@ import com.example.smartdosing.database.entities.ReceivedTaskEntity
 import com.example.smartdosing.navigation.SmartDosingNavHost
 import com.example.smartdosing.navigation.SmartDosingRoutes
 import com.example.smartdosing.ui.components.NewTaskNotificationDialog
+import com.example.smartdosing.ui.components.PairingConfirmationDialog
 import com.example.smartdosing.ui.components.SmartDosingBottomNavigationBar
 import com.example.smartdosing.ui.components.SmartDosingNavigationRail
 import com.example.smartdosing.ui.theme.SmartDosingTheme
@@ -42,7 +48,15 @@ import com.example.smartdosing.ui.theme.SmartDosingTokens
 import com.example.smartdosing.ui.theme.LocalWindowSize
 import com.example.smartdosing.ui.theme.SmartDosingWindowHeightClass
 import com.example.smartdosing.ui.theme.SmartDosingWindowWidthClass
+import com.example.smartdosing.web.WebService
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+private const val PAIRING_POLL_INTERVAL_MS = 2_000L
+private const val PAIRING_TAG = "PairingConfirmation"
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -74,8 +88,41 @@ fun SmartDosingApp() {
     val newTaskReceived by taskReceiver.newTaskReceived.collectAsState()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
+    val coroutineScope = rememberCoroutineScope()
     val pendingDialogTasks = remember { mutableStateListOf<ReceivedTaskEntity>() }
     var currentDialogTask by remember { mutableStateOf<ReceivedTaskEntity?>(null) }
+    var currentPairingSession by remember { mutableStateOf<PairingSession?>(null) }
+    var isPairingProcessing by remember { mutableStateOf(false) }
+    var pairingTickerNow by remember { mutableStateOf(System.currentTimeMillis()) }
+
+    // 前台 UI 定时轮询待确认配对请求；请求来源仍由 Ktor /api/device/pair 创建。
+    LaunchedEffect(Unit) {
+        while (isActive) {
+            val waitingRequests = withContext(Dispatchers.IO) {
+                PairingRequestStore.getWaitingRequests().sortedBy { it.createdAt }
+            }
+            val activePairingId = currentPairingSession?.pairingId
+            val activeSession = waitingRequests.firstOrNull { it.pairingId == activePairingId }
+            currentPairingSession = when {
+                activeSession != null -> activeSession
+                !isPairingProcessing && waitingRequests.isNotEmpty() -> waitingRequests.first()
+                !isPairingProcessing -> null
+                else -> currentPairingSession
+            }
+            delay(PAIRING_POLL_INTERVAL_MS)
+        }
+    }
+
+    // 配对弹窗倒计时单独刷新，确保发送端等待期间设备屏幕上能看到剩余时间。
+    LaunchedEffect(currentPairingSession?.pairingId) {
+        while (isActive && currentPairingSession != null) {
+            pairingTickerNow = System.currentTimeMillis()
+            if ((currentPairingSession?.expiresAt ?: Long.MAX_VALUE) <= pairingTickerNow && !isPairingProcessing) {
+                currentPairingSession = null
+            }
+            delay(1_000L)
+        }
+    }
 
     // 新任务先进入本地弹窗队列，避免短时间连续到达时被覆盖。
     LaunchedEffect(newTaskReceived) {
@@ -112,6 +159,49 @@ fun SmartDosingApp() {
                     currentDialogTask = null
                     navController.navigate(SmartDosingRoutes.LAB_CENTER) {
                         launchSingleTop = true
+                    }
+                }
+            )
+        }
+
+        currentPairingSession?.let { session ->
+            val remainingSeconds = ((session.expiresAt - pairingTickerNow) / 1_000L).coerceAtLeast(0L)
+            PairingConfirmationDialog(
+                session = session,
+                remainingSeconds = remainingSeconds,
+                isProcessing = isPairingProcessing,
+                onApprove = {
+                    if (isPairingProcessing) return@PairingConfirmationDialog
+                    isPairingProcessing = true
+                    coroutineScope.launch {
+                        val result = withContext(Dispatchers.IO) {
+                            PairingApprovalManager.getInstance(context).approve(session.pairingId)
+                        }
+                        isPairingProcessing = false
+                        if (result.success) {
+                            currentPairingSession = null
+                            Toast.makeText(context, result.message, Toast.LENGTH_SHORT).show()
+                        } else {
+                            Log.w(PAIRING_TAG, "确认配对失败: ${result.message}")
+                            Toast.makeText(context, "确认配对失败：${result.message}", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                },
+                onReject = {
+                    if (isPairingProcessing) return@PairingConfirmationDialog
+                    isPairingProcessing = true
+                    coroutineScope.launch {
+                        val result = withContext(Dispatchers.IO) {
+                            PairingApprovalManager.getInstance(context).reject(session.pairingId)
+                        }
+                        isPairingProcessing = false
+                        if (result.success) {
+                            currentPairingSession = null
+                            Toast.makeText(context, result.message, Toast.LENGTH_SHORT).show()
+                        } else {
+                            Log.w(PAIRING_TAG, "拒绝配对失败: ${result.message}")
+                            Toast.makeText(context, "拒绝配对失败：${result.message}", Toast.LENGTH_SHORT).show()
+                        }
                     }
                 }
             )

@@ -73,7 +73,10 @@ class TaskReceiver(private val context: Context) {
     /**
      * 处理接收到的任务请求
      */
-    suspend fun receiveTask(request: IncomingTaskRequest): TaskReceiveResponse {
+    suspend fun receiveTask(
+        request: IncomingTaskRequest,
+        allowUnpairedSender: Boolean = false
+    ): TaskReceiveResponse {
         val deviceIdentity = DeviceUIDManager.getDeviceIdentity(context)
 
         try {
@@ -142,20 +145,21 @@ class TaskReceiver(private val context: Context) {
 
             val now = System.currentTimeMillis()
 
-            // 自动授权发送端（认证拦截器已临时禁用，此处自动注册未知发送端）
             val isAuthorized = deviceDao.isSenderAuthorized(request.senderUID)
-            if (!isAuthorized) {
-                Log.i(TAG, "自动授权发送端: ${request.senderUID} (${request.senderName})")
-                val newSender = com.example.smartdosing.database.entities.AuthorizedSenderEntity(
-                    uid = request.senderUID,
-                    name = request.senderName,
-                    ipAddress = request.senderIP,
-                    authorizedAt = now,
-                    lastTaskAt = now,
-                    taskCount = 0,
-                    isActive = true
+            if (!isAuthorized && !allowUnpairedSender) {
+                Log.w(TAG, "拒绝未授权发送端任务: ${request.senderUID} (${request.senderName})")
+                return TaskReceiveResponse(
+                    success = false,
+                    message = "发送端未授权，请先完成配对",
+                    transferId = request.transferId,
+                    receiverUID = deviceIdentity.uid,
+                    receiverName = deviceIdentity.deviceName,
+                    schemaVersion = request.schemaVersion,
+                    errorCode = "UNAUTHORIZED_SENDER"
                 )
-                deviceDao.upsertSender(newSender)
+            }
+            if (!isAuthorized) {
+                Log.w(TAG, "Debug 无认证模式接收未配对发送端任务: ${request.senderUID} (${request.senderName})")
             }
 
             // 3. 生成本地任务 ID
@@ -213,12 +217,14 @@ class TaskReceiver(private val context: Context) {
             deviceDao.insertReceivedTask(receivedTask)
 
             // 6. 更新发送端活动记录
-            deviceDao.updateSenderActivity(
-                uid = request.senderUID,
-                timestamp = now,
-                ipAddress = request.senderIP,
-                appVersion = request.senderAppVersion
-            )
+            if (isAuthorized) {
+                deviceDao.updateSenderActivity(
+                    uid = request.senderUID,
+                    timestamp = now,
+                    ipAddress = request.senderIP,
+                    appVersion = request.senderAppVersion
+                )
+            }
 
             // 7. 通知新任务到达
             _newTaskReceived.value = receivedTask

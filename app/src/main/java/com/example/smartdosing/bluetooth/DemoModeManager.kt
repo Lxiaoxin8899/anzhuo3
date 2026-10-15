@@ -6,6 +6,7 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import java.util.Locale
 
 /**
  * 演示模式管理器
@@ -254,7 +255,7 @@ class DemoModeManager {
      * 发送重量数据
      */
     private fun emitWeight(value: Double, isStable: Boolean) {
-        val formattedValue = String.format("%.3f", value).toDouble()
+        val formattedValue = String.format(Locale.US, "%.3f", value).toDouble()
         _currentWeight.value = WeightData(
             value = formattedValue,
             unit = unit,

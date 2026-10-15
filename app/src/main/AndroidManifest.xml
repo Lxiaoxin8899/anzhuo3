@@ -38,23 +38,18 @@
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!-- 语音播放权限 -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
 
-    <!-- 小米设备特殊权限 -->
-    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <!-- 设备保活权限 -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <!-- 小米TTS专用权限 -->
     <uses-permission android:name="com.xiaomi.permission.TTS" />
     <uses-permission android:name="com.miui.permission.TTS" />
-    <uses-permission android:name="android.permission.BIND_TTS_SERVICE" />
-
-    <!-- 音频焦点权限 -->
-    <uses-permission android:name="android.permission.AUDIO_FOCUS" />
-    <uses-permission android:name="android.permission.ACCESS_AUDIO_STATE" />
 
     <application
         android:name=".SmartDosingApplication"

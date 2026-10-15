@@ -6,6 +6,7 @@ import android.net.wifi.WifiManager
 import android.os.Build
 import java.net.Inet4Address
 import java.net.NetworkInterface
+import java.util.Locale
 import java.util.UUID
 
 /**
@@ -129,6 +130,7 @@ object DeviceUIDManager {
             wifiManager?.connectionInfo?.ipAddress?.let { ipInt ->
                 if (ipInt != 0) {
                     val ip = String.format(
+                        Locale.US,
                         "%d.%d.%d.%d",
                         ipInt and 0xff,
                         ipInt shr 8 and 0xff,

@@ -83,20 +83,28 @@ object PairingRequestStore {
      * @return 生成的 API Key，或 null（如果会话不存在/已过期）
      */
     fun approve(pairingId: String): String? {
-        val session = sessions[pairingId] ?: return null
-        if (session.status != PairingStatus.WAITING) return null
+        val apiKey = UUID.randomUUID().toString()
+        return if (approveWithApiKey(pairingId, apiKey)) apiKey else null
+    }
+
+    /**
+     * 使用已落库的 API Key 完成配对确认。
+     * 中文注释：调用方应先完成授权发送端落库，避免轮询端拿到数据库里尚不可用的 key。
+     */
+    fun approveWithApiKey(pairingId: String, apiKey: String): Boolean {
+        val session = sessions[pairingId] ?: return false
+        if (session.status != PairingStatus.WAITING) return false
         if (System.currentTimeMillis() > session.expiresAt) {
             sessions[pairingId] = session.copy(status = PairingStatus.EXPIRED)
-            return null
+            return false
         }
 
-        val apiKey = UUID.randomUUID().toString()
         sessions[pairingId] = session.copy(
             status = PairingStatus.APPROVED,
             generatedApiKey = apiKey
         )
-        Log.i(TAG, "配对已确认: $pairingId, 生成 API Key")
-        return apiKey
+        Log.i(TAG, "配对已确认: $pairingId, API Key 已生效")
+        return true
     }
 
     /**

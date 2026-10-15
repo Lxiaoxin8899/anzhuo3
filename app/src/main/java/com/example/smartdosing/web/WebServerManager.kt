@@ -2,6 +2,7 @@ package com.example.smartdosing.web
 
 import android.content.Context
 import android.util.Log
+import com.example.smartdosing.BuildConfig
 import com.example.smartdosing.data.*
 import com.example.smartdosing.data.transfer.RecipeSyncCommand
 import com.example.smartdosing.data.transfer.RecipeSyncOperation
@@ -31,16 +32,21 @@ import io.ktor.server.plugins.statuspages.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import io.ktor.util.AttributeKey
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.InputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.UUID
 import com.example.smartdosing.web.transfer.LanTransferProposalAdapter
 import com.example.smartdosing.web.transfer.UnsupportedSchemaException
+
+private val AuthenticatedSenderKey = AttributeKey<AuthorizedSenderEntity>("AuthenticatedSender")
 
 /**
  * 无线传输服务器管理类
@@ -75,6 +81,8 @@ class WebServerManager(private val context: Context) {
         private const val DEFAULT_PORT = 8080
         private const val API_KEY_HEADER = "X-API-Key"
         private const val MAX_UPLOAD_SIZE = 10L * 1024 * 1024 // 10MB
+        private const val MAX_TASK_BODY_SIZE = 1L * 1024 * 1024 // 1MB
+        private const val READ_BUFFER_SIZE = 8 * 1024
     }
 
     /**
@@ -160,14 +168,111 @@ class WebServerManager(private val context: Context) {
             }
         }
 
-        // API Key 认证已临时禁用，方便后台系统对接
-        // TODO: 生产环境建议启用认证机制以提高安全性
-
         // 配置路由
         routing {
             configureStaticRoutes()
             configureApiRoutes()
         }
+    }
+
+    private suspend fun ApplicationCall.ensureApiAuthorized(): Boolean {
+        if (request.httpMethod == HttpMethod.Options || isPublicPairingRoute()) {
+            return true
+        }
+
+        if (isDebugNoAuthAllowed()) {
+            Log.w(TAG, "Debug 无认证开关已启用，跳过局域网 API 鉴权: ${request.path()}")
+            return true
+        }
+
+        val suppliedApiKey = request.headers[API_KEY_HEADER]?.trim()
+        if (suppliedApiKey.isNullOrBlank()) {
+            respond(
+                HttpStatusCode.Unauthorized,
+                ApiResponse<Unit>(success = false, message = "缺少 X-API-Key，请先完成设备配对")
+            )
+            return false
+        }
+
+        val sender = SmartDosingDatabase
+            .getDatabase(appContext)
+            .deviceDao()
+            .getSenderByApiKey(suppliedApiKey)
+        if (sender == null) {
+            if (isLoopbackRequest() && suppliedApiKey == apiKey) {
+                Log.d(TAG, "允许 App 内部 loopback API Key 访问: ${request.path()}")
+                return true
+            }
+            respond(
+                HttpStatusCode.Forbidden,
+                ApiResponse<Unit>(success = false, message = "API Key 无效或发送端已停用")
+            )
+            return false
+        }
+
+        attributes.put(AuthenticatedSenderKey, sender)
+        return true
+    }
+
+    private fun ApplicationCall.isPublicPairingRoute(): Boolean {
+        val path = request.path()
+        if (request.httpMethod == HttpMethod.Post && path == "/api/device/pair") {
+            return true
+        }
+
+        if (request.httpMethod != HttpMethod.Get || !path.startsWith("/api/device/pair/")) {
+            return false
+        }
+
+        val pairingId = path.removePrefix("/api/device/pair/")
+        return pairingId.startsWith("PAIR-") && !pairingId.contains("/")
+    }
+
+    private fun ApplicationCall.isDebugNoAuthAllowed(): Boolean {
+        if (!BuildConfig.DEBUG) {
+            return false
+        }
+        return appContext
+            .getSharedPreferences(WebService.PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean(WebService.KEY_DEBUG_NO_AUTH, false)
+    }
+
+    private fun ApplicationCall.isLoopbackRequest(): Boolean {
+        return request.local.remoteHost in setOf(
+            "127.0.0.1",
+            "localhost",
+            "::1",
+            "0:0:0:0:0:0:0:1"
+        )
+    }
+
+    private fun ApplicationCall.authenticatedSender(): AuthorizedSenderEntity? {
+        return attributes.getOrNull(AuthenticatedSenderKey)
+    }
+
+    private suspend fun ApplicationCall.requireAuthenticatedSender(senderUID: String): Boolean {
+        if (isDebugNoAuthAllowed()) {
+            return true
+        }
+
+        val sender = authenticatedSender()
+        if (sender == null) {
+            respond(
+                HttpStatusCode.Forbidden,
+                ApiResponse<Unit>(success = false, message = "该接口必须使用已配对发送端的 API Key")
+            )
+            return false
+        }
+
+        if (!sender.uid.equals(senderUID, ignoreCase = true)) {
+            respond(
+                HttpStatusCode.Forbidden,
+                ApiResponse<Unit>(success = false, message = "API Key 与发送端 UID 不匹配")
+            )
+            return false
+        }
+
+        return true
     }
 
     /**
@@ -245,6 +350,12 @@ class WebServerManager(private val context: Context) {
 
     private fun Route.configureApiRoutes() {
         route("/api") {
+            intercept(ApplicationCallPipeline.Plugins) {
+                if (!call.ensureApiAuthorized()) {
+                    finish()
+                }
+            }
+
             // 获取所有配方
             get("/recipes") {
                 try {
@@ -920,86 +1031,6 @@ class WebServerManager(private val context: Context) {
                     }
                 }
 
-                // 设备端确认配对（供 App 内部调用）
-                post("/pair/{pairingId}/approve") {
-                    try {
-                        val pairingId = call.parameters["pairingId"]
-                            ?: return@post call.respond(
-                                HttpStatusCode.BadRequest,
-                                ApiResponse<Unit>(success = false, message = "pairingId 不能为空")
-                            )
-
-                        val generatedApiKey = PairingRequestStore.approve(pairingId)
-                        if (generatedApiKey == null) {
-                            call.respond(
-                                HttpStatusCode.BadRequest,
-                                ApiResponse<Unit>(success = false, message = "配对请求不存在或已过期")
-                            )
-                            return@post
-                        }
-
-                        // 将配对信息持久化到数据库
-                        val session = PairingRequestStore.getSession(pairingId)
-                        if (session == null) {
-                            call.respond(
-                                HttpStatusCode.InternalServerError,
-                                ApiResponse<Unit>(success = false, message = "配对会话异常丢失")
-                            )
-                            return@post
-                        }
-                        val database = com.example.smartdosing.database.SmartDosingDatabase.getDatabase(appContext)
-                        val deviceDao = database.deviceDao()
-                        val now = System.currentTimeMillis()
-
-                        val sender = AuthorizedSenderEntity(
-                            uid = session.senderUID,
-                            name = session.senderName,
-                            ipAddress = session.senderIP,
-                            authorizedAt = now,
-                            isActive = true,
-                            senderPort = session.senderPort,
-                            callbackBaseUrl = session.callbackBaseUrl,
-                            senderApiKey = generatedApiKey
-                        )
-                        deviceDao.upsertSender(sender)
-
-                        call.respond(ApiResponse<Unit>(success = true, message = "配对已确认"))
-                    } catch (e: Exception) {
-                        Log.e(TAG, "确认配对失败", e)
-                        call.respond(
-                            HttpStatusCode.InternalServerError,
-                            ApiResponse<Unit>(success = false, message = "确认配对失败")
-                        )
-                    }
-                }
-
-                // 设备端拒绝配对（供 App 内部调用）
-                post("/pair/{pairingId}/reject") {
-                    try {
-                        val pairingId = call.parameters["pairingId"]
-                            ?: return@post call.respond(
-                                HttpStatusCode.BadRequest,
-                                ApiResponse<Unit>(success = false, message = "pairingId 不能为空")
-                            )
-
-                        val success = PairingRequestStore.reject(pairingId)
-                        if (success) {
-                            call.respond(ApiResponse<Unit>(success = true, message = "配对已拒绝"))
-                        } else {
-                            call.respond(
-                                HttpStatusCode.BadRequest,
-                                ApiResponse<Unit>(success = false, message = "配对请求不存在或已处理")
-                            )
-                        }
-                    } catch (e: Exception) {
-                        Log.e(TAG, "拒绝配对失败", e)
-                        call.respond(
-                            HttpStatusCode.InternalServerError,
-                            ApiResponse<Unit>(success = false, message = "拒绝配对失败")
-                        )
-                    }
-                }
-
                 // 获取待确认的配对请求列表（供 App UI 弹窗使用）
                 get("/pair/pending") {
                     try {
@@ -1030,7 +1061,15 @@ class WebServerManager(private val context: Context) {
             route("/transfer") {
                 // 接收任务（核心接口）
                 post("/task") {
-                    val rawBody = call.receiveText()
+                    val rawBody = try {
+                        call.receiveTextWithinLimit(MAX_TASK_BODY_SIZE)
+                    } catch (e: PayloadTooLargeException) {
+                        call.respond(
+                            HttpStatusCode.PayloadTooLarge,
+                            ApiResponse<Unit>(success = false, message = "任务请求体超过限制（最大 ${MAX_TASK_BODY_SIZE / 1024 / 1024}MB）")
+                        )
+                        return@post
+                    }
                     val taskReceiver = com.example.smartdosing.data.transfer.TaskReceiver.getInstance(appContext)
                     val request = try {
                         lanAdapter.tryConvert(rawBody) ?: gson.fromJson(rawBody, IncomingTaskRequest::class.java)
@@ -1101,9 +1140,16 @@ class WebServerManager(private val context: Context) {
                         return@post
                     }
 
+                    if (!call.requireAuthenticatedSender(request.senderUID)) {
+                        return@post
+                    }
+
                     try {
                         Log.i(TAG, "收到任务传输请求: transferId=${request.transferId}, from=${request.senderName}")
-                        val response = taskReceiver.receiveTask(request)
+                        val response = taskReceiver.receiveTask(
+                            request = request,
+                            allowUnpairedSender = call.isDebugNoAuthAllowed()
+                        )
 
                         if (response.success) {
                             call.respond(HttpStatusCode.Created, ApiResponse(success = true, message = response.message, data = response))
@@ -1147,6 +1193,10 @@ class WebServerManager(private val context: Context) {
                             return@post
                         }
 
+                        if (!call.requireAuthenticatedSender(request.senderUID)) {
+                            return@post
+                        }
+
                         val importRequest = request.recipe.toImportRequest()
                         val existing = request.recipe.code
                             .takeIf { it.isNotBlank() }
@@ -1175,19 +1225,9 @@ class WebServerManager(private val context: Context) {
                         val deviceDao = database.deviceDao()
                         val now = System.currentTimeMillis()
                         val isAuthorized = deviceDao.isSenderAuthorized(request.senderUID)
-                        if (!isAuthorized) {
-                            val newSender = AuthorizedSenderEntity(
-                                uid = request.senderUID,
-                                name = request.senderName,
-                                ipAddress = request.senderIP,
-                                authorizedAt = now,
-                                lastTaskAt = now,
-                                taskCount = 0,
-                                isActive = true
-                            )
-                            deviceDao.upsertSender(newSender)
+                        if (isAuthorized) {
+                            deviceDao.updateSenderActivity(request.senderUID, now, request.senderIP, null)
                         }
-                        deviceDao.updateSenderActivity(request.senderUID, now, request.senderIP, null)
 
                         val syncResult = RecipeSyncResult(
                             transferId = request.transferId,
@@ -1388,10 +1428,15 @@ class WebServerManager(private val context: Context) {
                             is PartData.FileItem -> {
                                 fileName = part.originalFileName
                                 Log.i(TAG, "[Import] 接收文件: $fileName")
-                                val bytes = part.streamProvider().readBytes()
-                                if (bytes.size > MAX_UPLOAD_SIZE) {
+                                val bytes = try {
+                                    part.streamProvider().use { input ->
+                                        input.readBytesWithinLimit(MAX_UPLOAD_SIZE)
+                                    }
+                                } catch (e: PayloadTooLargeException) {
                                     fileTooLarge = true
-                                } else {
+                                    null
+                                }
+                                if (bytes != null) {
                                     fileBytes = bytes
                                     Log.i(TAG, "[Import] 文件大小: ${fileBytes?.size} bytes")
                                 }
@@ -1456,7 +1501,59 @@ class WebServerManager(private val context: Context) {
             }
         }
     }
+
+    private suspend fun ApplicationCall.receiveTextWithinLimit(maxBytes: Long): String {
+        request.header(HttpHeaders.ContentLength)
+            ?.toLongOrNull()
+            ?.takeIf { it > maxBytes }
+            ?.let { throw PayloadTooLargeException(maxBytes) }
+
+        val channel = receiveChannel()
+        val output = ByteArrayOutputStream()
+        val buffer = ByteArray(READ_BUFFER_SIZE)
+        var total = 0L
+
+        while (!channel.isClosedForRead) {
+            val read = channel.readAvailable(buffer, 0, buffer.size)
+            if (read == -1) {
+                break
+            }
+            if (read == 0) {
+                yield()
+                continue
+            }
+            total += read
+            if (total > maxBytes) {
+                throw PayloadTooLargeException(maxBytes)
+            }
+            output.write(buffer, 0, read)
+        }
+
+        return output.toString(Charsets.UTF_8.name())
+    }
+
+    private fun InputStream.readBytesWithinLimit(maxBytes: Long): ByteArray {
+        val output = ByteArrayOutputStream()
+        val buffer = ByteArray(READ_BUFFER_SIZE)
+        var total = 0L
+
+        while (true) {
+            val read = read(buffer)
+            if (read == -1) {
+                break
+            }
+            total += read
+            if (total > maxBytes) {
+                throw PayloadTooLargeException(maxBytes)
+            }
+            output.write(buffer, 0, read)
+        }
+
+        return output.toByteArray()
+    }
 }
+
+private class PayloadTooLargeException(val maxBytes: Long) : IllegalArgumentException("payload too large")
 
 /**
  * 研发任务内存仓库：负责任务列表、快速发布及日志统计
@@ -1496,7 +1593,9 @@ private class ConfigurationTaskStore(
                 ).any { it.contains(query, ignoreCase = true) }
             }
         }
-        result
+        // 中文注释：局域网下发任务会异步写入 received_tasks，旧任务已在内存列表中时新任务可能被追加到底部。
+        // 返回前统一按发布时间/创建时间倒序排列，确保刚下发的任务在设备端任务中心最先可见。
+        result.sortedByDescending { task -> task.publishedAt ?: task.createdAt }
     }
 
     suspend fun getTask(taskId: String): ConfigurationTask? = mutex.withLock {

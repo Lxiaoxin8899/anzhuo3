@@ -1,5 +1,10 @@
 package com.example.smartdosing.ui.screens.settings
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -21,6 +26,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
+import com.example.smartdosing.BuildConfig
 import com.example.smartdosing.ui.theme.*
 import com.example.smartdosing.web.WebService
 import com.example.smartdosing.web.WebServiceResult
@@ -48,7 +55,24 @@ fun WebServiceSettingsScreen(
     // 设置状态
     var webPort by remember { mutableStateOf(webService.getPreferredPort()) }
     var autoStart by remember { mutableStateOf(webService.isAutoStartEnabled()) }
+    var debugNoAuth by remember { mutableStateOf(webService.isDebugNoAuthEnabled()) }
     var showAdvanced by remember { mutableStateOf(false) }
+
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (!granted) {
+            statusMessage = "通知权限未授权，服务状态通知可能不可见"
+        }
+    }
+    val requestNotificationPermissionIfNeeded = {
+        if (
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
 
     // 加载设备信息
     LaunchedEffect(Unit) {
@@ -58,6 +82,7 @@ fun WebServiceSettingsScreen(
         deviceIP = deviceInfo.ipAddress
         webPort = webService.getPreferredPort()
         autoStart = webService.isAutoStartEnabled()
+        debugNoAuth = webService.isDebugNoAuthEnabled()
     }
 
     Column(
@@ -86,6 +111,7 @@ fun WebServiceSettingsScreen(
                         statusMessage = if (success) "无线传输服务已停止" else "停止服务失败"
                     } else {
                         // 启动服务
+                        requestNotificationPermissionIfNeeded()
                         webService.setPreferredPort(webPort)
                         when (val result = webService.startWebService(webPort)) {
                             is WebServiceResult.Success -> {
@@ -121,6 +147,7 @@ fun WebServiceSettingsScreen(
         WebServiceConfigCard(
             webPort = webPort,
             autoStart = autoStart,
+            debugNoAuth = debugNoAuth,
             showAdvanced = showAdvanced,
             onPortChange = {
                 webPort = it
@@ -131,10 +158,16 @@ fun WebServiceSettingsScreen(
                 webService.setAutoStartEnabled(it)
                 statusMessage = if (it) "已启用自动启动无线传输服务" else "已关闭自动启动无线传输服务"
             },
+            onDebugNoAuthChange = {
+                debugNoAuth = it
+                webService.setDebugNoAuthEnabled(it)
+                statusMessage = if (it) "Debug 无认证已开启" else "Debug 无认证已关闭"
+            },
             onShowAdvancedChange = { showAdvanced = it },
             onRestartService = {
                 scope.launch {
                     statusMessage = "正在重启无线传输服务..."
+                    requestNotificationPermissionIfNeeded()
                     webService.setPreferredPort(webPort)
                     when (val result = webService.restartWebService(webPort)) {
                         is WebServiceResult.Success -> {
@@ -358,9 +391,11 @@ fun ServiceStatusInfo(
 fun WebServiceConfigCard(
     webPort: Int,
     autoStart: Boolean,
+    debugNoAuth: Boolean,
     showAdvanced: Boolean,
     onPortChange: (Int) -> Unit,
     onAutoStartChange: (Boolean) -> Unit,
+    onDebugNoAuthChange: (Boolean) -> Unit,
     onShowAdvancedChange: (Boolean) -> Unit,
     onRestartService: () -> Unit
 ) {
@@ -431,6 +466,20 @@ fun WebServiceConfigCard(
                 Spacer(modifier = Modifier.height(16.dp))
                 Divider()
                 Spacer(modifier = Modifier.height(16.dp))
+
+                if (BuildConfig.DEBUG) {
+                    SettingRow(
+                        title = "跳过接口认证",
+                        subtitle = "仅 Debug 构建生效，默认关闭",
+                        icon = Icons.Default.Settings
+                    ) {
+                        Switch(
+                            checked = debugNoAuth,
+                            onCheckedChange = onDebugNoAuthChange
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
 
                 // 重启服务按钮
                 OutlinedButton(

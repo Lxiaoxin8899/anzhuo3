@@ -40,6 +40,7 @@ import com.example.smartdosing.data.settings.AdminPreferencesManager
 import com.example.smartdosing.data.settings.WeightUnit
 import com.example.smartdosing.ui.components.BluetoothDeviceSelectDialog
 import kotlinx.coroutines.launch
+import java.util.Locale
 
 /**
  * 蓝牙电子秤设置界面
@@ -413,7 +414,7 @@ fun BluetoothScaleSettingsScreen(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(
-                            text = "当前设置: ±${currentPermille}‰ (相当于 ±${String.format("%.1f", currentPercent)}%)",
+                            text = "当前设置: ±${currentPermille}‰ (相当于 ±${String.format(Locale.US, "%.1f", currentPercent)}%)",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onPrimaryContainer,
                             modifier = Modifier.padding(12.dp)

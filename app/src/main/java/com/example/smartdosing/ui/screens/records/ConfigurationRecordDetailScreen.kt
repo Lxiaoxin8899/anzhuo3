@@ -33,6 +33,7 @@ import com.example.smartdosing.data.ConfigurationRecord
 import com.example.smartdosing.data.ConfigurationRecordStatus
 import com.example.smartdosing.data.repository.ConfigurationRepositoryProvider
 import com.example.smartdosing.ui.theme.SmartDosingTheme
+import java.util.Locale
 import kotlinx.coroutines.launch
 import java.text.DecimalFormat
 
@@ -247,7 +248,7 @@ private fun MaterialAnalysisRow(material: ConfigurationMaterialRecord) {
             }
             val devPercent = (material.deviation / material.targetWeight * 100)
             Text(
-                text = "${if (material.deviation > 0) "+" else ""}${String.format("%.2f", devPercent)}%",
+                text = "${if (material.deviation > 0) "+" else ""}${String.format(Locale.US, "%.2f", devPercent)}%",
                 style = MaterialTheme.typography.labelSmall,
                 color = if (material.isOutOfTolerance) Color.Red else Color(0xFF4CAF50),
                 fontWeight = FontWeight.Bold

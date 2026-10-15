@@ -354,6 +354,14 @@ private suspend fun saveMaterialConfiguration(
     // 获取应用实例和偏好管理器
     val application = context.applicationContext as? com.example.smartdosing.SmartDosingApplication
     val preferencesManager = application?.bluetoothPreferencesManager
+    // 中文注释：正式登录协议未确定前，配置记录先落本机占位操作员，便于后续追溯执行人。
+    val currentOperator = application
+        ?.operatorIdentityManager
+        ?.sessionFlow
+        ?.first()
+        ?.displayLabel
+        ?.takeIf { it.isNotBlank() }
+        ?: configData.perfumer.ifBlank { "研发配置工位" }
     
     // 获取公差设置（默认为10‰，即1%）
     val tolerancePermille = if (preferencesManager != null) {
@@ -364,7 +372,12 @@ private suspend fun saveMaterialConfiguration(
     }
 
     runCatching {
-        val createdRecord = recordRepository.createRecord(configData.toConfigurationRecord(tolerancePermille))
+        val createdRecord = recordRepository.createRecord(
+            configData.toConfigurationRecord(
+                tolerancePermille = tolerancePermille,
+                operatorName = currentOperator
+            )
+        )
         createdRecord.also {
             if (configData.taskId.isNotBlank()) {
                 if (configData.taskId.startsWith("RT-")) {
@@ -409,7 +422,10 @@ private suspend fun saveMaterialConfiguration(
  * 将材料配置数据映射为配置记录实体，写入任务闭环。
  * @param tolerancePermille 允许的误差范围（千分比）
  */
-private fun MaterialConfigurationData.toConfigurationRecord(tolerancePermille: Int = 10): ConfigurationRecord {
+private fun MaterialConfigurationData.toConfigurationRecord(
+    tolerancePermille: Int = 10,
+    operatorName: String? = null
+): ConfigurationRecord {
     val now = System.currentTimeMillis()
     val defaultId = if (recordId.isNotBlank()) recordId else "CR-${UUID.randomUUID()}"
     val defaultTaskId = if (taskId.isNotBlank()) taskId else "TASK-${UUID.randomUUID()}"
@@ -449,7 +465,7 @@ private fun MaterialConfigurationData.toConfigurationRecord(tolerancePermille: I
         recipeName = recipeName.ifBlank { recipeCode.ifBlank { "研发配置" } },
         recipeCode = recipeCode.ifBlank { "RND-$now" },
         category = "研发配置",
-        operator = perfumer.ifBlank { "研发配置工位" },
+        operator = operatorName?.takeIf { it.isNotBlank() } ?: perfumer.ifBlank { "研发配置工位" },
         quantity = if (totalTarget > 0) totalTarget else totalActual,
         unit = baseUnit,
         actualQuantity = totalActual,

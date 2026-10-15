@@ -31,10 +31,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.smartdosing.SmartDosingApplication
 import com.example.smartdosing.data.ConfigurationTask
 import com.example.smartdosing.data.TaskPriority
 import com.example.smartdosing.data.TaskStatus
-import com.example.smartdosing.data.device.DeviceUIDManager
+import com.example.smartdosing.data.settings.OperatorSession
 import com.example.smartdosing.data.repository.ConfigurationRepositoryProvider
 import com.example.smartdosing.ui.components.ErrorState
 import com.example.smartdosing.ui.theme.LocalWindowSize
@@ -62,6 +63,10 @@ fun TaskCenterScreen(
     val repository = remember { ConfigurationRepositoryProvider.taskRepository }
     val windowSize = LocalWindowSize.current
     val isCompactWidth = windowSize.widthClass == SmartDosingWindowWidthClass.Compact
+    val identityManager = remember {
+        (context.applicationContext as SmartDosingApplication).operatorIdentityManager
+    }
+    val operatorSession by identityManager.sessionFlow.collectAsState(initial = OperatorSession.Default)
     var allTasks by remember { mutableStateOf<List<ConfigurationTask>>(emptyList()) }
     var tasks by remember { mutableStateOf<List<ConfigurationTask>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
@@ -77,10 +82,7 @@ fun TaskCenterScreen(
     var snackbarMessage by remember { mutableStateOf<String?>(null) }
     var showSnackbar by remember { mutableStateOf(false) }
 
-    // 优先使用设备名作为操作员标识
-    val currentUser = remember {
-        DeviceUIDManager.getDeviceIdentity(context).deviceName.ifBlank { "本机操作员" }
-    }
+    val currentUser = operatorSession.displayLabel.ifBlank { OperatorSession.Default.displayName }
 
     fun refreshTasks() {
         scope.launch {
@@ -381,7 +383,8 @@ private fun TaskCard(
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 PriorityTag(task.priority)
                 Text(
-                    text = task.title.ifBlank { task.recipeName },
+                    // 中文注释：任务标题可能是“批量任务-日期”等调度名称，任务卡主标题优先展示实验员更关心的配方名称。
+                    text = task.recipeName.ifBlank { task.title },
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.weight(1f),
@@ -389,6 +392,15 @@ private fun TaskCard(
                     overflow = TextOverflow.Ellipsis
                 )
                 StatusTag(task.status)
+            }
+            if (task.title.isNotBlank() && task.title != task.recipeName) {
+                Text(
+                    text = "任务：${task.title}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
 
             // 技术信息面板

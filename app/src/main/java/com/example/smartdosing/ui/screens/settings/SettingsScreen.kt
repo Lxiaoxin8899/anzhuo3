@@ -35,8 +35,12 @@ import com.example.smartdosing.audio.BeepToneType
 import com.example.smartdosing.data.settings.AdminPreferencesManager
 import com.example.smartdosing.data.settings.DosingPreferencesManager
 import com.example.smartdosing.data.settings.DosingPreferencesState
+import com.example.smartdosing.data.settings.OperatorSession
 import com.example.smartdosing.ui.theme.SmartDosingTheme
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * 系统设置页面
@@ -62,10 +66,15 @@ fun SettingsScreen(
     )
     val isAdminLoggedIn by AdminPreferencesManager.isAdminLoggedIn.collectAsState()
     val hasAdminPassword = adminSettings.passwordHash.isNotEmpty()
+    val identityManager = remember {
+        (context.applicationContext as SmartDosingApplication).operatorIdentityManager
+    }
+    val operatorSession by identityManager.sessionFlow.collectAsState(initial = OperatorSession.Default)
 
     // 管理员对话框状态
     var showAdminLoginDialog by remember { mutableStateOf(false) }
     var showSetPasswordDialog by remember { mutableStateOf(false) }
+    var showOperatorIdentityDialog by remember { mutableStateOf(false) }
 
     // 音调预览播放器
     val toneGenerator = remember {
@@ -138,6 +147,50 @@ fun SettingsScreen(
                     }
                 )
             )
+        ),
+        SettingsSection(
+            title = "身份管理",
+            icon = Icons.Outlined.Person,
+            items = buildList {
+                add(SettingsItem.Info(
+                    title = "当前操作员",
+                    subtitle = operatorSession.displayLabel,
+                    icon = Icons.Outlined.Person
+                ))
+                add(SettingsItem.Info(
+                    title = "身份来源",
+                    subtitle = if (operatorSession.isPlaceholderLogin) {
+                        "本地占位会话 · ${formatOperatorLoginAt(operatorSession.loginAt)}"
+                    } else {
+                        "未登录正式账号，使用默认本机身份"
+                    },
+                    icon = Icons.Outlined.Badge
+                ))
+                add(SettingsItem.Info(
+                    title = "主机协议",
+                    subtitle = "登录字段与校验方式待主机端确认",
+                    icon = Icons.Outlined.SyncAlt
+                ))
+                add(SettingsItem.Action(
+                    title = if (operatorSession.isPlaceholderLogin) "切换当前操作员" else "设置当前操作员",
+                    subtitle = "先保存本机占位身份，后续对接正式登录协议",
+                    icon = Icons.Outlined.ManageAccounts,
+                    onClick = { showOperatorIdentityDialog = true }
+                ))
+                if (operatorSession.isPlaceholderLogin) {
+                    add(SettingsItem.Action(
+                        title = "退出当前操作员",
+                        subtitle = "清除本机占位会话并回到默认身份",
+                        icon = Icons.Outlined.Person,
+                        onClick = {
+                            scope.launch {
+                                identityManager.clearLocalOperator()
+                                Toast.makeText(context, "已退出当前操作员", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    ))
+                }
+            }
         ),
         // TTS 语音播报设置已软下线
         SettingsSection(
@@ -455,6 +508,67 @@ fun SettingsScreen(
         )
     )
 
+    if (showOperatorIdentityDialog) {
+        var displayName by remember { mutableStateOf(operatorSession.displayName) }
+        var operatorId by remember { mutableStateOf(operatorSession.operatorId) }
+        var role by remember { mutableStateOf(operatorSession.role) }
+        var error by remember { mutableStateOf<String?>(null) }
+
+        AlertDialog(
+            onDismissRequest = { showOperatorIdentityDialog = false },
+            title = { Text("当前操作员") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "这是本机占位身份，用于先记录谁在设备上接单和执行任务。正式登录协议待主机端确认。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    OutlinedTextField(
+                        value = displayName,
+                        onValueChange = { displayName = it; error = null },
+                        label = { Text("姓名/显示名") },
+                        singleLine = true,
+                        isError = error != null,
+                        supportingText = error?.let { msg -> { Text(msg) } }
+                    )
+                    OutlinedTextField(
+                        value = operatorId,
+                        onValueChange = { operatorId = it },
+                        label = { Text("工号/身份标识（可选）") },
+                        singleLine = true
+                    )
+                    OutlinedTextField(
+                        value = role,
+                        onValueChange = { role = it },
+                        label = { Text("角色") },
+                        singleLine = true
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (displayName.isBlank()) {
+                        error = "请填写操作员姓名"
+                        return@TextButton
+                    }
+                    scope.launch {
+                        identityManager.setLocalOperator(
+                            displayName = displayName,
+                            operatorId = operatorId,
+                            role = role
+                        )
+                        showOperatorIdentityDialog = false
+                        Toast.makeText(context, "当前操作员已更新", Toast.LENGTH_SHORT).show()
+                    }
+                }) { Text("保存") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showOperatorIdentityDialog = false }) { Text("取消") }
+            }
+        )
+    }
+
     // 管理员登录对话框
     if (showAdminLoginDialog) {
         var password by remember { mutableStateOf("") }
@@ -484,10 +598,12 @@ fun SettingsScreen(
             },
             confirmButton = {
                 TextButton(onClick = {
-                    if (adminManager.verifyAndLogin(password, adminSettings.passwordHash)) {
-                        showAdminLoginDialog = false
-                    } else {
-                        error = "密码错误"
+                    scope.launch {
+                        if (adminManager.verifyAndLogin(password, adminSettings.passwordHash)) {
+                            showAdminLoginDialog = false
+                        } else {
+                            error = "密码错误"
+                        }
                     }
                 }) { Text("确认") }
             },
@@ -532,13 +648,11 @@ fun SettingsScreen(
                         newPassword.length < 6 -> error = "密码至少6位"
                         newPassword != confirmPassword -> error = "两次输入不一致"
                         else -> {
-                            scope.launch { adminManager.setPassword(newPassword) }
-                            adminManager.verifyAndLogin(
-                                newPassword,
-                                AdminPreferencesManager.hashPassword(newPassword)
-                            )
-                            showSetPasswordDialog = false
-                            Toast.makeText(context, "管理员密码已设置", Toast.LENGTH_SHORT).show()
+                            scope.launch {
+                                adminManager.setPassword(newPassword)
+                                showSetPasswordDialog = false
+                                Toast.makeText(context, "管理员密码已设置", Toast.LENGTH_SHORT).show()
+                            }
                         }
                     }
                 }) { Text("确认") }
@@ -1150,6 +1264,11 @@ fun InfoSettingItem(
             )
         }
     }
+}
+
+private fun formatOperatorLoginAt(loginAt: Long): String {
+    if (loginAt <= 0L) return "尚未设置"
+    return SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(loginAt))
 }
 
 @Preview(showBackground = true, device = "spec:width=1280dp,height=800dp,dpi=240")

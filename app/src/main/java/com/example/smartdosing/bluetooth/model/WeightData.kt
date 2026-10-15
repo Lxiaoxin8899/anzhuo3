@@ -1,5 +1,7 @@
 package com.example.smartdosing.bluetooth.model
 
+import java.util.Locale
+
 data class WeightData(
     val value: Double,
     val unit: String,
@@ -8,7 +10,7 @@ data class WeightData(
     val timestamp: Long = System.currentTimeMillis()
 ) {
     fun getDisplayValue(): String {
-        return String.format("%.3f", value)
+        return String.format(Locale.US, "%.3f", value)
     }
 
     fun getFullDisplay(): String {
