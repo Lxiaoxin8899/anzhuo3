@@ -17,6 +17,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -89,15 +90,19 @@ fun SmartDosingBottomNavigationBar(
         }
     }
 
+    // 只处理底部安全间距，兼容手势导航 / 三键导航 / 异形全面屏
+    val barInsets = NavigationBarDefaults.windowInsets.only(WindowInsetsSides.Bottom)
+    // 固定高度只约束内容区，系统导航栏高度另加，避免三键导航设备上图标被压缩
+    val bottomInset = with(LocalDensity.current) { barInsets.getBottom(this).toDp() }
+
     NavigationBar(
         modifier = modifier
             .fillMaxWidth()
-            .height(metrics.height),
+            .height(metrics.height + bottomInset),
         containerColor = MaterialTheme.colorScheme.surface,
         contentColor = MaterialTheme.colorScheme.onSurface,
         tonalElevation = 6.dp,
-        // 只处理底部安全间距，兼容手势导航 / 异形全面屏
-        windowInsets = NavigationBarDefaults.windowInsets.only(WindowInsetsSides.Bottom)
+        windowInsets = barInsets
     ) {
         bottomNavigationDestinations.forEach { destination ->
             val selected = currentRoute == destination.route

@@ -441,7 +441,12 @@ fun MaterialConfigurationScreen(
             )
         }
     ) { paddingValues ->
-        Box(modifier = Modifier.padding(paddingValues)) {
+        Box(
+            modifier = Modifier
+                .padding(paddingValues)
+                .consumeWindowInsets(paddingValues)
+                .imePadding()
+        ) {
             val activeEvaluation = materialStates.getOrNull(activeRowIndex)?.let {
                 evaluateState(activeRowIndex, it)
             }

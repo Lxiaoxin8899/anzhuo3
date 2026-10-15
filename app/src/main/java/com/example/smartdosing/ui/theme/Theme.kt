@@ -13,7 +13,6 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.unit.times
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
@@ -163,12 +162,12 @@ fun SmartDosingTheme(
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
+            // 系统栏背景交给 enableEdgeToEdge 的透明 scrim，这里只同步图标明暗，状态栏与导航栏成对设置
             val window = (view.context as Activity).window
-            @Suppress("DEPRECATION")
-            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
-                window.statusBarColor = colorScheme.primary.toArgb()
+            WindowCompat.getInsetsController(window, view).apply {
+                isAppearanceLightStatusBars = !darkTheme
+                isAppearanceLightNavigationBars = !darkTheme
             }
-            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme // Light status bar on light theme
         }
     }
 

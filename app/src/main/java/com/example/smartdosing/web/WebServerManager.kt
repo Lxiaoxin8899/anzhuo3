@@ -45,6 +45,7 @@ import java.util.Locale
 import java.util.UUID
 import com.example.smartdosing.web.transfer.LanTransferProposalAdapter
 import com.example.smartdosing.web.transfer.UnsupportedSchemaException
+import com.example.smartdosing.web.transfer.toSummary
 
 private val AuthenticatedSenderKey = AttributeKey<AuthorizedSenderEntity>("AuthenticatedSender")
 
@@ -907,7 +908,7 @@ class WebServerManager(private val context: Context) {
                 get("/senders") {
                     try {
                         val database = com.example.smartdosing.database.SmartDosingDatabase.getDatabase(appContext)
-                        val senders = database.deviceDao().getActiveSenders()
+                        val senders = database.deviceDao().getActiveSenders().map { it.toSummary() }
                         call.respond(ApiResponse(success = true, data = senders))
                     } catch (e: Exception) {
                         Log.e(TAG, "获取发送端列表失败", e)
