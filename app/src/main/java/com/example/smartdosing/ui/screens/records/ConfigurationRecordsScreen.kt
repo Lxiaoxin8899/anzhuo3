@@ -12,9 +12,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Category
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -58,6 +60,9 @@ fun ConfigurationRecordsScreen(
     var selectedCustomer by remember { mutableStateOf<String?>(null) }
     var selectedStatus by remember { mutableStateOf<ConfigurationRecordStatus?>(null) }
     var sortAscending by remember { mutableStateOf(false) }
+    var isSearchVisible by rememberSaveable { mutableStateOf(false) }
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    val visibleRecords = remember(records, searchQuery) { filterRecordsByKeyword(records, searchQuery) }
 
     fun refreshRecords() {
         scope.launch {
@@ -99,8 +104,14 @@ fun ConfigurationRecordsScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { /* TODO: Search */ }) {
-                        Icon(Icons.Default.Search, "搜索")
+                    IconButton(onClick = {
+                        isSearchVisible = !isSearchVisible
+                        if (!isSearchVisible) searchQuery = ""
+                    }) {
+                        Icon(
+                            if (isSearchVisible) Icons.Default.Close else Icons.Default.Search,
+                            if (isSearchVisible) "关闭搜索" else "搜索"
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = Color.Transparent)
@@ -125,7 +136,19 @@ fun ConfigurationRecordsScreen(
                 .padding(horizontal = 20.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
-            RecordSummarySection(records = records)
+            if (isSearchVisible) {
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    placeholder = { Text("搜索配方名称 / 编码 / 客户 / 操作员") },
+                    leadingIcon = { Icon(Icons.Default.Search, null) },
+                    shape = RoundedCornerShape(16.dp)
+                )
+            }
+
+            RecordSummarySection(records = visibleRecords)
             
             FilterSection(
                 selectedStatus = selectedStatus,
@@ -136,13 +159,16 @@ fun ConfigurationRecordsScreen(
                 isLoading -> RecordLoadingState()
                 loadError != null -> RecordErrorState(message = loadError!!, onRetry = { refreshRecords() })
                 records.isEmpty() -> RecordEmptyState()
+                visibleRecords.isEmpty() -> Box(Modifier.fillMaxWidth().padding(top = 48.dp), contentAlignment = Alignment.Center) {
+                    Text("没有匹配“$searchQuery”的档案", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
                 else -> {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                         contentPadding = PaddingValues(bottom = 24.dp)
                     ) {
-                        items(records, key = { it.id }) { record ->
+                        items(visibleRecords, key = { it.id }) { record ->
                             ArchiveRecordCard(
                                 record = record,
                                 onClick = { onRecordSelected(record.id) }
@@ -152,6 +178,18 @@ fun ConfigurationRecordsScreen(
                 }
             }
         }
+    }
+}
+
+/**
+ * 按关键字过滤档案，匹配配方名称、编码、客户、操作员与报告单号（忽略大小写）
+ */
+internal fun filterRecordsByKeyword(records: List<ConfigurationRecord>, keyword: String): List<ConfigurationRecord> {
+    val query = keyword.trim()
+    if (query.isEmpty()) return records
+    return records.filter { record ->
+        listOf(record.recipeName, record.recipeCode, record.customer, record.operator, record.id)
+            .any { it.contains(query, ignoreCase = true) }
     }
 }
 

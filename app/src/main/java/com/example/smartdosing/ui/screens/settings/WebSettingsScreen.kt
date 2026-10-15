@@ -2,7 +2,9 @@ package com.example.smartdosing.ui.screens.settings
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -28,10 +30,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.example.smartdosing.BuildConfig
+import com.example.smartdosing.data.backup.BackupResult
+import com.example.smartdosing.data.backup.DataBackupManager
+import com.example.smartdosing.data.settings.AdminPreferencesManager
 import com.example.smartdosing.ui.theme.*
 import com.example.smartdosing.web.WebService
 import com.example.smartdosing.web.WebServiceResult
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+
+private const val RESTART_DELAY_MS = 1_200L
 
 /**
  * 无线传输服务设置页面 - 包含无线传输服务管理
@@ -506,6 +514,70 @@ fun WebServiceConfigCard(
  */
 @Composable
 fun SystemSettingsCard() {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val backupManager = remember { DataBackupManager(context) }
+    val adminManager = remember { AdminPreferencesManager(context) }
+    val adminSettings by adminManager.settingsFlow.collectAsState(initial = AdminPreferencesManager.AdminSettingsState())
+    val isAdminLoggedIn by AdminPreferencesManager.isAdminLoggedIn.collectAsState()
+    var isWorking by remember { mutableStateOf(false) }
+    var pendingRestoreUri by remember { mutableStateOf<Uri?>(null) }
+
+    fun showResult(result: BackupResult) {
+        val message = when (result) {
+            is BackupResult.Success -> result.message
+            is BackupResult.Failure -> result.message
+        }
+        Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+    }
+
+    val exportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/zip")
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        isWorking = true
+        scope.launch {
+            showResult(backupManager.exportTo(uri))
+            isWorking = false
+        }
+    }
+
+    val importLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        pendingRestoreUri = uri
+    }
+
+    pendingRestoreUri?.let { uri ->
+        AlertDialog(
+            onDismissRequest = { if (!isWorking) pendingRestoreUri = null },
+            title = { Text("确认恢复数据") },
+            text = { Text("恢复会用备份覆盖本机全部配方、记录和任务数据，且无法撤销。恢复完成后应用会自动重启。") },
+            confirmButton = {
+                TextButton(
+                    enabled = !isWorking,
+                    onClick = {
+                        isWorking = true
+                        scope.launch {
+                            val result = backupManager.restoreFrom(uri)
+                            showResult(result)
+                            if (result is BackupResult.Success) {
+                                delay(RESTART_DELAY_MS)
+                                backupManager.restartApp()
+                            } else {
+                                isWorking = false
+                                pendingRestoreUri = null
+                            }
+                        }
+                    }
+                ) { Text("覆盖并恢复", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(enabled = !isWorking, onClick = { pendingRestoreUri = null }) { Text("取消") }
+            }
+        )
+    }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -526,20 +598,32 @@ fun SystemSettingsCard() {
 
             SettingRow(
                 title = "数据备份",
-                subtitle = "备份配方和设置数据",
+                subtitle = "导出配方、记录与任务数据库",
                 icon = Icons.Default.Settings
             ) {
-                OutlinedButton(onClick = { /* TODO */ }) {
+                OutlinedButton(
+                    enabled = !isWorking,
+                    onClick = { exportLauncher.launch(DataBackupManager.suggestedFileName()) }
+                ) {
                     Text("备份")
                 }
             }
 
             SettingRow(
                 title = "数据恢复",
-                subtitle = "从备份文件恢复数据",
+                subtitle = "从备份文件恢复数据（覆盖本机数据）",
                 icon = Icons.Default.Add
             ) {
-                OutlinedButton(onClick = { /* TODO */ }) {
+                OutlinedButton(
+                    enabled = !isWorking,
+                    onClick = {
+                        if (adminSettings.passwordHash.isNotEmpty() && !isAdminLoggedIn) {
+                            Toast.makeText(context, "需要管理员权限，请在系统设置中登录", Toast.LENGTH_SHORT).show()
+                        } else {
+                            importLauncher.launch(arrayOf("application/zip", "application/octet-stream"))
+                        }
+                    }
+                ) {
                     Text("恢复")
                 }
             }
@@ -549,7 +633,15 @@ fun SystemSettingsCard() {
                 subtitle = "清除应用缓存数据",
                 icon = Icons.Default.Clear
             ) {
-                OutlinedButton(onClick = { /* TODO */ }) {
+                OutlinedButton(
+                    enabled = !isWorking,
+                    onClick = {
+                        scope.launch {
+                            val freed = backupManager.clearCache()
+                            Toast.makeText(context, "已清除缓存 ${freed / 1024} KB", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                ) {
                     Text("清除")
                 }
             }

@@ -169,12 +169,6 @@ fun SmartDosingNavHost(
                         recipeId = record.recipeId.ifBlank { "quick_start" },
                         recordId = record.id
                     )
-                },
-                onFixError = { record ->
-                    navController.navigateToMaterialConfiguration(
-                        recipeId = record.recipeId.ifBlank { "quick_start" },
-                        recordId = record.id
-                    )
                 }
             )
         }

@@ -1,5 +1,6 @@
 package com.example.smartdosing.ui.screens.records
 
+import android.widget.Toast
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -22,6 +23,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -31,6 +33,7 @@ import androidx.compose.ui.unit.sp
 import com.example.smartdosing.data.ConfigurationMaterialRecord
 import com.example.smartdosing.data.ConfigurationRecord
 import com.example.smartdosing.data.ConfigurationRecordStatus
+import com.example.smartdosing.data.export.ConfigurationRecordExporter
 import com.example.smartdosing.data.repository.ConfigurationRepositoryProvider
 import com.example.smartdosing.ui.theme.SmartDosingTheme
 import java.util.Locale
@@ -45,9 +48,9 @@ import java.text.DecimalFormat
 fun ConfigurationRecordDetailScreen(
     recordId: String,
     onNavigateBack: () -> Unit = {},
-    onReconfigure: (ConfigurationRecord) -> Unit = {},
-    onFixError: (ConfigurationRecord) -> Unit = {}
+    onReconfigure: (ConfigurationRecord) -> Unit = {}
 ) {
+    val context = LocalContext.current
     val repository = remember { ConfigurationRepositoryProvider.recordRepository }
     var record by remember(recordId) { mutableStateOf<ConfigurationRecord?>(null) }
     var isLoading by remember { mutableStateOf(true) }
@@ -86,7 +89,17 @@ fun ConfigurationRecordDetailScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { /* TODO: Share/Export */ }) {
+                    IconButton(
+                        enabled = record != null,
+                        onClick = {
+                            record?.let { current ->
+                                runCatching { ConfigurationRecordExporter.share(context, current) }
+                                    .onFailure {
+                                        Toast.makeText(context, "导出失败：${it.message}", Toast.LENGTH_SHORT).show()
+                                    }
+                            }
+                        }
+                    ) {
                         Icon(Icons.Default.Share, "导出报告")
                     }
                 }
@@ -116,6 +129,15 @@ fun ConfigurationRecordDetailScreen(
                     }
                     
                     SignatureSection(record!!.operator)
+
+                    OutlinedButton(
+                        onClick = { onReconfigure(record!!) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("按此配方重新配置")
+                    }
                 }
             }
         }

@@ -39,7 +39,7 @@ import com.example.smartdosing.database.converters.DatabaseConverters
         ReceivedTaskEntity::class,
         PendingTaskResultSyncEntity::class
     ],
-    version = 7,
+    version = SmartDosingDatabase.SCHEMA_VERSION,
     exportSchema = true
 )
 @TypeConverters(DatabaseConverters::class)
@@ -55,6 +55,7 @@ abstract class SmartDosingDatabase : RoomDatabase() {
 
     companion object {
         const val DATABASE_NAME = "smartdosing.db"
+        const val SCHEMA_VERSION = 7
 
         @Volatile
         private var INSTANCE: SmartDosingDatabase? = null
@@ -140,6 +141,16 @@ abstract class SmartDosingDatabase : RoomDatabase() {
          */
         fun clearInstance() {
             INSTANCE = null
+        }
+
+        /**
+         * 关闭并清除数据库实例（用于恢复备份前释放文件句柄）
+         */
+        fun closeAndClearInstance() {
+            synchronized(this) {
+                INSTANCE?.close()
+                INSTANCE = null
+            }
         }
     }
 
