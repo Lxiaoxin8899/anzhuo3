@@ -16,7 +16,7 @@ import io.mockk.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runTest
 import okhttp3.Call
 import okhttp3.OkHttpClient
 import okhttp3.Response
@@ -35,6 +35,7 @@ class TaskResultCallbackManagerTest {
     private val mockDeviceDao = mockk<DeviceDao>(relaxed = true)
     private val mockBackendConnectionManager = mockk<BackendConnectionManager>(relaxed = true)
     private val mockHttpClient = mockk<OkHttpClient>(relaxed = true)
+    private lateinit var manager: TaskResultCallbackManager
 
     private val testReceivedTask = ReceivedTaskEntity(
         id = "RT-ABC12345",
@@ -103,11 +104,8 @@ class TaskResultCallbackManagerTest {
         every { BackendConnectionManager.Companion.getInstance(any()) } returns mockBackendConnectionManager
         every { DeviceUIDManager.getDeviceIdentity(any()) } returns testIdentity
 
-        // 利用反射将私有属性 httpClient 设为我们 Mock 的 okHttpClient
-        val managerInstance = TaskResultCallbackManager.getInstance(mockContext)
-        val httpClientField = TaskResultCallbackManager::class.java.getDeclaredField("httpClient")
-        httpClientField.isAccessible = true
-        httpClientField.set(managerInstance, mockHttpClient)
+        // 关闭构造时的自动补传，否则后台协程会与用例里的 coVerify 计数竞争
+        manager = TaskResultCallbackManager(mockContext, mockHttpClient, retryOnInit = false)
 
         // 默认数据库行为
         coEvery { mockDeviceDao.getReceivedTaskById(any()) } returns testReceivedTask
@@ -116,6 +114,7 @@ class TaskResultCallbackManagerTest {
 
     @After
     fun tearDown() {
+        TaskResultCallbackManager.clearInstance()
         unmockkAll()
     }
 
@@ -123,11 +122,10 @@ class TaskResultCallbackManagerTest {
      * 测试用例 1: WebSocket 同步完全成功，应该直接返回成功并不触发 HTTP。
      */
     @Test
-    fun testSyncViaWebSocketSuccess() = runBlocking {
+    fun testSyncViaWebSocketSuccess() = runTest {
         every { mockBackendConnectionManager.sendTaskResultJson(any()) } returns true
 
-        val success = TaskResultCallbackManager.getInstance(mockContext)
-            .syncResultForTask("RT-ABC12345", testRecord, 1.0)
+        val success = manager.syncResultForTask("RT-ABC12345", testRecord, 1.0)
 
         assertTrue(success)
         // 验证数据库状态更新
@@ -141,7 +139,7 @@ class TaskResultCallbackManagerTest {
      * 测试用例 2: WebSocket 中断 (发送失败)，回退至 HTTP 接口，且 HTTP 请求成功。
      */
     @Test
-    fun testSyncViaWebSocketFailedFallbackToHttpSuccess() = runBlocking {
+    fun testSyncViaWebSocketFailedFallbackToHttpSuccess() = runTest {
         // WebSocket 返回发送失败
         every { mockBackendConnectionManager.sendTaskResultJson(any()) } returns false
 
@@ -152,8 +150,7 @@ class TaskResultCallbackManagerTest {
         every { mockCall.execute() } returns mockResponse
         every { mockResponse.isSuccessful } returns true
 
-        val success = TaskResultCallbackManager.getInstance(mockContext)
-            .syncResultForTask("RT-ABC12345", testRecord, 1.0)
+        val success = manager.syncResultForTask("RT-ABC12345", testRecord, 1.0)
 
         assertTrue(success)
         // 验证数据库更新
@@ -167,7 +164,7 @@ class TaskResultCallbackManagerTest {
      * 测试用例 3: 双通道皆失败 (WebSocket 失败, HTTP 也因网络故障抛出异常)，应当压入待同步队列。
      */
     @Test
-    fun testSyncBothChannelsFailedQueuesPendingSync() = runBlocking {
+    fun testSyncBothChannelsFailedQueuesPendingSync() = runTest {
         // 1. WebSocket 失败
         every { mockBackendConnectionManager.sendTaskResultJson(any()) } returns false
 
@@ -176,8 +173,7 @@ class TaskResultCallbackManagerTest {
         every { mockHttpClient.newCall(any()) } returns mockCall
         every { mockCall.execute() } throws IOException("网络无法连接")
 
-        val success = TaskResultCallbackManager.getInstance(mockContext)
-            .syncResultForTask("RT-ABC12345", testRecord, 1.0)
+        val success = manager.syncResultForTask("RT-ABC12345", testRecord, 1.0)
 
         assertFalse(success)
         // 验证不会标记数据库成功
@@ -190,14 +186,13 @@ class TaskResultCallbackManagerTest {
      * 测试用例 4: 多客户端轮流并发结果同步测试，确保操作原子性，不发生异常或崩溃。
      */
     @Test
-    fun testConcurrentResultSyncDoesNotCrash() = runBlocking {
+    fun testConcurrentResultSyncDoesNotCrash() = runTest {
         every { mockBackendConnectionManager.sendTaskResultJson(any()) } returns true
 
         // 启动 10 个并发协程同步
         val jobs = List(10) { index ->
             async(Dispatchers.Default) {
-                TaskResultCallbackManager.getInstance(mockContext)
-                    .syncResultForTask("RT-ABC12345", testRecord.copy(id = "CR-CONC-$index"), 1.0)
+                manager.syncResultForTask("RT-ABC12345", testRecord.copy(id = "CR-CONC-$index"), 1.0)
             }
         }
 
@@ -214,7 +209,7 @@ class TaskResultCallbackManagerTest {
      * 测试用例 5: 自愈机制补传测试 (retryPendingResults)，补传成功后应自动从队列中移除。
      */
     @Test
-    fun testRetryPendingResultsSuccess() = runBlocking {
+    fun testRetryPendingResultsSuccess() = runTest {
         val pendingList = listOf(
             PendingTaskResultSyncEntity(
                 id = "TRS-TRANS-888",
@@ -235,7 +230,7 @@ class TaskResultCallbackManagerTest {
         // 补传时 WebSocket 连接成功
         every { mockBackendConnectionManager.sendTaskResultJson(any()) } returns true
 
-        TaskResultCallbackManager.getInstance(mockContext).retryPendingResults(limit = 10)
+        manager.retryPendingResults(limit = 10)
 
         // 验证补传成功后更新状态且移除队列
         coVerify(exactly = 1) { mockDeviceDao.markTaskResultSynced("RT-ABC12345", "CR-2026-001", any()) }

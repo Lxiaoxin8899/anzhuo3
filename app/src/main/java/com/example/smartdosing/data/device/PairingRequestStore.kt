@@ -18,6 +18,16 @@ object PairingRequestStore {
     private val sessions = ConcurrentHashMap<String, PairingSession>()
     private val ipRequestTimestamps = ConcurrentHashMap<String, MutableList<Long>>()
 
+    /** 时间源，单元测试可替换以验证过期与限流 */
+    internal var clock: () -> Long = { System.currentTimeMillis() }
+
+    /** 仅供单元测试：清空会话与限流记录并恢复系统时钟 */
+    internal fun resetForTest() {
+        sessions.clear()
+        ipRequestTimestamps.clear()
+        clock = { System.currentTimeMillis() }
+    }
+
     /**
      * 创建配对请求，返回 pairingId
      * @return pairingId 或 null（如果被限流）
@@ -41,8 +51,8 @@ object PairingRequestStore {
         // 同一 senderUID 只允许一个活跃请求，取消旧的
         sessions.entries.removeIf { it.value.senderUID == senderUID && it.value.status == PairingStatus.WAITING }
 
-        val pairingId = "PAIR-${System.currentTimeMillis()}-${UUID.randomUUID().toString().take(4).uppercase()}"
-        val now = System.currentTimeMillis()
+        val pairingId = "PAIR-${clock()}-${UUID.randomUUID().toString().take(4).uppercase()}"
+        val now = clock()
 
         val session = PairingSession(
             pairingId = pairingId,
@@ -94,7 +104,7 @@ object PairingRequestStore {
     fun approveWithApiKey(pairingId: String, apiKey: String): Boolean {
         val session = sessions[pairingId] ?: return false
         if (session.status != PairingStatus.WAITING) return false
-        if (System.currentTimeMillis() > session.expiresAt) {
+        if (clock() > session.expiresAt) {
             sessions[pairingId] = session.copy(status = PairingStatus.EXPIRED)
             return false
         }
@@ -123,7 +133,7 @@ object PairingRequestStore {
      * 清理过期的配对请求
      */
     private fun cleanExpired() {
-        val now = System.currentTimeMillis()
+        val now = clock()
         sessions.entries.removeIf { (_, session) ->
             session.status == PairingStatus.WAITING && now > session.expiresAt
         }
@@ -141,7 +151,7 @@ object PairingRequestStore {
      * IP 限流检查（线程安全）
      */
     private fun isRateLimited(ip: String): Boolean {
-        val now = System.currentTimeMillis()
+        val now = clock()
         val timestamps = ipRequestTimestamps.getOrPut(ip) {
             Collections.synchronizedList(mutableListOf())
         }

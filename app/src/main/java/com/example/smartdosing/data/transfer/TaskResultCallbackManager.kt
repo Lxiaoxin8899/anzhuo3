@@ -26,7 +26,11 @@ import java.util.concurrent.TimeUnit
  * 任务最终配置结果同步器
  * 负责把设备端保存的完整材料配置结果回传给后端，失败时进入本地待同步队列。
  */
-class TaskResultCallbackManager private constructor(private val context: Context) {
+class TaskResultCallbackManager internal constructor(
+    private val context: Context,
+    private val httpClient: OkHttpClient = defaultHttpClient(),
+    retryOnInit: Boolean = true
+) {
 
     companion object {
         private const val TAG = "TaskResultCallback"
@@ -43,19 +47,27 @@ class TaskResultCallbackManager private constructor(private val context: Context
                 }
             }
         }
+
+        /** 仅供单元测试：丢弃单例，避免用例之间共享状态 */
+        internal fun clearInstance() {
+            INSTANCE = null
+        }
+
+        private fun defaultHttpClient(): OkHttpClient = OkHttpClient.Builder()
+            .connectTimeout(10, TimeUnit.SECONDS)
+            .readTimeout(15, TimeUnit.SECONDS)
+            .writeTimeout(15, TimeUnit.SECONDS)
+            .build()
     }
 
     private val gson = Gson()
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    private val httpClient = OkHttpClient.Builder()
-        .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(15, TimeUnit.SECONDS)
-        .writeTimeout(15, TimeUnit.SECONDS)
-        .build()
 
     init {
-        scope.launch {
-            retryPendingResults()
+        if (retryOnInit) {
+            scope.launch {
+                retryPendingResults()
+            }
         }
     }
 

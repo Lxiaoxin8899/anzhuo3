@@ -32,7 +32,12 @@ import kotlin.math.min
  * 中文注释：该连接只负责“设备主动连后端”的控制通道，设备身份仍使用持久化 deviceUID；
  * 原本的 Ktor HTTP 服务继续保留，用于配对、调试和旧链路兼容。
  */
-class BackendConnectionManager private constructor(private val context: Context) {
+class BackendConnectionManager internal constructor(
+    private val context: Context,
+    private val httpClient: OkHttpClient = defaultHttpClient(),
+    private val baseReconnectDelayMs: Long = BASE_RECONNECT_DELAY_MS,
+    private val targetProvider: (suspend () -> ConnectionTarget?)? = null
+) {
 
     companion object {
         private const val TAG = "BackendConnection"
@@ -51,16 +56,24 @@ class BackendConnectionManager private constructor(private val context: Context)
                 }
             }
         }
+
+        private fun defaultHttpClient(): OkHttpClient = OkHttpClient.Builder()
+            .connectTimeout(10, TimeUnit.SECONDS)
+            .readTimeout(0, TimeUnit.SECONDS)
+            .pingInterval(20, TimeUnit.SECONDS)
+            .build()
     }
 
     private val gson = Gson()
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    private val httpClient = OkHttpClient.Builder()
-        .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(0, TimeUnit.SECONDS)
-        .pingInterval(20, TimeUnit.SECONDS)
-        .build()
     private val lanAdapter = LanTransferProposalAdapter(gson)
+
+    // 中文注释：连接状态的切换统一在 stateLock 内完成；以监听器实例区分“当前连接”与陈旧回调，
+    // 因为 OkHttp 可能在 newWebSocket() 返回之前就回调 onFailure（例如连接被拒绝）。
+    private val stateLock = Any()
+
+    @Volatile
+    private var activeListener: DeviceSocketListener? = null
 
     @Volatile
     private var webSocket: WebSocket? = null
@@ -68,14 +81,21 @@ class BackendConnectionManager private constructor(private val context: Context)
     @Volatile
     private var connected = false
 
+    @Volatile
     private var reconnectJob: Job? = null
     private var heartbeatJob: Job? = null
+    @Volatile
     private var reconnectAttempts = 0
+    @Volatile
     private var manualStop = false
+
+    /** 是否已完成 HELLO/CONNECTED 握手 */
+    val isConnected: Boolean
+        get() = connected
 
     fun start() {
         manualStop = false
-        if (webSocket != null || reconnectJob?.isActive == true) {
+        if (activeListener != null || reconnectJob?.isActive == true) {
             return
         }
         scope.launch {
@@ -89,9 +109,7 @@ class BackendConnectionManager private constructor(private val context: Context)
         reconnectJob = null
         heartbeatJob?.cancel()
         heartbeatJob = null
-        connected = false
-        webSocket?.close(1000, "device stopped")
-        webSocket = null
+        closeCurrentSocket(1000, "device stopped")
     }
 
     fun reconnect(reason: String) {
@@ -99,10 +117,19 @@ class BackendConnectionManager private constructor(private val context: Context)
         // 中文注释：配对刚确认时需要立刻使用新写入的 senderApiKey，取消旧的延迟重连任务避免等待退避周期。
         reconnectJob?.cancel()
         reconnectJob = null
-        webSocket?.close(1001, reason)
-        webSocket = null
-        connected = false
+        closeCurrentSocket(1001, reason)
         start()
+    }
+
+    private fun closeCurrentSocket(code: Int, reason: String) {
+        val socket = synchronized(stateLock) {
+            val current = webSocket
+            activeListener = null
+            webSocket = null
+            connected = false
+            current
+        }
+        socket?.close(code, reason)
     }
 
     fun sendTaskProgress(payload: TaskProgressCallback): Boolean {
@@ -115,7 +142,8 @@ class BackendConnectionManager private constructor(private val context: Context)
     }
 
     private suspend fun connect() {
-        val target = findConnectionTarget()
+        val provider = targetProvider
+        val target = if (provider != null) provider() else findConnectionTarget()
         if (target == null) {
             Log.d(TAG, "暂无可用后端连接配置，等待配对后再连接")
             return
@@ -127,7 +155,17 @@ class BackendConnectionManager private constructor(private val context: Context)
             .build()
 
         Log.i(TAG, "连接后端 WebSocket: $wsUrl")
-        webSocket = httpClient.newWebSocket(request, DeviceSocketListener(target.apiKey))
+        val listener = DeviceSocketListener(target.apiKey)
+        synchronized(stateLock) {
+            if (manualStop) return
+            activeListener = listener
+        }
+        val socket = httpClient.newWebSocket(request, listener)
+        synchronized(stateLock) {
+            if (activeListener === listener && !listener.finished) {
+                webSocket = socket
+            }
+        }
     }
 
     private suspend fun findConnectionTarget(): ConnectionTarget? = withContext(Dispatchers.IO) {
@@ -237,49 +275,76 @@ class BackendConnectionManager private constructor(private val context: Context)
         }
         val delayMs = min(
             MAX_RECONNECT_DELAY_MS,
-            BASE_RECONNECT_DELAY_MS * (1L shl min(reconnectAttempts, 4))
+            baseReconnectDelayMs * (1L shl min(reconnectAttempts, 4))
         )
         reconnectJob = scope.launch {
             delay(delayMs)
             reconnectAttempts++
+            // 先释放重连任务占位：连接若立即失败，onFailure 需要能排下一次重连
+            reconnectJob = null
             connect()
         }
     }
 
     private inner class DeviceSocketListener(private val apiKey: String) : WebSocketListener() {
+        @Volatile
+        var finished = false
+            private set
+
+        private val isCurrent: Boolean
+            get() = activeListener === this
+
         override fun onOpen(webSocket: WebSocket, response: Response) {
+            val current = synchronized(stateLock) {
+                if (isCurrent) this@BackendConnectionManager.webSocket = webSocket
+                isCurrent
+            }
+            if (!current) {
+                webSocket.close(1000, "superseded")
+                return
+            }
             Log.i(TAG, "后端 WebSocket 已打开")
-            this@BackendConnectionManager.webSocket = webSocket
             sendHello(apiKey)
         }
 
         override fun onMessage(webSocket: WebSocket, text: String) {
+            if (!isCurrent) return
             handleServerMessage(text)
         }
 
+        override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+            // OkHttp 不会自动回 close 帧；不回应的话 onClosed 要等后端超时（约 60 秒）才触发
+            webSocket.close(code, null)
+        }
+
         override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
-            // 旧 socket 的异步回调不能清理当前新连接状态。
-            if (webSocket !== this@BackendConnectionManager.webSocket) {
-                Log.d(TAG, "忽略陈旧回调：旧 socket 已不是当前连接，跳过状态清理")
-                return
-            }
             Log.i(TAG, "后端 WebSocket 已关闭: code=$code, reason=$reason")
-            connected = false
-            heartbeatJob?.cancel()
-            this@BackendConnectionManager.webSocket = null
-            scheduleReconnect()
+            onTerminated()
         }
 
         override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+            Log.w(TAG, "后端 WebSocket 连接失败: ${t.message}")
+            onTerminated()
+        }
+
+        private fun onTerminated() {
+            val current = synchronized(stateLock) {
+                finished = true
+                if (!isCurrent) {
+                    false
+                } else {
+                    activeListener = null
+                    this@BackendConnectionManager.webSocket = null
+                    connected = false
+                    true
+                }
+            }
             // 旧 socket 的异步回调不能清理当前新连接状态。
-            if (webSocket !== this@BackendConnectionManager.webSocket) {
+            if (!current) {
                 Log.d(TAG, "忽略陈旧回调：旧 socket 已不是当前连接，跳过状态清理")
                 return
             }
-            Log.w(TAG, "后端 WebSocket 连接失败: ${t.message}")
-            connected = false
             heartbeatJob?.cancel()
-            this@BackendConnectionManager.webSocket = null
             scheduleReconnect()
         }
     }
@@ -350,7 +415,7 @@ class BackendConnectionManager private constructor(private val context: Context)
     }
 }
 
-private data class ConnectionTarget(
+internal data class ConnectionTarget(
     val callbackBaseUrl: String,
     val apiKey: String
 )

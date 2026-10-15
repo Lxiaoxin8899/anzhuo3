@@ -97,7 +97,7 @@ class WebServerManager(private val context: Context) {
                 return true
             }
             server = embeddedServer(Netty, port = port, host = "0.0.0.0") {
-                configureServer()
+                smartDosingModule()
             }
             server?.start(wait = false)
             Log.i(TAG, "无线传输服务器启动成功，端口: $port")
@@ -132,9 +132,10 @@ class WebServerManager(private val context: Context) {
     }
 
     /**
-     * 配置Ktor服务器
+     * 配置Ktor服务器（插件 + 路由）
+     * internal 以便单元测试通过 Ktor testApplication 直接挂载，无需启动 Netty
      */
-    private fun Application.configureServer() {
+    internal fun Application.smartDosingModule() {
         // 安装插件
         install(ContentNegotiation) {
             gson {
