@@ -22,3 +22,7 @@ update_template.py
 .gstack/**/screenshots/
 .gstack/**/*.png
 .gstack/**/*.xml
+
+# AI agent 本地技能目录（来自 github.com/android/skills，可重新安装，不入库）
+/.agents/
+/.claude/skills/
