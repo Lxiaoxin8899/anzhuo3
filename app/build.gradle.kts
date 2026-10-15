@@ -90,7 +90,6 @@ dependencies {
     implementation(libs.ktor.serialization.gson)
     implementation(libs.ktor.server.cors)
     implementation(libs.ktor.server.status.pages)
-    implementation(libs.ktor.server.html.builder)
 
     // JSON序列化
     implementation(libs.gson)

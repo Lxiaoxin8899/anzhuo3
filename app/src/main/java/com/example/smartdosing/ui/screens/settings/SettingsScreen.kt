@@ -192,7 +192,6 @@ fun SettingsScreen(
                 }
             }
         ),
-        // TTS 语音播报设置已软下线
         SettingsSection(
             title = "界面偏好",
             icon = Icons.Outlined.Palette,

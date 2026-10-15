@@ -67,10 +67,6 @@ private const val PAIRING_TAG = "PairingConfirmation"
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        // TTS 语音系统已软下线，如需恢复请取消注释
-        // initializeXiaomiTTS()
-
         enableEdgeToEdge()
         setContent {
             val context = LocalContext.current

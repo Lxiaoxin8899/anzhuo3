@@ -131,11 +131,6 @@ fun MaterialConfigurationScreen(
     var materialStates by rememberSaveable(stateSaver = MaterialConfigStateListSaver) { mutableStateOf<List<MaterialConfigState>>(emptyList()) }
     var isLoading by rememberSaveable { mutableStateOf(true) }
     var loadError by rememberSaveable { mutableStateOf<String?>(null) }
-    
-    // 语音播报逻辑（TTS 已软下线）
-    fun announceMaterial(index: Int) {
-        // TTS 已软下线，暂不播报
-    }
 
     // 提示音管理器
     val dosingPreferencesManager = remember { DosingPreferencesManager(context) }
@@ -190,7 +185,6 @@ fun MaterialConfigurationScreen(
         val next = materialStates.indexOfFirst { !it.isConfirmed }
         if (next >= 0) {
             activeRowIndex = next
-            announceMaterial(next)
         } else {
             isMagnified = false
             showCompletionDialog = true
@@ -300,8 +294,6 @@ fun MaterialConfigurationScreen(
                     val scaledMaterial = material.copy(weight = material.weight * scaleFactor)
                     MaterialConfigState(scaledMaterial, "", isConfirmed = false, hasError = false)
                 }
-                // 首次进入播报第一行
-                announceMaterial(0)
             } else {
                 loadError = "未找到有效配方"
             }
@@ -467,10 +459,7 @@ fun MaterialConfigurationScreen(
                             isBluetoothConnected = isBluetoothConnected,
                             isViewOnly = isViewOnly,
                             isManualInputDisabled = isManualInputDisabled,
-                            onRowClick = {
-                                activeRowIndex = it
-                                announceMaterial(it)
-                            },
+                            onRowClick = { activeRowIndex = it },
                             onConfirm = {
                                 activeEvaluation?.let { handleConfirmClick(it) }
                             },
@@ -504,10 +493,7 @@ fun MaterialConfigurationScreen(
                             isBluetoothConnected = isBluetoothConnected,
                             isViewOnly = isViewOnly,
                             isManualInputDisabled = isManualInputDisabled,
-                            onRowClick = {
-                                activeRowIndex = it
-                                announceMaterial(it)
-                            },
+                            onRowClick = { activeRowIndex = it },
                             onConfirm = {
                                 activeEvaluation?.let { handleConfirmClick(it) }
                             },

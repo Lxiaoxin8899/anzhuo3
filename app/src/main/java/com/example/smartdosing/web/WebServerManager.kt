@@ -346,7 +346,6 @@ class WebServerManager(private val context: Context) {
         get("/import") { call.respondWebUiOffline("/import") }
         get("/stats") { call.respondWebUiOffline("/stats") }
         get("/templates") { call.respondWebUiOffline("/templates") }
-        get("/test-encoding") { call.respondWebUiOffline("/test-encoding") }
     }
 
     private fun Route.configureApiRoutes() {
