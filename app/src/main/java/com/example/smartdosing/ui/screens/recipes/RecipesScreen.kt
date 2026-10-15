@@ -77,7 +77,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -91,7 +90,9 @@ import com.example.smartdosing.data.DatabaseRecipeRepository
 import com.example.smartdosing.data.RecipeStats
 import com.example.smartdosing.data.RecipeStatus
 import com.example.smartdosing.ui.components.ErrorState
+import com.example.smartdosing.ui.theme.LocalWindowSize
 import com.example.smartdosing.ui.theme.SmartDosingTheme
+import com.example.smartdosing.ui.theme.SmartDosingWindowWidthClass
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -111,9 +112,8 @@ fun RecipesScreen(
 ) {
     val context = LocalContext.current
     val repository = remember { DatabaseRecipeRepository.getInstance(context) }
-    val configuration = LocalConfiguration.current
-    val screenWidthDp = configuration.screenWidthDp
-    val isCompactScreen = screenWidthDp < 900
+    // 仅在 Expanded（≥840dp）时常驻左侧过滤面板，其余宽度改用底部弹层
+    val isCompactScreen = LocalWindowSize.current.widthClass != SmartDosingWindowWidthClass.Expanded
 
     var recipes by remember { mutableStateOf<List<Recipe>>(emptyList()) }
     var filteredRecipes by remember { mutableStateOf<List<Recipe>>(emptyList()) }

@@ -1,11 +1,13 @@
 package com.example.smartdosing.ui.theme
 
+import androidx.compose.material3.adaptive.currentWindowAdaptiveInfo
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.window.core.layout.WindowHeightSizeClass
+import androidx.window.core.layout.WindowWidthSizeClass
 
 /**
  * 设备宽度分类，统一用于判断当前是手机、折叠屏还是平板
@@ -93,22 +95,24 @@ val LocalWindowSize = staticCompositionLocalOf {
 }
 
 /**
- * 使用 Compose Configuration 计算宽/高分类，并衍生一个推荐的间距缩放比
+ * 按当前窗口（而非整块屏幕，分屏/自由窗口下更准确）计算宽/高分类，并衍生推荐的间距缩放比。
+ * 断点沿用 Material 官方窗口尺寸类：宽度 600 / 840dp，高度 480 / 900dp。
  */
 @Composable
 fun rememberSmartWindowSize(): SmartDosingWindowSize {
+    val sizeClass = currentWindowAdaptiveInfo().windowSizeClass
     val configuration = LocalConfiguration.current
     val widthDp = configuration.screenWidthDp
     val heightDp = configuration.screenHeightDp
 
-    val widthClass = when {
-        widthDp >= 900 -> SmartDosingWindowWidthClass.Expanded
-        widthDp >= 600 -> SmartDosingWindowWidthClass.Medium
+    val widthClass = when (sizeClass.windowWidthSizeClass) {
+        WindowWidthSizeClass.EXPANDED -> SmartDosingWindowWidthClass.Expanded
+        WindowWidthSizeClass.MEDIUM -> SmartDosingWindowWidthClass.Medium
         else -> SmartDosingWindowWidthClass.Compact
     }
-    val heightClass = when {
-        heightDp >= 900 -> SmartDosingWindowHeightClass.Expanded
-        heightDp >= 600 -> SmartDosingWindowHeightClass.Medium
+    val heightClass = when (sizeClass.windowHeightSizeClass) {
+        WindowHeightSizeClass.EXPANDED -> SmartDosingWindowHeightClass.Expanded
+        WindowHeightSizeClass.MEDIUM -> SmartDosingWindowHeightClass.Medium
         else -> SmartDosingWindowHeightClass.Compact
     }
 

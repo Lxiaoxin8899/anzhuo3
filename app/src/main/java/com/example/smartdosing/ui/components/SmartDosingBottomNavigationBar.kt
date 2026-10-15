@@ -27,6 +27,8 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import com.example.smartdosing.navigation.bottomNavigationDestinations
+import com.example.smartdosing.ui.theme.LocalWindowSize
+import com.example.smartdosing.ui.theme.SmartDosingWindowWidthClass
 
 /**
  * 底部导航栏的响应式参数
@@ -54,9 +56,10 @@ fun SmartDosingBottomNavigationBar(
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
     val configuration = LocalConfiguration.current
+    val widthClass = LocalWindowSize.current.widthClass
 
-    // 依据屏幕尺寸切换最合适的展示参数
-    val metrics = remember(configuration.screenWidthDp, configuration.screenHeightDp) {
+    // 依据屏幕尺寸切换最合适的展示参数（大类断点与全局窗口尺寸类保持一致）
+    val metrics = remember(configuration.screenWidthDp, configuration.screenHeightDp, widthClass) {
         val isUltraCompactWidth = configuration.screenWidthDp < 360
         val isCompactHeight = configuration.screenHeightDp < 520
         when {
@@ -69,7 +72,7 @@ fun SmartDosingBottomNavigationBar(
                     showLabel = false
                 )
             }
-            configuration.screenWidthDp < 600 -> {
+            widthClass == SmartDosingWindowWidthClass.Compact -> {
                 // 常规手机/小平板：图标+文字
                 BottomBarMetrics(
                     height = 66.dp,

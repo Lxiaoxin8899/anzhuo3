@@ -47,7 +47,8 @@ import java.text.DecimalFormat
 @Composable
 fun ConfigurationRecordDetailScreen(
     recordId: String,
-    onNavigateBack: () -> Unit = {},
+    // 为 null 时不显示返回按钮（作为档案库宽屏双栏的右侧详情面板嵌入）
+    onNavigateBack: (() -> Unit)? = {},
     onReconfigure: (ConfigurationRecord) -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -84,8 +85,10 @@ fun ConfigurationRecordDetailScreen(
                     }
                 },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回")
+                    if (onNavigateBack != null) {
+                        IconButton(onClick = onNavigateBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回")
+                        }
                     }
                 },
                 actions = {

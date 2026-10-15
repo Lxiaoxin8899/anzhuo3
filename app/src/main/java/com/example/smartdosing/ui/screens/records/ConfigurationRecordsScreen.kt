@@ -35,7 +35,9 @@ import com.example.smartdosing.data.ConfigurationRecord
 import com.example.smartdosing.data.ConfigurationRecordStatus
 import com.example.smartdosing.data.repository.ConfigurationRecordFilter
 import com.example.smartdosing.data.repository.ConfigurationRepositoryProvider
+import com.example.smartdosing.ui.theme.LocalWindowSize
 import com.example.smartdosing.ui.theme.SmartDosingTheme
+import com.example.smartdosing.ui.theme.SmartDosingWindowWidthClass
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -48,7 +50,8 @@ import kotlinx.coroutines.withContext
 fun ConfigurationRecordsScreen(
     refreshSignal: Int = 0,
     onNavigateBack: () -> Unit = {},
-    onRecordSelected: (String) -> Unit = {}
+    onRecordSelected: (String) -> Unit = {},
+    onReconfigure: (ConfigurationRecord) -> Unit = {}
 ) {
     val repository = remember { ConfigurationRepositoryProvider.recordRepository }
     var records by remember { mutableStateOf<List<ConfigurationRecord>>(emptyList()) }
@@ -63,6 +66,20 @@ fun ConfigurationRecordsScreen(
     var isSearchVisible by rememberSaveable { mutableStateOf(false) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
     val visibleRecords = remember(records, searchQuery) { filterRecordsByKeyword(records, searchQuery) }
+
+    // 宽屏（Expanded）采用列表 + 详情双栏，点击档案只切换右侧详情；其余宽度仍跳转独立详情页
+    val isTwoPane = LocalWindowSize.current.widthClass == SmartDosingWindowWidthClass.Expanded
+    var selectedRecordId by rememberSaveable { mutableStateOf<String?>(null) }
+    if (isTwoPane) {
+        LaunchedEffect(visibleRecords) {
+            if (visibleRecords.none { it.id == selectedRecordId }) {
+                selectedRecordId = visibleRecords.firstOrNull()?.id
+            }
+        }
+    }
+    val openRecord: (String) -> Unit = { id ->
+        if (isTwoPane) selectedRecordId = id else onRecordSelected(id)
+    }
 
     fun refreshRecords() {
         scope.launch {
@@ -129,54 +146,84 @@ fun ConfigurationRecordsScreen(
             }
         }
     ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .padding(horizontal = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(20.dp)
-        ) {
-            if (isSearchVisible) {
-                OutlinedTextField(
-                    value = searchQuery,
-                    onValueChange = { searchQuery = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    placeholder = { Text("搜索配方名称 / 编码 / 客户 / 操作员") },
-                    leadingIcon = { Icon(Icons.Default.Search, null) },
-                    shape = RoundedCornerShape(16.dp)
-                )
-            }
-
-            RecordSummarySection(records = visibleRecords)
-            
-            FilterSection(
-                selectedStatus = selectedStatus,
-                onStatusSelected = { selectedStatus = it; refreshRecords() }
-            )
-
-            when {
-                isLoading -> RecordLoadingState()
-                loadError != null -> RecordErrorState(message = loadError!!, onRetry = { refreshRecords() })
-                records.isEmpty() -> RecordEmptyState()
-                visibleRecords.isEmpty() -> Box(Modifier.fillMaxWidth().padding(top = 48.dp), contentAlignment = Alignment.Center) {
-                    Text("没有匹配“$searchQuery”的档案", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        val listPane: @Composable (Modifier) -> Unit = { paneModifier ->
+            Column(
+                modifier = paneModifier.padding(horizontal = 20.dp),
+                verticalArrangement = Arrangement.spacedBy(20.dp)
+            ) {
+                if (isSearchVisible) {
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        placeholder = { Text("搜索配方名称 / 编码 / 客户 / 操作员") },
+                        leadingIcon = { Icon(Icons.Default.Search, null) },
+                        shape = RoundedCornerShape(16.dp)
+                    )
                 }
-                else -> {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                        contentPadding = PaddingValues(bottom = 24.dp)
-                    ) {
-                        items(visibleRecords, key = { it.id }) { record ->
-                            ArchiveRecordCard(
-                                record = record,
-                                onClick = { onRecordSelected(record.id) }
-                            )
+
+                RecordSummarySection(records = visibleRecords)
+
+                FilterSection(
+                    selectedStatus = selectedStatus,
+                    onStatusSelected = { selectedStatus = it; refreshRecords() }
+                )
+
+                when {
+                    isLoading -> RecordLoadingState()
+                    loadError != null -> RecordErrorState(message = loadError!!, onRetry = { refreshRecords() })
+                    records.isEmpty() -> RecordEmptyState()
+                    visibleRecords.isEmpty() -> Box(Modifier.fillMaxWidth().padding(top = 48.dp), contentAlignment = Alignment.Center) {
+                        Text("没有匹配“$searchQuery”的档案", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    else -> {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                            contentPadding = PaddingValues(bottom = 24.dp)
+                        ) {
+                            items(visibleRecords, key = { it.id }) { record ->
+                                ArchiveRecordCard(
+                                    record = record,
+                                    selected = isTwoPane && record.id == selectedRecordId,
+                                    onClick = { openRecord(record.id) }
+                                )
+                            }
                         }
                     }
                 }
             }
+        }
+
+        if (isTwoPane) {
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+                    .consumeWindowInsets(innerPadding)
+            ) {
+                listPane(Modifier.weight(0.42f).fillMaxHeight())
+                VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                Box(modifier = Modifier.weight(0.58f).fillMaxHeight()) {
+                    val recordId = selectedRecordId
+                    if (recordId != null) {
+                        ConfigurationRecordDetailScreen(
+                            recordId = recordId,
+                            onNavigateBack = null,
+                            onReconfigure = onReconfigure
+                        )
+                    } else {
+                        Text(
+                            "选择左侧档案查看报告",
+                            modifier = Modifier.align(Alignment.Center),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        } else {
+            listPane(Modifier.fillMaxSize().padding(innerPadding))
         }
     }
 }
@@ -279,13 +326,19 @@ private fun FilterSection(
 }
 
 @Composable
-private fun ArchiveRecordCard(record: ConfigurationRecord, onClick: () -> Unit) {
+private fun ArchiveRecordCard(record: ConfigurationRecord, selected: Boolean = false, onClick: () -> Unit) {
     Card(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+        colors = CardDefaults.cardColors(
+            containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f) else MaterialTheme.colorScheme.surface
+        ),
+        border = if (selected) {
+            androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+        } else {
+            androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+        }
     ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {

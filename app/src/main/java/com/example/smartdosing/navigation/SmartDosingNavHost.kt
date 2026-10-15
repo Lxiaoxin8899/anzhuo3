@@ -148,6 +148,12 @@ fun SmartDosingNavHost(
                     navController.navigate(
                         SmartDosingRoutes.configurationRecordDetail(recordId)
                     )
+                },
+                onReconfigure = { record ->
+                    navController.navigateToMaterialConfiguration(
+                        recipeId = record.recipeId.ifBlank { "quick_start" },
+                        recordId = record.id
+                    )
                 }
             )
         }
